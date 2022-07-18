@@ -452,17 +452,13 @@ Prerequisites: please make sure you installed "yarn" on your environment.
 
 ```
 $ brew install yarn
-$ brew install nvm
 ```
 
 Test the smart contract, by running the following commands:
 
 ```
-$ git clone https://github.com/ConsenSys/UniversalToken.git
-$ cd UniversalToken
-$ nvm use
 $ yarn
-$ yarn test
+$ yarn test test/ERC1400.test.js
 ```
 
 ## How to deploy the contract on a blockchain network?
