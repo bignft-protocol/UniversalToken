@@ -41,10 +41,6 @@ module.exports = {
       accounts,
       saveDeployments: true
     },
-    ganache: {
-      url: 'http://localhost:8545',
-      accounts
-    },
     mainnet: {
       url: MAINNET_RPC_URL,
       accounts,
