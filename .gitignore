@@ -8,6 +8,7 @@ node_modules
 package-json.lock
 
 # Generated files
+cache
 artifacts
 build
 dist
