@@ -500,3 +500,14 @@ For all other networks than hardhat, you have to send ether to the accounts asso
 
 - Discover the accounts associated to your MNEMONIC thanks to https://www.myetherwallet.com/#view-wallet-info > Mnemonic phrase.
 - Send ether to those accounts.
+
+### How to verify contract on Ethereum Scan
+
+If you want to verify contract, for example on bscTestnet network, first you need to get an ETHERSCAN_API_KEY, then run this
+
+```bash
+# contract-arguments.js
+module.exports = ['param1', 'param2'];
+
+npx hardhat verify --network bscTestnet --constructor-args contract-arguments.js --contract "contracts/ERC1400.sol:ERC1400" $CONTRACT_ADDRESS
+```
