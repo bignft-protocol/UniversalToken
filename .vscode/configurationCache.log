@@ -1,0 +1,1 @@
+{"buildTargets":["coverage","develop","docker-start","docker-stop","init","lint","open-remix-ide","remix","run-coverage","start-ganache","start-remixd","stop-develop","stop-ganache","test","test-lint","yarn"],"launchTargets":[],"customConfigurationProvider":{"workspaceBrowse":{"browsePath":[],"compilerArgs":[]},"fileIndex":[]}}
