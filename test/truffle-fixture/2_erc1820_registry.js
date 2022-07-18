@@ -21,10 +21,10 @@ module.exports = async function () {
       );
     })
     .catch((err) => {
-      // eslint-disable-next-line no-useless-escape
       if (
         err.message.search(
-          /the tx doesn\\'t have the correct nonce|Nonce too low/g
+          // eslint-disable-next-line no-useless-escape
+          /the tx doesn\'t have the correct nonce|Nonce too low/g
         ) >= 0
       ) {
         console.log(
