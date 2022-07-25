@@ -2,13 +2,11 @@ module.exports = {
   env: {
     es2021: true,
     node: true,
-    mocha: true,
-    "truffle/globals": true,
+    mocha: true
   },
-  plugins: ["truffle"],
-  extends: ["eslint:recommended"],
+  extends: ['eslint:recommended'],
   rules: {
-    "no-undef": 0,
-    "no-unused-vars": 0,
-  },
+    'no-undef': 0,
+    'no-unused-vars': 0
+  }
 };

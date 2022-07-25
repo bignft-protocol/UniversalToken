@@ -19,3 +19,4 @@ allFiredEvents
 yarn-error.log
 .coverage_artifacts
 .coverage_contracts
+cache/
