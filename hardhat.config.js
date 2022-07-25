@@ -24,6 +24,10 @@ const POLYGON_MAINNET_RPC_URL =
   process.env.POLYGON_MAINNET_RPC_URL ||
   'https://polygon-mainnet.alchemyapi.io/v2/your-api-key';
 
+const BSC_TESTNET_RPC_URL =
+  process.env.BSC_TESTNET_RPC_URL ||
+  'https://data-seed-prebsc-1-s1.binance.org:8545';
+
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const accounts = PRIVATE_KEY ? [PRIVATE_KEY] : [];
 
@@ -53,6 +57,11 @@ module.exports = {
     },
     polygon: {
       url: POLYGON_MAINNET_RPC_URL,
+      accounts,
+      saveDeployments: true
+    },
+    bscTestnet: {
+      url: BSC_TESTNET_RPC_URL,
       accounts,
       saveDeployments: true
     }

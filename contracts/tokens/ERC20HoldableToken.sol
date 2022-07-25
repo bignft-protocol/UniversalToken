@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /*
  * This code has not been reviewed.
  * Do not use or deploy this code before reviewing it personally first.
@@ -27,18 +29,22 @@ contract ERC20HoldableToken is ERC20Token, IERC20HoldableToken {
 
     mapping(bytes32 => bytes32) internal _holdHashToId;
 
-    uint256 override public totalSupplyOnHold;
+    uint256 public override totalSupplyOnHold;
 
     modifier isHeld(bytes32 holdId) {
         require(
             holds[holdId].status == HoldStatusCode.Ordered ||
-            holds[holdId].status == HoldStatusCode.ExecutedAndKeptOpen,
+                holds[holdId].status == HoldStatusCode.ExecutedAndKeptOpen,
             "Hold is not in Ordered status"
         );
         _;
     }
 
-    constructor(string memory name, string memory symbol, uint8 decimals) ERC20Token(name, symbol, decimals) {}
+    constructor(
+        string memory name,
+        string memory symbol,
+        uint8 decimals
+    ) ERC20Token(name, symbol, decimals) {}
 
     function generateHoldId(
         address recipient,
@@ -59,21 +65,28 @@ contract ERC20HoldableToken is ERC20Token, IERC20HoldableToken {
     }
 
     /**
-    * @dev Retrieve hold hash, and ID for given parameters
-    */
-    function retrieveHoldHashId(address notary, address sender, address recipient, uint value) public view returns (bytes32, bytes32) {
+     * @dev Retrieve hold hash, and ID for given parameters
+     */
+    function retrieveHoldHashId(
+        address notary,
+        address sender,
+        address recipient,
+        uint value
+    ) public view returns (bytes32, bytes32) {
         // Pack and hash hold parameters
-        bytes32 holdHash = keccak256(abi.encodePacked(
-            address(this), //Include the token address to indicate domain
-            sender,
-            recipient,
-            notary,
-            value
-        ));
+        bytes32 holdHash = keccak256(
+            abi.encodePacked(
+                address(this), //Include the token address to indicate domain
+                sender,
+                recipient,
+                notary,
+                value
+            )
+        );
         bytes32 holdId = _holdHashToId[holdHash];
 
         return (holdHash, holdId);
-    }  
+    }
 
     /**
      @notice Called by the sender to hold some tokens for a recipient that the sender can not release back to themself until after the expiration date.
@@ -102,7 +115,7 @@ contract ERC20HoldableToken is ERC20Token, IERC20HoldableToken {
             "hold: amount exceeds available balance"
         );
 
-        (bytes32 holdHash,) = retrieveHoldHashId(
+        (bytes32 holdHash, ) = retrieveHoldHashId(
             notary,
             _msgSender(),
             recipient,
@@ -139,7 +152,12 @@ contract ERC20HoldableToken is ERC20Token, IERC20HoldableToken {
         );
     }
 
-    function retrieveHoldData(bytes32 holdId) external override view returns (ERC20HoldData memory) {
+    function retrieveHoldData(bytes32 holdId)
+        external
+        view
+        override
+        returns (ERC20HoldData memory)
+    {
         return holds[holdId];
     }
 
@@ -226,13 +244,12 @@ contract ERC20HoldableToken is ERC20Token, IERC20HoldableToken {
         super._transfer(holds[holdId].sender, recipient, holds[holdId].amount);
 
         holds[holdId].status = HoldStatusCode.Executed;
-        accountHoldBalances[holds[holdId]
-            .sender] = accountHoldBalances[holds[holdId].sender].sub(
-            holds[holdId].amount
-        );
+        accountHoldBalances[holds[holdId].sender] = accountHoldBalances[
+            holds[holdId].sender
+        ].sub(holds[holdId].amount);
         totalSupplyOnHold = totalSupplyOnHold.sub(holds[holdId].amount);
 
-        (bytes32 holdHash,) = retrieveHoldHashId(
+        (bytes32 holdHash, ) = retrieveHoldHashId(
             holds[holdId].notary,
             holds[holdId].sender,
             holds[holdId].recipient,
@@ -261,10 +278,9 @@ contract ERC20HoldableToken is ERC20Token, IERC20HoldableToken {
             holds[holdId].status = HoldStatusCode.ReleasedByNotary;
         }
 
-        accountHoldBalances[holds[holdId]
-            .sender] = accountHoldBalances[holds[holdId].sender].sub(
-            holds[holdId].amount
-        );
+        accountHoldBalances[holds[holdId].sender] = accountHoldBalances[
+            holds[holdId].sender
+        ].sub(holds[holdId].amount);
         totalSupplyOnHold = totalSupplyOnHold.sub(holds[holdId].amount);
 
         emit ReleaseHold(holdId, msg.sender);
@@ -274,16 +290,25 @@ contract ERC20HoldableToken is ERC20Token, IERC20HoldableToken {
      @notice Amount of tokens owned by an account that are available for transfer. That is, the gross balance less any held tokens.
      @param account owner of the tokensß
      */
-    function balanceOf(address account) public override(ERC20, IERC20) view returns (uint256) {
+    function balanceOf(address account)
+        public
+        view
+        override(ERC20, IERC20)
+        returns (uint256)
+    {
         return super.balanceOf(account);
-        
     }
 
     /**
      @notice Amount of tokens owned by an account that are held pending execution or release.
      @param account owner of the tokens
      */
-    function balanceOnHold(address account) public override view returns (uint256) {
+    function balanceOnHold(address account)
+        public
+        view
+        override
+        returns (uint256)
+    {
         return accountHoldBalances[account];
     }
 
@@ -291,7 +316,12 @@ contract ERC20HoldableToken is ERC20Token, IERC20HoldableToken {
      @notice Total amount of tokens owned by an account including all the held tokens pending execution or release.
      @param account owner of the tokens
      */
-    function spendableBalanceOf(address account) public override view returns (uint256) {
+    function spendableBalanceOf(address account)
+        public
+        view
+        override
+        returns (uint256)
+    {
         return super.balanceOf(account).sub(accountHoldBalances[account]);
     }
 
@@ -299,14 +329,23 @@ contract ERC20HoldableToken is ERC20Token, IERC20HoldableToken {
      @param holdId a unique identifier for the hold.
      @return hold status code.
      */
-    function holdStatus(bytes32 holdId) public override view returns (HoldStatusCode) {
+    function holdStatus(bytes32 holdId)
+        public
+        view
+        override
+        returns (HoldStatusCode)
+    {
         return holds[holdId].status;
     }
 
     /**
      @notice ERC20 transfer that checks on hold tokens can not be transferred.
      */
-    function transfer(address recipient, uint256 amount) public override(ERC20, IERC20) returns (bool) {
+    function transfer(address recipient, uint256 amount)
+        public
+        override(ERC20, IERC20)
+        returns (bool)
+    {
         require(
             this.spendableBalanceOf(msg.sender) >= amount,
             "HoldableToken: amount exceeds available balance"
@@ -332,7 +371,11 @@ contract ERC20HoldableToken is ERC20Token, IERC20HoldableToken {
     /**
      @notice ERC20 approve that checks on hold tokens can not be approved for spending by another account.
      */
-    function approve(address spender, uint256 amount) public override(ERC20, IERC20) returns (bool) {
+    function approve(address spender, uint256 amount)
+        public
+        override(ERC20, IERC20)
+        returns (bool)
+    {
         require(
             this.spendableBalanceOf(msg.sender) >= amount,
             "HoldableToken: amount exceeds available balance"

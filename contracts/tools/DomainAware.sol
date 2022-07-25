@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /*
  * This code has not been reviewed.
  * Do not use or deploy this code before reviewing it personally first.
@@ -5,7 +7,6 @@
 pragma solidity ^0.8.0;
 
 abstract contract DomainAware {
-
     // Mapping of ChainID to domain separators. This is a very gas efficient way
     // to not recalculate the domain separator on every call, while still
     // automatically detecting ChainID changes.
@@ -15,9 +16,9 @@ abstract contract DomainAware {
         _updateDomainSeparator();
     }
 
-    function domainName() public virtual view returns (string memory);
+    function domainName() public view virtual returns (string memory);
 
-    function domainVersion() public virtual view returns (string memory);
+    function domainVersion() public view virtual returns (string memory);
 
     function generateDomainSeparator() public view returns (bytes32) {
         uint256 chainID = _chainID();

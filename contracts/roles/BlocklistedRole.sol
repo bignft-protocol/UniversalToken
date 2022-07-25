@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /*
  * This code has not been reviewed.
  * Do not use or deploy this code before reviewing it personally first.
@@ -6,7 +8,6 @@ pragma solidity ^0.8.0;
 
 import "./Roles.sol";
 import "./BlocklistAdminRole.sol";
-
 
 /**
  * @title BlocklistedRole
@@ -28,15 +29,25 @@ abstract contract BlocklistedRole is BlocklistAdminRole {
         _;
     }
 
-    function isBlocklisted(address token, address account) public view returns (bool) {
+    function isBlocklisted(address token, address account)
+        public
+        view
+        returns (bool)
+    {
         return _blocklisteds[token].has(account);
     }
 
-    function addBlocklisted(address token, address account) public onlyBlocklistAdmin(token) {
+    function addBlocklisted(address token, address account)
+        public
+        onlyBlocklistAdmin(token)
+    {
         _addBlocklisted(token, account);
     }
 
-    function removeBlocklisted(address token, address account) public onlyBlocklistAdmin(token) {
+    function removeBlocklisted(address token, address account)
+        public
+        onlyBlocklistAdmin(token)
+    {
         _removeBlocklisted(token, account);
     }
 

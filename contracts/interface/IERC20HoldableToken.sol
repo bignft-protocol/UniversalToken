@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /*
  * This code has not been reviewed.
  * Do not use or deploy this code before reviewing it personally first.
@@ -22,7 +24,6 @@ struct ERC20HoldData {
  * @dev like approve except the tokens can't be spent by the sender while they are on hold.
  */
 interface IERC20HoldableToken is IERC20 {
-
     event NewHold(
         bytes32 indexed holdId,
         address indexed recipient,
@@ -56,7 +57,10 @@ interface IERC20HoldableToken is IERC20 {
         bytes32 lockHash
     ) external returns (bool);
 
-    function retrieveHoldData(bytes32 holdId) external view returns (ERC20HoldData memory);
+    function retrieveHoldData(bytes32 holdId)
+        external
+        view
+        returns (ERC20HoldData memory);
 
     /**
      @notice Called by the notary to transfer the held tokens to the set at the hold recipient if there is no hash lock.
@@ -99,7 +103,10 @@ interface IERC20HoldableToken is IERC20 {
      @notice Total amount of tokens owned by an account including all the held tokens pending execution or release.
      @param account owner of the tokens
      */
-    function spendableBalanceOf(address account) external view returns (uint256);
+    function spendableBalanceOf(address account)
+        external
+        view
+        returns (uint256);
 
     function totalSupplyOnHold() external view returns (uint256);
 

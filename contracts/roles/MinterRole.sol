@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /*
  * This code has not been reviewed.
  * Do not use or deploy this code before reviewing it personally first.
