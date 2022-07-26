@@ -1,11 +1,12 @@
-require('dotenv').config();
-require('@nomiclabs/hardhat-ethers');
-require('@nomiclabs/hardhat-truffle5');
-require('@nomiclabs/hardhat-etherscan');
-require('@babel/register');
-require('@babel/polyfill');
-require('solidity-coverage');
-require('hardhat-contract-sizer');
+import 'dotenv/config';
+
+import { HardhatUserConfig } from 'hardhat/types';
+import '@nomiclabs/hardhat-ethers';
+import '@nomiclabs/hardhat-truffle5';
+import '@nomiclabs/hardhat-etherscan';
+import '@typechain/hardhat';
+import 'solidity-coverage';
+import 'hardhat-contract-sizer';
 
 const MAINNET_RPC_URL =
   process.env.MAINNET_RPC_URL ||
@@ -31,40 +32,37 @@ const BSC_TESTNET_RPC_URL =
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const accounts = PRIVATE_KEY ? [PRIVATE_KEY] : [];
 
-module.exports = {
+const config: HardhatUserConfig = {
   defaultNetwork: 'hardhat',
   networks: {
     hardhat: {},
     kovan: {
       url: KOVAN_RPC_URL,
-      accounts,
-      saveDeployments: true
+      accounts
     },
     rinkeby: {
       url: RINKEBY_RPC_URL,
-      accounts,
-      saveDeployments: true
+      accounts
     },
     mainnet: {
       url: MAINNET_RPC_URL,
-      accounts,
-      saveDeployments: true
+      accounts
     },
     mumbai: {
       url: MUMBAI_RPC_URL,
-      accounts,
-      saveDeployments: true
+      accounts
     },
     polygon: {
       url: POLYGON_MAINNET_RPC_URL,
-      accounts,
-      saveDeployments: true
+      accounts
     },
     bscTestnet: {
       url: BSC_TESTNET_RPC_URL,
-      accounts,
-      saveDeployments: true
+      accounts
     }
+  },
+  paths: {
+    sources: 'src'
   },
   etherscan: {
     // Your API key for Etherscan
@@ -88,3 +86,5 @@ module.exports = {
     timeout: 100000
   }
 };
+
+export default config;

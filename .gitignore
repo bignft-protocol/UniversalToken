@@ -1,4 +1,4 @@
-types/
+typechain-types/
 .idea/
 .env
 .DS_Store
@@ -20,3 +20,4 @@ yarn-error.log
 .coverage_artifacts
 .coverage_contracts
 cache/
+contract-arguments.js
