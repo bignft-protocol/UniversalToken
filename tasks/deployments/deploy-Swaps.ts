@@ -1,13 +1,19 @@
+import { ethers, artifacts } from 'hardhat';
+
 async function main() {
   const Swaps = artifacts.require('Swaps');
 
-  const from = '0x4EeABa74D7f51fe3202D7963EFf61D2e7e166cBa';
+  const [owner] = await ethers.getSigners();
 
   const swaps = await Swaps.new(false, {
-    from: from
+    from: owner
   });
 
+  Swaps.setAsDeployed(swaps);
+
   console.log('Swaps deployed at: ' + swaps.address);
+
+  process.exit();
 }
 
 main().catch((error) => {
