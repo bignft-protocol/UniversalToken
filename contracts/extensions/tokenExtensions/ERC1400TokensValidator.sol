@@ -862,7 +862,7 @@ contract ERC1400TokensValidator is
 
         if (sender != address(0)) {
             // In case tokens already exist, increase held balance
-            _increaseHeldBalance(token, newHold, holdId);
+            _increaseHeldBalance(token, newHold);
 
             (bytes32 holdHash, ) = _retrieveHoldHashId(
                 token,
@@ -1130,6 +1130,8 @@ contract ERC1400TokensValidator is
         } else {
             revert("hold can not be executed");
         }
+
+        return canExecuteHold;
     }
 
     /**
@@ -1192,11 +1194,9 @@ contract ERC1400TokensValidator is
     /**
      * @dev Increase held balance.
      */
-    function _increaseHeldBalance(
-        address token,
-        Hold storage executableHold,
-        bytes32 holdId
-    ) private {
+    function _increaseHeldBalance(address token, Hold storage executableHold)
+        private
+    {
         _heldBalance[token][executableHold.sender] = _heldBalance[token][
             executableHold.sender
         ].add(executableHold.value);

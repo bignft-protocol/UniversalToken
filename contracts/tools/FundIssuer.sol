@@ -206,7 +206,7 @@ contract FundIssuer is
      * @dev Initialize Fund issuance contract + register
      * the contract implementation in ERC1820Registry.
      */
-    constructor() public {
+    constructor() {
         ERC1820Implementer._setInterface(FUND_ISSUER);
         ERC1820Implementer._setInterface(ERC1400_TOKENS_RECIPIENT);
         setInterfaceImplementation(ERC1400_TOKENS_RECIPIENT, address(this));
@@ -228,7 +228,7 @@ contract FundIssuer is
         uint,
         bytes calldata data,
         bytes calldata operatorData
-    ) external view override returns (bool) {
+    ) external pure override returns (bool) {
         return (_canReceive(data, operatorData));
     }
 

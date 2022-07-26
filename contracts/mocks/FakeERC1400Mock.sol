@@ -28,10 +28,7 @@ contract FakeERC1400Mock is ERC1400 {
         bytes32[] memory defaultPartitions,
         address extension,
         address mockAddress
-    )
-        public
-        ERC1400(name, symbol, granularity, controllers, defaultPartitions)
-    {
+    ) ERC1400(name, symbol, granularity, controllers, defaultPartitions) {
         if (extension != address(0)) {
             ExtensionMock(extension).addCertificateSigner(
                 address(this),

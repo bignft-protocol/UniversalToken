@@ -150,6 +150,8 @@ contract ERC20HoldableToken is ERC20Token, IERC20HoldableToken {
             expirationDateTime,
             lockHash
         );
+
+        return true;
     }
 
     function retrieveHoldData(bytes32 holdId)

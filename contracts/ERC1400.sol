@@ -191,7 +191,7 @@ contract ERC1400 is
         uint256 granularity,
         address[] memory controllers,
         bytes32[] memory defaultPartitions
-    ) public {
+    ) {
         _name = name;
         _symbol = symbol;
         _totalSupply = 0;
@@ -1831,8 +1831,9 @@ contract ERC1400 is
         return _name;
     }
 
-    function domainVersion() public view override returns (string memory) {
+    function domainVersion() public pure override returns (string memory) {
         return "1";
     }
+
     /************************************************************************************************/
 }

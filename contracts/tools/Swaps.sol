@@ -309,7 +309,7 @@ contract Swaps is
         uint,
         bytes calldata data,
         bytes calldata operatorData
-    ) external view override returns (bool) {
+    ) external pure override returns (bool) {
         return (_canReceive(data, operatorData));
     }
 

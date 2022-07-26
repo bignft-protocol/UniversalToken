@@ -41,7 +41,7 @@ contract ERC1400TokensChecker is
     string internal constant ERC1400_TOKENS_RECIPIENT =
         "ERC1400TokensRecipient";
 
-    constructor() public {
+    constructor() {
         ERC1820Implementer._setInterface(ERC1400_TOKENS_CHECKER);
     }
 

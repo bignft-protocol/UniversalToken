@@ -50,10 +50,7 @@ contract ERC1400HoldableToken is ERC1400, IExtensionTypes {
         bytes32[] memory defaultPartitions,
         address extension,
         address newOwner
-    )
-        public
-        ERC1400(name, symbol, granularity, controllers, defaultPartitions)
-    {
+    ) ERC1400(name, symbol, granularity, controllers, defaultPartitions) {
         if (extension != address(0)) {
             Extension(extension).registerTokenSetup(
                 address(this), // token

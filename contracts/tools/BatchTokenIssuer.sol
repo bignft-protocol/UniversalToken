@@ -44,7 +44,7 @@ contract BatchTokenIssuer is ERC1820Implementer {
         _;
     }
 
-    constructor() public {
+    constructor() {
         ERC1820Implementer._setInterface(BATCH_ISSUER);
     }
 
@@ -60,7 +60,7 @@ contract BatchTokenIssuer is ERC1820Implementer {
         bytes32[] calldata partitions,
         address[] calldata tokenHolders,
         uint256[] calldata values
-    ) external onlyTokenMinter(token) returns (uint256[] memory) {
+    ) external onlyTokenMinter(token) {
         require(
             partitions.length == tokenHolders.length,
             "partitions and tokenHolders arrays have different lengths"

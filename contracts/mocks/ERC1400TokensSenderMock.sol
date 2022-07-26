@@ -21,7 +21,7 @@ contract ERC1400TokensSenderMock is IERC1400TokensSender, ERC1820Implementer {
         uint value,
         bytes calldata data,
         bytes calldata /*operatorData*/ // Comments to avoid compilation warnings for unused variables.
-    ) external view override returns (bool) {
+    ) external pure override returns (bool) {
         return (_canTransfer(from, to, value, data));
     }
 
@@ -34,7 +34,7 @@ contract ERC1400TokensSenderMock is IERC1400TokensSender, ERC1820Implementer {
         uint value,
         bytes calldata data,
         bytes calldata /*operatorData*/ // Comments to avoid compilation warnings for unused variables.
-    ) external override {
+    ) external pure override {
         require(_canTransfer(from, to, value, data), "56"); // 0x56	invalid sender
     }
 

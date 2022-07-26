@@ -25,7 +25,7 @@ contract ERC1400TokensRecipientMock is
         uint value,
         bytes calldata data,
         bytes calldata /*operatorData*/ // Comments to avoid compilation warnings for unused variables.
-    ) external view override returns (bool) {
+    ) external pure override returns (bool) {
         return (_canReceive(from, to, value, data));
     }
 
@@ -38,7 +38,7 @@ contract ERC1400TokensRecipientMock is
         uint value,
         bytes calldata data,
         bytes calldata /*operatorData*/ // Comments to avoid compilation warnings for unused variables.
-    ) external override {
+    ) external pure override {
         require(_canReceive(from, to, value, data), "57"); // 0x57	invalid receiver
     }
 
