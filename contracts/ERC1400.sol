@@ -11,7 +11,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "./tools/ERC1820Client.sol";
-import "./interface/ERC1820Implementer.sol";
+import "./tools/ERC1820Implementer.sol";
 
 import "./roles/MinterRole.sol";
 

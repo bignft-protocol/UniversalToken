@@ -3,7 +3,7 @@
 pragma solidity ^0.8.0;
 
 import "../extensions/userExtensions/IERC1400TokensRecipient.sol";
-import "../interface/ERC1820Implementer.sol";
+import "../tools/ERC1820Implementer.sol";
 
 contract ERC1400TokensRecipientMock is
     IERC1400TokensRecipient,

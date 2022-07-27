@@ -1,15 +1,20 @@
-const { ZERO_ADDRESS, ZERO_BYTES32 } = require("@openzeppelin/test-helpers/src/constants");
-const { web3 } = require("@openzeppelin/test-helpers/src/setup");
+const {
+  ZERO_ADDRESS,
+  ZERO_BYTES32
+} = require('@openzeppelin/test-helpers/src/constants');
+const { web3 } = require('@openzeppelin/test-helpers/src/setup');
 
-const { newSecretHashPair, newHoldId } = require("./utils/crypto");
+const { newSecretHashPair, newHoldId } = require('./utils/crypto');
 
-const BatchReader = artifacts.require("BatchReader.sol");
+const BatchReader = artifacts.require('BatchReader.sol');
 
-const ERC1820Registry = artifacts.require("IERC1820Registry");
+const ERC1820Registry = artifacts.require('IERC1820Registry');
 
-const ERC721Token = artifacts.require("ERC721Token");
-const ERC1400HoldableCertificate = artifacts.require("ERC1400HoldableCertificateToken");
-const ERC1400TokensValidator = artifacts.require("ERC1400TokensValidator");
+const ERC721Token = artifacts.require('ERC721Token');
+const ERC1400HoldableCertificate = artifacts.require(
+  'ERC1400HoldableCertificateToken'
+);
+const ERC1400TokensValidator = artifacts.require('ERC1400TokensValidator');
 
 const {
   CERTIFICATE_VALIDATION_NONE,
@@ -19,23 +24,23 @@ const {
   setGranularityByPartitionActivated,
   setHoldsActivated,
   addTokenController
-} = require("./common/extension");
-const { assert } = require("chai");
+} = require('./common/extension');
+const { assert } = require('chai');
 
-const EMPTY_CERTIFICATE = "0x";
+const EMPTY_CERTIFICATE = '0x';
 
 const partition1_short =
-  "7265736572766564000000000000000000000000000000000000000000000000"; // reserved in hex
+  '7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
 const partition2_short =
-  "6973737565640000000000000000000000000000000000000000000000000000"; // issued in hex
+  '6973737565640000000000000000000000000000000000000000000000000000'; // issued in hex
 const partition3_short =
-  "6c6f636b65640000000000000000000000000000000000000000000000000000"; // locked in hex
+  '6c6f636b65640000000000000000000000000000000000000000000000000000'; // locked in hex
 const partition4_short =
-  "636f6c6c61746572616c00000000000000000000000000000000000000000000"; // collateral in hex
-const partition1 = "0x".concat(partition1_short);
-const partition2 = "0x".concat(partition2_short);
-const partition3 = "0x".concat(partition3_short);
-const partition4 = "0x".concat(partition4_short);
+  '636f6c6c61746572616c00000000000000000000000000000000000000000000'; // collateral in hex
+const partition1 = '0x'.concat(partition1_short);
+const partition2 = '0x'.concat(partition2_short);
+const partition3 = '0x'.concat(partition3_short);
+const partition4 = '0x'.concat(partition4_short);
 
 const partitions = [partition1, partition2, partition3, partition4];
 
@@ -56,7 +61,12 @@ const issuanceAmount42 = 42;
 const issuanceAmount43 = 43;
 
 const token1DefaultPartitions = [partition1, partition2, partition3];
-const token2DefaultPartitions = [partition1, partition2, partition3, partition4];
+const token2DefaultPartitions = [
+  partition1,
+  partition2,
+  partition3,
+  partition4
+];
 const token3DefaultPartitions = [];
 const token4DefaultPartitions = [partition3, partition4];
 
@@ -70,25 +80,35 @@ const SECONDS_IN_AN_HOUR = 3600;
 const holdAmount = 6;
 
 contract(
-  "BatchReader",
-  ([owner, controller1, controller2, controller3, deployer, tokenHolder1, tokenHolder2, tokenHolder3, unknown]) => {
+  'BatchReader',
+  ([
+    owner,
+    controller1,
+    controller2,
+    controller3,
+    deployer,
+    tokenHolder1,
+    tokenHolder2,
+    tokenHolder3,
+    unknown
+  ]) => {
     before(async function () {
       this.registry = await ERC1820Registry.at(
-        "0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24"
+        '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'
       );
-  
+
       this.extension = await ERC1400TokensValidator.new({
-        from: deployer,
+        from: deployer
       });
       this.extension2 = await ERC1400TokensValidator.new({
-        from: deployer,
+        from: deployer
       });
 
       this.balanceReader = await BatchReader.new();
 
       this.token1 = await ERC1400HoldableCertificate.new(
-        "ERC1400Token",
-        "DAU",
+        'ERC1400Token',
+        'DAU',
         1,
         [controller1],
         token1DefaultPartitions,
@@ -99,8 +119,8 @@ contract(
         { from: controller1 }
       );
       this.token2 = await ERC1400HoldableCertificate.new(
-        "ERC1400Token",
-        "DAU",
+        'ERC1400Token',
+        'DAU',
         1,
         [controller1],
         token2DefaultPartitions,
@@ -111,8 +131,8 @@ contract(
         { from: controller1 }
       );
       this.token3 = await ERC1400HoldableCertificate.new(
-        "ERC1400Token",
-        "DAU",
+        'ERC1400Token',
+        'DAU',
         1,
         [],
         token3DefaultPartitions,
@@ -123,8 +143,8 @@ contract(
         { from: controller2 }
       );
       this.token4 = await ERC1400HoldableCertificate.new(
-        "ERC1400Token",
-        "DAU",
+        'ERC1400Token',
+        'DAU',
         1,
         [controller1, controller2, controller3],
         token4DefaultPartitions,
@@ -135,19 +155,9 @@ contract(
         { from: controller3 }
       );
 
-      this.token5 = await ERC721Token.new(
-        "ERC721Token",
-        "DAU",
-        "",
-        ""
-      );
+      this.token5 = await ERC721Token.new('ERC721Token', 'DAU', '', '');
 
-      this.token6 = await ERC721Token.new(
-        "ERC721Token",
-        "DAU",
-        "",
-        ""
-      );
+      this.token6 = await ERC721Token.new('ERC721Token', 'DAU', '', '');
 
       // Add token extension controllers
       await addTokenController(
@@ -194,12 +204,7 @@ contract(
       );
 
       // Deactivate holds
-      await setHoldsActivated(
-        this.extension2,
-        this.token3,
-        owner,
-        false
-      );
+      await setHoldsActivated(this.extension2, this.token3, owner, false);
 
       // Token1
       await this.token1.issueByPartition(
@@ -339,13 +344,17 @@ contract(
       await this.token4.issueByPartition(
         partition1,
         tokenHolder1,
-        4*issuanceAmount11,
+        4 * issuanceAmount11,
         EMPTY_CERTIFICATE,
         { from: controller3 }
       );
 
       // Transfer some ETH to modify the balances
-      await web3.eth.sendTransaction({from: tokenHolder1, to: tokenHolder2, value: web3.utils.toWei('5')});
+      await web3.eth.sendTransaction({
+        from: tokenHolder1,
+        to: tokenHolder2,
+        value: web3.utils.toWei('5')
+      });
 
       // Create token holds to modify the spendable balances by partition
       await this.extension.hold(
@@ -366,7 +375,7 @@ contract(
         tokenHolder2,
         unknown, // notary
         partition2,
-        2*holdAmount,
+        2 * holdAmount,
         SECONDS_IN_AN_HOUR,
         newSecretHashPair().hash,
         ZERO_BYTES32, // certificate
@@ -374,14 +383,26 @@ contract(
       );
 
       // Add allowlisted
-      await this.extension.addAllowlisted(this.token1.address, tokenHolder1, { from: controller1 });
-      await this.extension.addAllowlisted(this.token1.address, tokenHolder2, { from: controller1 });
-      await this.extension.addAllowlisted(this.token2.address, tokenHolder3, { from: controller1 });
+      await this.extension.addAllowlisted(this.token1.address, tokenHolder1, {
+        from: controller1
+      });
+      await this.extension.addAllowlisted(this.token1.address, tokenHolder2, {
+        from: controller1
+      });
+      await this.extension.addAllowlisted(this.token2.address, tokenHolder3, {
+        from: controller1
+      });
 
       // Add blocklisted
-      await this.extension.addBlocklisted(this.token1.address, tokenHolder3, { from: controller1 });
-      await this.extension.addBlocklisted(this.token2.address, tokenHolder2, { from: controller1 });
-      await this.extension.addBlocklisted(this.token2.address, tokenHolder3, { from: controller1 });
+      await this.extension.addBlocklisted(this.token1.address, tokenHolder3, {
+        from: controller1
+      });
+      await this.extension.addBlocklisted(this.token2.address, tokenHolder2, {
+        from: controller1
+      });
+      await this.extension.addBlocklisted(this.token2.address, tokenHolder3, {
+        from: controller1
+      });
 
       // Mint NFTs
       await this.token5.mint(tokenHolder1, 1);
@@ -419,24 +440,41 @@ contract(
       await this.token6.mint(tokenHolder3, 140);
     });
 
-    describe("batchTokenSuppliesInfos", function () {
-      it("returns the list of token supplies", async function () {
-        const tokenAddresses = [this.token1.address, this.token2.address, this.token3.address, this.token4.address];
+    describe('batchTokenSuppliesInfos', function () {
+      it('returns the list of token supplies', async function () {
+        const tokenAddresses = [
+          this.token1.address,
+          this.token2.address,
+          this.token3.address,
+          this.token4.address
+        ];
 
-        const batchTokenSupplies = await this.balanceReader.batchTokenSuppliesInfos(
-          tokenAddresses,
-          { from: unknown }
-        );
+        const batchTokenSupplies =
+          await this.balanceReader.batchTokenSuppliesInfos(tokenAddresses, {
+            from: unknown
+          });
 
-        const totalSupply1Partition1 = issuanceAmount11 + issuanceAmount12 + issuanceAmount13;
-        const totalSupply1Partition2 = issuanceAmount21 + issuanceAmount22 + issuanceAmount23;
-        const totalSupply1Partition3 = issuanceAmount31 + issuanceAmount32 + issuanceAmount33;
-        const totalSupply1 = totalSupply1Partition1 + totalSupply1Partition2 + totalSupply1Partition3;
+        const totalSupply1Partition1 =
+          issuanceAmount11 + issuanceAmount12 + issuanceAmount13;
+        const totalSupply1Partition2 =
+          issuanceAmount21 + issuanceAmount22 + issuanceAmount23;
+        const totalSupply1Partition3 =
+          issuanceAmount31 + issuanceAmount32 + issuanceAmount33;
+        const totalSupply1 =
+          totalSupply1Partition1 +
+          totalSupply1Partition2 +
+          totalSupply1Partition3;
 
-        const totalSupply2Partition1 = 2 * (issuanceAmount21 + issuanceAmount22 + issuanceAmount23);
-        const totalSupply2Partition2 = 2 * (issuanceAmount31 + issuanceAmount32 + issuanceAmount33);
-        const totalSupply2Partition3 = 2 * (issuanceAmount41 + issuanceAmount42 + issuanceAmount43);
-        const totalSupply2 = totalSupply2Partition1 + totalSupply2Partition2 + totalSupply2Partition3;
+        const totalSupply2Partition1 =
+          2 * (issuanceAmount21 + issuanceAmount22 + issuanceAmount23);
+        const totalSupply2Partition2 =
+          2 * (issuanceAmount31 + issuanceAmount32 + issuanceAmount33);
+        const totalSupply2Partition3 =
+          2 * (issuanceAmount41 + issuanceAmount42 + issuanceAmount43);
+        const totalSupply2 =
+          totalSupply2Partition1 +
+          totalSupply2Partition2 +
+          totalSupply2Partition3;
 
         const totalSupply3 = 0;
 
@@ -478,7 +516,13 @@ contract(
 
         // TOTAL PARTITIONS
         //
-        assert.equal(batchTotalPartitions.length, token1Partitions.length + token2Partitions.length + token3Partitions.length + token4Partitions.length);
+        assert.equal(
+          batchTotalPartitions.length,
+          token1Partitions.length +
+            token2Partitions.length +
+            token3Partitions.length +
+            token4Partitions.length
+        );
         //
         // Token1
         assert.equal(batchTotalPartitions[0], token1Partitions[0]);
@@ -495,37 +539,82 @@ contract(
 
         // PARTITION SUPPLIES
         //
-        assert.equal(batchPartitionSupplies.length, token1Partitions.length + token2Partitions.length + token3Partitions.length + token4Partitions.length);
+        assert.equal(
+          batchPartitionSupplies.length,
+          token1Partitions.length +
+            token2Partitions.length +
+            token3Partitions.length +
+            token4Partitions.length
+        );
         //
         // Token1
-        assert.equal(parseInt(batchPartitionSupplies[0]), totalSupply1Partition1);
-        assert.equal(parseInt(batchPartitionSupplies[1]), totalSupply1Partition2);
-        assert.equal(parseInt(batchPartitionSupplies[2]), totalSupply1Partition3);
+        assert.equal(
+          parseInt(batchPartitionSupplies[0]),
+          totalSupply1Partition1
+        );
+        assert.equal(
+          parseInt(batchPartitionSupplies[1]),
+          totalSupply1Partition2
+        );
+        assert.equal(
+          parseInt(batchPartitionSupplies[2]),
+          totalSupply1Partition3
+        );
         // Token2
-        assert.equal(parseInt(batchPartitionSupplies[3]), totalSupply2Partition1);
-        assert.equal(parseInt(batchPartitionSupplies[4]), totalSupply2Partition2);
-        assert.equal(parseInt(batchPartitionSupplies[5]), totalSupply2Partition3);
+        assert.equal(
+          parseInt(batchPartitionSupplies[3]),
+          totalSupply2Partition1
+        );
+        assert.equal(
+          parseInt(batchPartitionSupplies[4]),
+          totalSupply2Partition2
+        );
+        assert.equal(
+          parseInt(batchPartitionSupplies[5]),
+          totalSupply2Partition3
+        );
         // Token3
         // NA
         // Token4
-        assert.equal(parseInt(batchPartitionSupplies[6]), totalSupply4Partition1);
+        assert.equal(
+          parseInt(batchPartitionSupplies[6]),
+          totalSupply4Partition1
+        );
 
         // DEFAULT PARTITIONS LENGTH
         //
         assert.equal(defaultPartitionsLengths.length, tokenAddresses.length);
         //
         // Token1
-        assert.equal(defaultPartitionsLengths[0], token1DefaultPartitions.length);
+        assert.equal(
+          defaultPartitionsLengths[0],
+          token1DefaultPartitions.length
+        );
         // Token2
-        assert.equal(defaultPartitionsLengths[1], token2DefaultPartitions.length);
+        assert.equal(
+          defaultPartitionsLengths[1],
+          token2DefaultPartitions.length
+        );
         // Token3
-        assert.equal(defaultPartitionsLengths[2], token3DefaultPartitions.length);
+        assert.equal(
+          defaultPartitionsLengths[2],
+          token3DefaultPartitions.length
+        );
         // Token4
-        assert.equal(defaultPartitionsLengths[3], token4DefaultPartitions.length);
+        assert.equal(
+          defaultPartitionsLengths[3],
+          token4DefaultPartitions.length
+        );
 
         // DEFAULT PARTITIONS
         //
-        assert.equal(batchDefaultPartitions.length, token1DefaultPartitions.length + token2DefaultPartitions.length + token3DefaultPartitions.length + token4DefaultPartitions.length);
+        assert.equal(
+          batchDefaultPartitions.length,
+          token1DefaultPartitions.length +
+            token2DefaultPartitions.length +
+            token3DefaultPartitions.length +
+            token4DefaultPartitions.length
+        );
         //
         // Token1
         assert.equal(batchDefaultPartitions[0], token1DefaultPartitions[0]);
@@ -544,14 +633,19 @@ contract(
       });
     });
 
-    describe("batchTokenRolesInfos", function () {
-      it("returns the list of token roles", async function () {
-        const tokenAddresses = [this.token1.address, this.token2.address, this.token3.address, this.token4.address];
+    describe('batchTokenRolesInfos', function () {
+      it('returns the list of token roles', async function () {
+        const tokenAddresses = [
+          this.token1.address,
+          this.token2.address,
+          this.token3.address,
+          this.token4.address
+        ];
 
-        const batchTokenRolesInfos = await this.balanceReader.batchTokenRolesInfos(
-          tokenAddresses,
-          { from: unknown }
-        );
+        const batchTokenRolesInfos =
+          await this.balanceReader.batchTokenRolesInfos(tokenAddresses, {
+            from: unknown
+          });
 
         const batchOwners = batchTokenRolesInfos[0];
         const batchControllersLength = batchTokenRolesInfos[1];
@@ -587,7 +681,7 @@ contract(
 
         // CONTROLLERS
         //
-        assert.equal(batchControllers.length, 1+1+0+3);
+        assert.equal(batchControllers.length, 1 + 1 + 0 + 3);
         //
         // Token1
         assert.equal(batchControllers[0], controller1);
@@ -602,7 +696,10 @@ contract(
 
         // EXTENSION CONTROLLERS LENGTH
         //
-        assert.equal(batchExtensionControllersLength.length, tokenAddresses.length);
+        assert.equal(
+          batchExtensionControllersLength.length,
+          tokenAddresses.length
+        );
         //
         // Token1
         assert.equal(parseInt(batchExtensionControllersLength[0]), 1);
@@ -615,7 +712,7 @@ contract(
 
         // EXTENSION CONTROLLERS
         //
-        assert.equal(batchExtensionControllers.length, 1+1+2+0);
+        assert.equal(batchExtensionControllers.length, 1 + 1 + 2 + 0);
         //
         // Token1
         assert.equal(batchExtensionControllers[0], controller1);
@@ -626,18 +723,22 @@ contract(
         assert.equal(batchExtensionControllers[3], controller2);
         // Token4
         //
-
       });
     });
 
-    describe("batchTokenExtensionSetup", function () {
-      it("returns the list of token extensions setup", async function () {
-        const tokenAddresses = [this.token1.address, this.token2.address, this.token3.address, this.token4.address];
+    describe('batchTokenExtensionSetup', function () {
+      it('returns the list of token extensions setup', async function () {
+        const tokenAddresses = [
+          this.token1.address,
+          this.token2.address,
+          this.token3.address,
+          this.token4.address
+        ];
 
-        const batchTokenRolesInfos = await this.balanceReader.batchTokenExtensionSetup(
-          tokenAddresses,
-          { from: unknown }
-        );
+        const batchTokenRolesInfos =
+          await this.balanceReader.batchTokenExtensionSetup(tokenAddresses, {
+            from: unknown
+          });
 
         const batchTokenExtension = batchTokenRolesInfos[0];
         const batchCertificateActivated = batchTokenRolesInfos[1];
@@ -700,7 +801,10 @@ contract(
 
         // GRANULARITY BY PARTITION
         //
-        assert.equal(batchGranularityByPartitionActivated.length, tokenAddresses.length);
+        assert.equal(
+          batchGranularityByPartitionActivated.length,
+          tokenAddresses.length
+        );
         //
         // Token1
         assert.equal(batchGranularityByPartitionActivated[0], false);
@@ -723,20 +827,25 @@ contract(
         assert.equal(batchHoldsActivated[2], false);
         // Token4
         assert.equal(batchHoldsActivated[3], false);
-
       });
     });
 
-    describe("batchBalances", function () {
-      it("returns the lists of ETH, ERC20 and ERC1400 balances (spendable or not)", async function () {
+    describe('batchBalances', function () {
+      it('returns the lists of ETH, ERC20 and ERC1400 balances (spendable or not)', async function () {
         const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
-        const tokenAddresses = [this.token1.address, this.token2.address, this.token3.address, this.token4.address];
+        const tokenAddresses = [
+          this.token1.address,
+          this.token2.address,
+          this.token3.address,
+          this.token4.address
+        ];
 
-        const batchERC1400Balances = await this.balanceReader.batchERC1400Balances(
-          tokenAddresses,
-          tokenHolders,
-          { from: unknown }
-        );
+        const batchERC1400Balances =
+          await this.balanceReader.batchERC1400Balances(
+            tokenAddresses,
+            tokenHolders,
+            { from: unknown }
+          );
 
         const batchEthBalances = batchERC1400Balances[0];
         const batchBalancesOf = batchERC1400Balances[1];
@@ -748,27 +857,57 @@ contract(
         // ETH BALANCES
         //
         assert.equal(batchEthBalances.length, tokenHolders.length);
-        assert.equal(web3.utils.fromWei(batchEthBalances[0]), web3.utils.fromWei(await web3.eth.getBalance(tokenHolders[0])));
-        assert.equal(web3.utils.fromWei(batchEthBalances[1]), web3.utils.fromWei(await web3.eth.getBalance(tokenHolders[1])));
-        assert.equal(web3.utils.fromWei(batchEthBalances[2]), web3.utils.fromWei(await web3.eth.getBalance(tokenHolders[2])));
+        assert.equal(
+          web3.utils.fromWei(batchEthBalances[0]),
+          web3.utils.fromWei(await web3.eth.getBalance(tokenHolders[0]))
+        );
+        assert.equal(
+          web3.utils.fromWei(batchEthBalances[1]),
+          web3.utils.fromWei(await web3.eth.getBalance(tokenHolders[1]))
+        );
+        assert.equal(
+          web3.utils.fromWei(batchEthBalances[2]),
+          web3.utils.fromWei(await web3.eth.getBalance(tokenHolders[2]))
+        );
 
         // BALANCES
         //
-        assert.equal(batchBalancesOf.length, tokenHolders.length*tokenAddresses.length);
+        assert.equal(
+          batchBalancesOf.length,
+          tokenHolders.length * tokenAddresses.length
+        );
         //
         // Tokenholder1
-        assert.equal(parseInt(batchBalancesOf[0]), issuanceAmount11+issuanceAmount21+issuanceAmount31);
-        assert.equal(parseInt(batchBalancesOf[1]), 2*(issuanceAmount21+issuanceAmount31+issuanceAmount41));
+        assert.equal(
+          parseInt(batchBalancesOf[0]),
+          issuanceAmount11 + issuanceAmount21 + issuanceAmount31
+        );
+        assert.equal(
+          parseInt(batchBalancesOf[1]),
+          2 * (issuanceAmount21 + issuanceAmount31 + issuanceAmount41)
+        );
         assert.equal(parseInt(batchBalancesOf[2]), 0);
-        assert.equal(parseInt(batchBalancesOf[3]), 4*issuanceAmount11);
+        assert.equal(parseInt(batchBalancesOf[3]), 4 * issuanceAmount11);
         // Tokenholder2
-        assert.equal(parseInt(batchBalancesOf[4]), issuanceAmount12+issuanceAmount22+issuanceAmount32);
-        assert.equal(parseInt(batchBalancesOf[5]), 2*(issuanceAmount22+issuanceAmount32+issuanceAmount42));
+        assert.equal(
+          parseInt(batchBalancesOf[4]),
+          issuanceAmount12 + issuanceAmount22 + issuanceAmount32
+        );
+        assert.equal(
+          parseInt(batchBalancesOf[5]),
+          2 * (issuanceAmount22 + issuanceAmount32 + issuanceAmount42)
+        );
         assert.equal(parseInt(batchBalancesOf[6]), 0);
         assert.equal(parseInt(batchBalancesOf[7]), 0);
         // Tokenholder3
-        assert.equal(parseInt(batchBalancesOf[8]), issuanceAmount13+issuanceAmount23+issuanceAmount33);
-        assert.equal(parseInt(batchBalancesOf[9]), 2*(issuanceAmount23+issuanceAmount33+issuanceAmount43));
+        assert.equal(
+          parseInt(batchBalancesOf[8]),
+          issuanceAmount13 + issuanceAmount23 + issuanceAmount33
+        );
+        assert.equal(
+          parseInt(batchBalancesOf[9]),
+          2 * (issuanceAmount23 + issuanceAmount33 + issuanceAmount43)
+        );
         assert.equal(parseInt(batchBalancesOf[10]), 0);
         assert.equal(parseInt(batchBalancesOf[11]), 0);
 
@@ -777,17 +916,35 @@ contract(
         assert.equal(totalPartitionsLengths.length, tokenAddresses.length);
         //
         // Token1
-        assert.equal(parseInt(totalPartitionsLengths[0]), token1Partitions.length);
+        assert.equal(
+          parseInt(totalPartitionsLengths[0]),
+          token1Partitions.length
+        );
         // Token2
-        assert.equal(parseInt(totalPartitionsLengths[1]), token2Partitions.length);
+        assert.equal(
+          parseInt(totalPartitionsLengths[1]),
+          token2Partitions.length
+        );
         // Token3
-        assert.equal(parseInt(totalPartitionsLengths[2]), token3Partitions.length);
+        assert.equal(
+          parseInt(totalPartitionsLengths[2]),
+          token3Partitions.length
+        );
         // Token4
-        assert.equal(parseInt(totalPartitionsLengths[3]), token4Partitions.length);
+        assert.equal(
+          parseInt(totalPartitionsLengths[3]),
+          token4Partitions.length
+        );
 
         // TOTAL PARTITIONS
         //
-        assert.equal(batchTotalPartitions.length, token1Partitions.length+token2Partitions.length + token3Partitions.length+token4Partitions.length);
+        assert.equal(
+          batchTotalPartitions.length,
+          token1Partitions.length +
+            token2Partitions.length +
+            token3Partitions.length +
+            token4Partitions.length
+        );
         //
         // Token1
         assert.equal(batchTotalPartitions[0], token1Partitions[0]);
@@ -804,42 +961,88 @@ contract(
 
         // PARTITION BALANCES
         //
-        assert.equal(batchBalancesOfByPartition.length, tokenHolders.length*(token1Partitions.length+token2Partitions.length+token3Partitions.length+token4Partitions.length));
+        assert.equal(
+          batchBalancesOfByPartition.length,
+          tokenHolders.length *
+            (token1Partitions.length +
+              token2Partitions.length +
+              token3Partitions.length +
+              token4Partitions.length)
+        );
         //
         // Tokenholder1 - token1
         assert.equal(parseInt(batchBalancesOfByPartition[0]), issuanceAmount11);
         assert.equal(parseInt(batchBalancesOfByPartition[1]), issuanceAmount21);
         assert.equal(parseInt(batchBalancesOfByPartition[2]), issuanceAmount31);
         // Tokenholder1 - token2
-        assert.equal(parseInt(batchBalancesOfByPartition[3]), 2*issuanceAmount21);
-        assert.equal(parseInt(batchBalancesOfByPartition[4]), 2*issuanceAmount31);
-        assert.equal(parseInt(batchBalancesOfByPartition[5]), 2*issuanceAmount41);
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[3]),
+          2 * issuanceAmount21
+        );
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[4]),
+          2 * issuanceAmount31
+        );
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[5]),
+          2 * issuanceAmount41
+        );
         // Tokenholder1 - token3
         // NA
         // Tokenholder1 - token4
-        assert.equal(parseInt(batchBalancesOfByPartition[6]), 4*issuanceAmount11);
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[6]),
+          4 * issuanceAmount11
+        );
         //
         // Tokenholder2 - token1
         assert.equal(parseInt(batchBalancesOfByPartition[7]), issuanceAmount12);
         assert.equal(parseInt(batchBalancesOfByPartition[8]), issuanceAmount22);
         assert.equal(parseInt(batchBalancesOfByPartition[9]), issuanceAmount32);
         // Tokenholder2 - token2
-        assert.equal(parseInt(batchBalancesOfByPartition[10]), 2*issuanceAmount22);
-        assert.equal(parseInt(batchBalancesOfByPartition[11]), 2*issuanceAmount32);
-        assert.equal(parseInt(batchBalancesOfByPartition[12]), 2*issuanceAmount42);
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[10]),
+          2 * issuanceAmount22
+        );
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[11]),
+          2 * issuanceAmount32
+        );
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[12]),
+          2 * issuanceAmount42
+        );
         // Tokenholder2 - token3
         // NA
         // Tokenholder2 - token4
         assert.equal(parseInt(batchBalancesOfByPartition[13]), 0);
         //
         // Tokenholder3 - token1
-        assert.equal(parseInt(batchBalancesOfByPartition[14]), issuanceAmount13);
-        assert.equal(parseInt(batchBalancesOfByPartition[15]), issuanceAmount23);
-        assert.equal(parseInt(batchBalancesOfByPartition[16]), issuanceAmount33);
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[14]),
+          issuanceAmount13
+        );
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[15]),
+          issuanceAmount23
+        );
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[16]),
+          issuanceAmount33
+        );
         // Tokenholder3 - token2
-        assert.equal(parseInt(batchBalancesOfByPartition[17]), 2*issuanceAmount23);
-        assert.equal(parseInt(batchBalancesOfByPartition[18]), 2*issuanceAmount33);
-        assert.equal(parseInt(batchBalancesOfByPartition[19]), 2*issuanceAmount43);
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[17]),
+          2 * issuanceAmount23
+        );
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[18]),
+          2 * issuanceAmount33
+        );
+        assert.equal(
+          parseInt(batchBalancesOfByPartition[19]),
+          2 * issuanceAmount43
+        );
         // Tokenholder3 - token3
         // NA
         // Tokenholder3 - token4
@@ -847,42 +1050,106 @@ contract(
 
         // SPENDABLE PARTITION BALANCES
         //
-        assert.equal(batchSpendableBalancesOfByPartition.length, tokenHolders.length*(token1Partitions.length+token2Partitions.length+token3Partitions.length+token4Partitions.length));
+        assert.equal(
+          batchSpendableBalancesOfByPartition.length,
+          tokenHolders.length *
+            (token1Partitions.length +
+              token2Partitions.length +
+              token3Partitions.length +
+              token4Partitions.length)
+        );
         //
         // Tokenholder1 - token1
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[0]), issuanceAmount11 - holdAmount);
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[1]), issuanceAmount21);
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[2]), issuanceAmount31);
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[0]),
+          issuanceAmount11 - holdAmount
+        );
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[1]),
+          issuanceAmount21
+        );
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[2]),
+          issuanceAmount31
+        );
         // Tokenholder1 - token2
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[3]), 2*issuanceAmount21);
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[4]), 2*issuanceAmount31);
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[5]), 2*issuanceAmount41);
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[3]),
+          2 * issuanceAmount21
+        );
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[4]),
+          2 * issuanceAmount31
+        );
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[5]),
+          2 * issuanceAmount41
+        );
         // Tokenholder1 - token3
         // NA
         // Tokenholder1 - token4
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[6]), 4*issuanceAmount11);
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[6]),
+          4 * issuanceAmount11
+        );
         //
         // Tokenholder2 - token1
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[7]), issuanceAmount12);
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[8]), issuanceAmount22);
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[9]), issuanceAmount32);
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[7]),
+          issuanceAmount12
+        );
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[8]),
+          issuanceAmount22
+        );
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[9]),
+          issuanceAmount32
+        );
         // Tokenholder2 - token2
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[10]), 2*issuanceAmount22);
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[11]), 2*issuanceAmount32);
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[12]), 2*issuanceAmount42);
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[10]),
+          2 * issuanceAmount22
+        );
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[11]),
+          2 * issuanceAmount32
+        );
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[12]),
+          2 * issuanceAmount42
+        );
         // Tokenholder2 - token3
         // NA
         // Tokenholder2 - token4
         assert.equal(parseInt(batchSpendableBalancesOfByPartition[13]), 0);
         //
         // Tokenholder3 - token1
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[14]), issuanceAmount13);
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[15]), issuanceAmount23);
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[16]), issuanceAmount33);
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[14]),
+          issuanceAmount13
+        );
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[15]),
+          issuanceAmount23
+        );
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[16]),
+          issuanceAmount33
+        );
         // Tokenholder3 - token2
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[17]), 2*issuanceAmount23 - 2*holdAmount);
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[18]), 2*issuanceAmount33);
-        assert.equal(parseInt(batchSpendableBalancesOfByPartition[19]), 2*issuanceAmount43);
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[17]),
+          2 * issuanceAmount23 - 2 * holdAmount
+        );
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[18]),
+          2 * issuanceAmount33
+        );
+        assert.equal(
+          parseInt(batchSpendableBalancesOfByPartition[19]),
+          2 * issuanceAmount43
+        );
         // Tokenholder3 - token3
         // NA
         // Tokenholder3 - token4
@@ -905,43 +1172,73 @@ contract(
         // ETH BALANCES
         //
         assert.equal(batchEthBalances.length, tokenHolders.length);
-        assert.equal(web3.utils.fromWei(batchEthBalances2[0]), web3.utils.fromWei(await web3.eth.getBalance(tokenHolders[0])));
-        assert.equal(web3.utils.fromWei(batchEthBalances2[1]), web3.utils.fromWei(await web3.eth.getBalance(tokenHolders[1])));
-        assert.equal(web3.utils.fromWei(batchEthBalances2[2]), web3.utils.fromWei(await web3.eth.getBalance(tokenHolders[2])));
+        assert.equal(
+          web3.utils.fromWei(batchEthBalances2[0]),
+          web3.utils.fromWei(await web3.eth.getBalance(tokenHolders[0]))
+        );
+        assert.equal(
+          web3.utils.fromWei(batchEthBalances2[1]),
+          web3.utils.fromWei(await web3.eth.getBalance(tokenHolders[1]))
+        );
+        assert.equal(
+          web3.utils.fromWei(batchEthBalances2[2]),
+          web3.utils.fromWei(await web3.eth.getBalance(tokenHolders[2]))
+        );
 
         // BALANCES
         //
-        assert.equal(batchBalancesOf2.length, tokenHolders.length*tokenAddresses.length);
+        assert.equal(
+          batchBalancesOf2.length,
+          tokenHolders.length * tokenAddresses.length
+        );
         //
         // Tokenholder1
-        assert.equal(parseInt(batchBalancesOf2[0]), issuanceAmount11+issuanceAmount21+issuanceAmount31);
-        assert.equal(parseInt(batchBalancesOf2[1]), 2*(issuanceAmount21+issuanceAmount31+issuanceAmount41));
+        assert.equal(
+          parseInt(batchBalancesOf2[0]),
+          issuanceAmount11 + issuanceAmount21 + issuanceAmount31
+        );
+        assert.equal(
+          parseInt(batchBalancesOf2[1]),
+          2 * (issuanceAmount21 + issuanceAmount31 + issuanceAmount41)
+        );
         assert.equal(parseInt(batchBalancesOf2[2]), 0);
-        assert.equal(parseInt(batchBalancesOf2[3]), 4*issuanceAmount11);
+        assert.equal(parseInt(batchBalancesOf2[3]), 4 * issuanceAmount11);
         // Tokenholder2
-        assert.equal(parseInt(batchBalancesOf2[4]), issuanceAmount12+issuanceAmount22+issuanceAmount32);
-        assert.equal(parseInt(batchBalancesOf2[5]), 2*(issuanceAmount22+issuanceAmount32+issuanceAmount42));
+        assert.equal(
+          parseInt(batchBalancesOf2[4]),
+          issuanceAmount12 + issuanceAmount22 + issuanceAmount32
+        );
+        assert.equal(
+          parseInt(batchBalancesOf2[5]),
+          2 * (issuanceAmount22 + issuanceAmount32 + issuanceAmount42)
+        );
         assert.equal(parseInt(batchBalancesOf2[6]), 0);
         assert.equal(parseInt(batchBalancesOf2[7]), 0);
         // Tokenholder3
-        assert.equal(parseInt(batchBalancesOf2[8]), issuanceAmount13+issuanceAmount23+issuanceAmount33);
-        assert.equal(parseInt(batchBalancesOf2[9]), 2*(issuanceAmount23+issuanceAmount33+issuanceAmount43));
+        assert.equal(
+          parseInt(batchBalancesOf2[8]),
+          issuanceAmount13 + issuanceAmount23 + issuanceAmount33
+        );
+        assert.equal(
+          parseInt(batchBalancesOf2[9]),
+          2 * (issuanceAmount23 + issuanceAmount33 + issuanceAmount43)
+        );
         assert.equal(parseInt(batchBalancesOf2[10]), 0);
         assert.equal(parseInt(batchBalancesOf2[11]), 0);
-
       });
     });
 
-    describe("batchERC721Balances", function() {
-      it("returns the list of minted tokens", async function() {
+    describe('batchERC721Balances', function () {
+      it('returns the list of minted tokens', async function () {
         const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
         const tokenAddresses = [this.token5.address, this.token6.address];
 
-        const batchERC721Balances = await this.balanceReader.batchERC721Balances(
-          tokenAddresses,
-          tokenHolders,
-          { from: unknown }
-        );
+        const batchERC721Balances =
+          await this.balanceReader.batchERC721Balances(
+            tokenAddresses,
+            tokenHolders,
+            { from: unknown }
+          );
 
         const batchEthBalances = batchERC721Balances[0];
         const batchBalancesOf = batchERC721Balances[1];
@@ -988,7 +1285,6 @@ contract(
         assert.equal(token5Holder3[5], 13);
         assert.equal(token5Holder3[6], 14);
 
-        
         assert.equal(token6Holder1[0], 10);
         assert.equal(token6Holder1[1], 20);
         assert.equal(token6Holder1[2], 30);
@@ -1005,13 +1301,18 @@ contract(
         assert.equal(token6Holder3[4], 120);
         assert.equal(token6Holder3[5], 130);
         assert.equal(token6Holder3[6], 140);
-      })
+      });
     });
 
-    describe("batchValidations", function () {
-      it("returns the lists of allowlisted and blocklisted", async function () {
+    describe('batchValidations', function () {
+      it('returns the lists of allowlisted and blocklisted', async function () {
         const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
-        const tokenAddresses = [this.token1.address, this.token2.address, this.token3.address, this.token4.address];
+        const tokenAddresses = [
+          this.token1.address,
+          this.token2.address,
+          this.token3.address,
+          this.token4.address
+        ];
 
         const batchValidations = await this.balanceReader.batchValidations(
           tokenAddresses,
@@ -1024,7 +1325,10 @@ contract(
 
         // ALLOWLISTED
         //
-        assert.equal(batchAllowlisted.length, tokenAddresses.length * tokenHolders.length);
+        assert.equal(
+          batchAllowlisted.length,
+          tokenAddresses.length * tokenHolders.length
+        );
         //
         // Tokenholder1
         assert.equal(batchAllowlisted[0], true);
@@ -1044,7 +1348,10 @@ contract(
 
         // BLOCKLISTED
         //
-        assert.equal(batchBlocklisted.length, tokenAddresses.length * tokenHolders.length);
+        assert.equal(
+          batchBlocklisted.length,
+          tokenAddresses.length * tokenHolders.length
+        );
         //
         // Tokenholder1
         assert.equal(batchBlocklisted[0], false);

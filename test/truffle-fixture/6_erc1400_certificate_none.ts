@@ -1,3 +1,6 @@
+import { artifacts, ethers } from 'hardhat';
+import type { ERC1400HoldableCertificateToken } from '../../typechain-types';
+
 const ERC1400HoldableCertificateToken = artifacts.require(
   'ERC1400HoldableCertificateToken'
 );
@@ -19,8 +22,8 @@ const CERTIFICATE_VALIDATION_NONE = 0;
 const CERTIFICATE_VALIDATION_NONCE = 1;
 const CERTIFICATE_VALIDATION_SALT = 2;
 
-module.exports = async function () {
-  const erc1400HoldableCertificateToken =
+export default async function () {
+  const erc1400HoldableCertificateToken: ERC1400HoldableCertificateToken =
     await ERC1400HoldableCertificateToken.new(
       'ERC1400HoldableCertificateToken',
       'DAU',
@@ -39,4 +42,4 @@ module.exports = async function () {
     '\n   > ERC1400HoldableCertificateToken token deployment without extension: Success -->',
     erc1400HoldableCertificateToken.address
   );
-};
+}

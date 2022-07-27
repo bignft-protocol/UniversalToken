@@ -21,8 +21,6 @@ const config: HardhatUserConfig = {
     },
     balconyTestnet: {
       url: 'https://endpoint-testnet.bignft.app',
-      gas: 5000000,
-      gasPrice: 1,
       accounts
     }
   },

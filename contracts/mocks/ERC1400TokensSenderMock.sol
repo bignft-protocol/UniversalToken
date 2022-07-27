@@ -3,7 +3,7 @@
 pragma solidity ^0.8.0;
 
 import "../extensions/userExtensions/IERC1400TokensSender.sol";
-import "../interface/ERC1820Implementer.sol";
+import "../tools/ERC1820Implementer.sol";
 
 contract ERC1400TokensSenderMock is IERC1400TokensSender, ERC1820Implementer {
     string internal constant ERC1400_TOKENS_SENDER = "ERC1400TokensSender";

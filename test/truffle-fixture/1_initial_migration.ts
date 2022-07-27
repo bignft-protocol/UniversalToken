@@ -1,5 +1,7 @@
+import { artifacts } from 'hardhat';
+
 const Migrations = artifacts.require('Migrations');
 
-module.exports = async function () {
+export default async function () {
   Migrations.setAsDeployed(await Migrations.new());
-};
+}

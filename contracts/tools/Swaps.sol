@@ -11,7 +11,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 import "./ERC1820Client.sol";
-import "../interface/ERC1820Implementer.sol";
+import "../tools/ERC1820Implementer.sol";
 
 import "../extensions/userExtensions/IERC1400TokensRecipient.sol";
 import "../interface/IERC20HoldableToken.sol";

@@ -226,7 +226,7 @@ contract(
   ]) {
     before(async function () {
       this.registry = await ERC1820Registry.at(
-        '0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24'
+        '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'
       );
     });
 

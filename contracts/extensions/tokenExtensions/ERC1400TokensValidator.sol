@@ -18,7 +18,7 @@ import "../../roles/BlocklistedRole.sol";
 import "../../interface/IHoldableERC1400TokenExtension.sol";
 import "../../tools/ERC1820Client.sol";
 import "../../tools/DomainAware.sol";
-import "../../interface/ERC1820Implementer.sol";
+import "../../tools/ERC1820Implementer.sol";
 
 import "../../IERC1400.sol";
 
