@@ -1,6 +1,7 @@
-const { expectRevert } = require('@openzeppelin/test-helpers');
+import { artifacts, contract, assert, ethers } from 'hardhat';
 
-const { soliditySha3 } = require('web3-utils');
+// @ts-ignore
+import { expectRevert } from '@openzeppelin/test-helpers';
 
 const ERC1400 = artifacts.require('ERC1400');
 const ERC1820Registry = artifacts.require('ERC1820Registry');
@@ -66,7 +67,7 @@ contract(
         });
         await this.registry.setInterfaceImplementer(
           tokenHolder,
-          soliditySha3(ERC1400_TOKENS_SENDER),
+          ethers.utils.id(ERC1400_TOKENS_SENDER),
           this.senderContract.address,
           { from: tokenHolder }
         );
@@ -76,7 +77,7 @@ contract(
         });
         await this.registry.setInterfaceImplementer(
           recipient,
-          soliditySha3(ERC1400_TOKENS_RECIPIENT),
+          ethers.utils.id(ERC1400_TOKENS_RECIPIENT),
           this.recipientContract.address,
           { from: recipient }
         );
@@ -88,13 +89,13 @@ contract(
       afterEach(async function () {
         await this.registry.setInterfaceImplementer(
           tokenHolder,
-          soliditySha3(ERC1400_TOKENS_SENDER),
+          ethers.utils.id(ERC1400_TOKENS_SENDER),
           ZERO_ADDRESS,
           { from: tokenHolder }
         );
         await this.registry.setInterfaceImplementer(
           recipient,
-          soliditySha3(ERC1400_TOKENS_RECIPIENT),
+          ethers.utils.id(ERC1400_TOKENS_RECIPIENT),
           ZERO_ADDRESS,
           { from: recipient }
         );

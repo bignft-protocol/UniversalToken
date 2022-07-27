@@ -1,8 +1,8 @@
-const { expectRevert } = require('@openzeppelin/test-helpers');
-const { soliditySha3 } = require('web3-utils');
-const { advanceTimeAndBlock } = require('./utils/time');
-const { newSecretHashPair, newHoldId } = require('./utils/crypto');
-const {
+// @ts-nocheck
+import { artifacts, contract, ethers, assert, web3 } from 'hardhat';
+import { advanceTimeAndBlock } from './utils/time';
+import { newSecretHashPair, newHoldId } from './utils/crypto';
+import {
   CERTIFICATE_VALIDATION_NONE,
   CERTIFICATE_VALIDATION_NONCE,
   CERTIFICATE_VALIDATION_SALT,
@@ -21,9 +21,9 @@ const {
   setHoldsActivated,
   assertIsTokenController,
   addTokenController
-} = require('./common/extension');
-const { assert } = require('chai');
-const Account = require('eth-lib/lib/account');
+} from './common/extension';
+import { expectRevert } from '@openzeppelin/test-helpers';
+import Account from 'eth-lib/lib/account';
 
 const ERC1400HoldableCertificate = artifacts.require(
   'ERC1400HoldableCertificateToken'
@@ -37,12 +37,12 @@ const ERC1400TokensValidatorMock = artifacts.require(
 const ERC1400TokensChecker = artifacts.require('ERC1400TokensChecker');
 const FakeERC1400Mock = artifacts.require('FakeERC1400Mock');
 
-const PauserMock = artifacts.require('PauserMock.sol');
-const CertificateSignerMock = artifacts.require('CertificateSignerMock.sol');
-const AllowlistMock = artifacts.require('AllowlistMock.sol');
-const BlocklistMock = artifacts.require('BlocklistMock.sol');
+const PauserMock = artifacts.require('PauserMock');
+const CertificateSignerMock = artifacts.require('CertificateSignerMock');
+const AllowlistMock = artifacts.require('AllowlistMock');
+const BlocklistMock = artifacts.require('BlocklistMock');
 
-const ClockMock = artifacts.require('ClockMock.sol');
+const ClockMock = artifacts.require('ClockMock');
 
 const ERC1400_TOKENS_VALIDATOR = 'ERC1400TokensValidator';
 const ERC1400_TOKENS_CHECKER = 'ERC1400TokensChecker';
@@ -131,7 +131,7 @@ const smallHoldAmount = 400;
 const SECONDS_IN_AN_HOUR = 3600;
 const SECONDS_IN_A_DAY = 24 * SECONDS_IN_AN_HOUR;
 
-const numberToHexa = (num, pushTo) => {
+const numberToHexa = (num: number, pushTo: number) => {
   const arr1 = [];
   const str = num.toString(16);
   if (str.length % 2 === 1) {
@@ -149,16 +149,19 @@ const numberToHexa = (num, pushTo) => {
   return arr1.join('');
 };
 
-const assertTotalSupply = async (_contract, _amount) => {
+const assertTotalSupply = async (
+  _contract: { totalSupply: () => any },
+  _amount: number
+) => {
   const totalSupply = await _contract.totalSupply();
   assert.equal(totalSupply, _amount);
 };
 
 const assertBalanceOf = async (
-  _contract,
-  _tokenHolder,
-  _partition,
-  _amount
+  _contract: any,
+  _tokenHolder: any,
+  _partition: string,
+  _amount: number
 ) => {
   await assertBalance(_contract, _tokenHolder, _amount);
   await assertBalanceOfByPartition(
@@ -170,10 +173,10 @@ const assertBalanceOf = async (
 };
 
 const assertBalanceOfByPartition = async (
-  _contract,
-  _tokenHolder,
-  _partition,
-  _amount
+  _contract: { balanceOfByPartition: (arg0: any, arg1: any) => any },
+  _tokenHolder: any,
+  _partition: string,
+  _amount: number
 ) => {
   const balanceByPartition = await _contract.balanceOfByPartition(
     _partition,
@@ -182,16 +185,20 @@ const assertBalanceOfByPartition = async (
   assert.equal(balanceByPartition, _amount);
 };
 
-const assertBalance = async (_contract, _tokenHolder, _amount) => {
+const assertBalance = async (
+  _contract: { balanceOf: (arg0: any) => any },
+  _tokenHolder: any,
+  _amount: number
+) => {
   const balance = await _contract.balanceOf(_tokenHolder);
   assert.equal(balance, _amount);
 };
 
 const assertEscResponse = async (
-  _response,
-  _escCode,
-  _additionalCode,
-  _destinationPartition
+  _response: any[],
+  _escCode: string,
+  _additionalCode: string,
+  _destinationPartition: string
 ) => {
   assert.equal(_response[0], _escCode);
   assert.equal(_response[1], _additionalCode);
@@ -199,15 +206,16 @@ const assertEscResponse = async (
 };
 
 const craftCertificate = async (
-  _txPayload,
-  _token,
-  _extension,
-  _clock, // this.clock
-  _txSender
+  _txPayload: any,
+  _token: { address: any; generateDomainSeparator: () => any },
+  _extension: { retrieveTokenSetup: (arg0: any) => any },
+  _clock: any, // this.clock
+  _txSender: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
   const domainSeperator = await _token.generateDomainSeparator();
-  if (parseInt(tokenSetup[0]) === CERTIFICATE_VALIDATION_NONCE) {
+  const certificateValidation = parseInt(tokenSetup[0]);
+  if (certificateValidation === CERTIFICATE_VALIDATION_NONCE) {
     return craftNonceBasedCertificate(
       _txPayload,
       _token,
@@ -216,7 +224,8 @@ const craftCertificate = async (
       _txSender,
       domainSeperator
     );
-  } else if (parseInt(tokenSetup[0]) === CERTIFICATE_VALIDATION_SALT) {
+  }
+  if (certificateValidation === CERTIFICATE_VALIDATION_SALT) {
     return craftSaltBasedCertificate(
       _txPayload,
       _token,
@@ -225,18 +234,18 @@ const craftCertificate = async (
       _txSender,
       domainSeperator
     );
-  } else {
-    return EMPTY_CERTIFICATE;
   }
+
+  return EMPTY_CERTIFICATE;
 };
 
 const craftNonceBasedCertificate = async (
-  _txPayload,
-  _token,
-  _extension,
-  _clock, // this.clock
-  _txSender,
-  _domain
+  _txPayload: string,
+  _token: { address: { toString: () => any } },
+  _extension: { usedCertificateNonce: (arg0: any, arg1: any) => any },
+  _clock: { getTime: () => any }, // this.clock
+  _txSender: { toString: () => any },
+  _domain: any
 ) => {
   // Retrieve current nonce from smart contract
   const nonce = await _extension.usedCertificateNonce(
@@ -261,7 +270,7 @@ const craftNonceBasedCertificate = async (
     );
   }
 
-  const packedAndHashedParameters = soliditySha3(
+  const packedAndHashedParameters = web3.utils.soliditySha3(
     { type: 'address', value: _txSender.toString() },
     { type: 'address', value: _token.address.toString() },
     { type: 'bytes', value: rawTxPayload },
@@ -269,7 +278,7 @@ const craftNonceBasedCertificate = async (
     { type: 'uint256', value: nonce.toString() }
   );
 
-  const packedAndHashedData = soliditySha3(
+  const packedAndHashedData = web3.utils.soliditySha3(
     { type: 'bytes32', value: _domain },
     { type: 'bytes32', value: packedAndHashedParameters }
   );
@@ -292,15 +301,15 @@ const craftNonceBasedCertificate = async (
 };
 
 const craftSaltBasedCertificate = async (
-  _txPayload,
-  _token,
-  _extension,
-  _clock, // this.clock
-  _txSender,
-  _domain
+  _txPayload: string,
+  _token: { address: { toString: () => any } },
+  _extension: { usedCertificateSalt: (arg0: any, arg1: string | null) => any },
+  _clock: { getTime: () => any }, // this.clock
+  _txSender: { toString: () => any },
+  _domain: any
 ) => {
   // Generate a random salt, which has never been used before
-  const salt = soliditySha3(new Date().getTime().toString());
+  const salt = ethers.utils.id(new Date().getTime().toString());
 
   // Check if salt has already been used, even though that very un likely to happen (statistically impossible)
   const saltHasAlreadyBeenUsed = await _extension.usedCertificateSalt(
@@ -331,7 +340,7 @@ const craftSaltBasedCertificate = async (
     );
   }
 
-  const packedAndHashedParameters = soliditySha3(
+  const packedAndHashedParameters = web3.utils.soliditySha3(
     { type: 'address', value: _txSender.toString() },
     { type: 'address', value: _token.address.toString() },
     { type: 'bytes', value: rawTxPayload },
@@ -339,7 +348,7 @@ const craftSaltBasedCertificate = async (
     { type: 'bytes32', value: salt.toString() }
   );
 
-  const packedAndHashedData = soliditySha3(
+  const packedAndHashedData = web3.utils.soliditySha3(
     { type: 'bytes32', value: _domain },
     { type: 'bytes32', value: packedAndHashedParameters }
   );
@@ -439,7 +448,7 @@ contract(
                 this.token.owner(),
                 this.registry.getInterfaceImplementer(
                   this.token.address,
-                  soliditySha3(ERC1400_TOKENS_VALIDATOR)
+                  ethers.utils.id(ERC1400_TOKENS_VALIDATOR)
                 )
               ]);
 
@@ -466,7 +475,7 @@ contract(
               [extensionImplementer, isOperator, isMinter] = await Promise.all([
                 this.registry.getInterfaceImplementer(
                   this.token.address,
-                  soliditySha3(ERC1400_TOKENS_VALIDATOR)
+                  ethers.utils.id(ERC1400_TOKENS_VALIDATOR)
                 ),
                 this.token.isOperator(this.extension.address, unknown),
                 this.token.isMinter(this.extension.address)
@@ -2230,7 +2239,7 @@ contract(
         });
         await this.registry.setInterfaceImplementer(
           tokenHolder,
-          soliditySha3(ERC1400_TOKENS_SENDER),
+          ethers.utils.id(ERC1400_TOKENS_SENDER),
           this.senderContract.address,
           { from: tokenHolder }
         );
@@ -2240,7 +2249,7 @@ contract(
         });
         await this.registry.setInterfaceImplementer(
           recipient,
-          soliditySha3(ERC1400_TOKENS_RECIPIENT),
+          ethers.utils.id(ERC1400_TOKENS_RECIPIENT),
           this.recipientContract.address,
           { from: recipient }
         );
@@ -2248,13 +2257,13 @@ contract(
       after(async function () {
         await this.registry.setInterfaceImplementer(
           tokenHolder,
-          soliditySha3(ERC1400_TOKENS_SENDER),
+          ethers.utils.id(ERC1400_TOKENS_SENDER),
           ZERO_ADDRESS,
           { from: tokenHolder }
         );
         await this.registry.setInterfaceImplementer(
           recipient,
-          soliditySha3(ERC1400_TOKENS_RECIPIENT),
+          ethers.utils.id(ERC1400_TOKENS_RECIPIENT),
           ZERO_ADDRESS,
           { from: recipient }
         );

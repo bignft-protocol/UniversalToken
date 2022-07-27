@@ -3,7 +3,7 @@
 import { ethers, artifacts, network, assert, contract } from 'hardhat';
 import type { ERC1400, ERC1820Registry, MinterMock } from '../typechain-types';
 
-const { expectRevert } = require('@openzeppelin/test-helpers');
+import { expectRevert } from '@openzeppelin/test-helpers';
 
 const ERC1400 = artifacts.require('ERC1400');
 

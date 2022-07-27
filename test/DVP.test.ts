@@ -1,8 +1,15 @@
-const { expectRevert } = require('@openzeppelin/test-helpers');
-const { web3 } = require('@openzeppelin/test-helpers/src/setup');
-const { assert } = require('chai');
-const { soliditySha3 } = require('web3-utils');
-const { advanceTimeAndBlock } = require('./utils/time');
+// @ts-nocheck
+import { artifacts, web3, assert, ethers, contract } from 'hardhat';
+import type {
+  Swaps,
+  ERC1400,
+  FakeERC1400Mock,
+  ERC20Token,
+  ERC721Token
+} from '../typechain-types';
+import { advanceTimeAndBlock } from './utils/time';
+
+import { expectRevert } from '@openzeppelin/test-helpers';
 
 const DVPContract = artifacts.require('Swaps');
 const ERC1400 = artifacts.require('ERC1400');
@@ -63,14 +70,14 @@ const dvpTradeProposalFlag =
 const dvpTradeAcceptanceFlag =
   '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'; // Flag to indicate an DVP e-money transfer
 
-const ERC1400_TOKENS_RECIPIENT_INTERFACE_HASH = soliditySha3(
+const ERC1400_TOKENS_RECIPIENT_INTERFACE_HASH = ethers.utils.id(
   'ERC1400TokensRecipient'
 );
-const ERC1400_TOKENS_SENDER_INTERFACE_HASH = soliditySha3(
+const ERC1400_TOKENS_SENDER_INTERFACE_HASH = ethers.utils.id(
   'ERC1400TokensSender'
 );
 
-const ERC1820_ACCEPT_MAGIC = soliditySha3('ERC1820_ACCEPT_MAGIC');
+const ERC1820_ACCEPT_MAGIC = ethers.utils.id('ERC1820_ACCEPT_MAGIC');
 
 const STATE_PENDING = 1;
 const STATE_EXECUTED = 2;
@@ -97,10 +104,10 @@ const issuanceTokenId = 123456789;
 const SECONDS_IN_A_WEEK = 86400 * 7;
 
 const assertBalanceOf = async (
-  _contract,
-  _tokenHolder,
-  _amount,
-  _balanceIsExact
+  _contract: { balanceOf: (arg0: any) => any },
+  _tokenHolder: any,
+  _amount: number,
+  _balanceIsExact: boolean
 ) => {
   const balance = (await _contract.balanceOf(_tokenHolder)).toNumber();
 
@@ -112,10 +119,10 @@ const assertBalanceOf = async (
 };
 
 const assertBalanceOfByPartition = async (
-  _contract,
-  _tokenHolder,
-  _partition,
-  _amount
+  _contract: { balanceOfByPartition: (arg0: any, arg1: any) => any },
+  _tokenHolder: any,
+  _partition: string,
+  _amount: number
 ) => {
   const balanceByPartition = (
     await _contract.balanceOfByPartition(_partition, _tokenHolder)
@@ -123,17 +130,21 @@ const assertBalanceOfByPartition = async (
   assert.equal(balanceByPartition, _amount);
 };
 
-const assertTokenOf = async (_contract, _tokenHolder, _tokenId) => {
+const assertTokenOf = async (
+  _contract: { ownerOf: (arg0: any) => any },
+  _tokenHolder: any,
+  _tokenId: number
+) => {
   const ownerOf = await _contract.ownerOf(_tokenId);
 
   assert.equal(ownerOf, _tokenHolder);
 };
 
 const assertERC20Allowance = async (
-  _contract,
-  _tokenHolder,
-  _spender,
-  _amount
+  _contract: { allowance: (arg0: any, arg1: any) => any },
+  _tokenHolder: any,
+  _spender: any,
+  _amount: any
 ) => {
   const allowance = (
     await _contract.allowance(_tokenHolder, _spender)
@@ -142,10 +153,12 @@ const assertERC20Allowance = async (
 };
 
 const assertERC1400Allowance = async (
-  _contract,
-  _tokenHolder,
-  _spender,
-  _amount
+  _contract: {
+    allowanceByPartition: (arg0: string, arg1: any, arg2: any) => any;
+  },
+  _tokenHolder: any,
+  _spender: any,
+  _amount: any
 ) => {
   const allowance = (
     await _contract.allowanceByPartition(partition1, _tokenHolder, _spender)
@@ -153,12 +166,20 @@ const assertERC1400Allowance = async (
   assert.equal(allowance, _amount);
 };
 
-const assertERC721Allowance = async (_contract, _tokenHolder, _tokenId) => {
+const assertERC721Allowance = async (
+  _contract: { getApproved: (arg0: any) => any },
+  _tokenHolder: any,
+  _tokenId: number
+) => {
   const approvedOf = await _contract.getApproved(_tokenId);
   assert.equal(approvedOf, _tokenHolder);
 };
 
-const assertEtherBalance = async (_etherHolder, _balance, _balanceIsExact) => {
+const assertEtherBalance = async (
+  _etherHolder: string,
+  _balance: number,
+  _balanceIsExact: boolean
+) => {
   const balance = await web3.eth.getBalance(_etherHolder);
   if (_balanceIsExact) {
     assert.equal(balance, _balance);
@@ -168,26 +189,26 @@ const assertEtherBalance = async (_etherHolder, _balance, _balanceIsExact) => {
 };
 
 const assertTrade = (
-  _contract,
-  _tradeIndex,
-  _holder1,
-  _holder2,
-  _executer,
-  _expirationDate,
-  _tradeType,
-  _tradeState,
-  _token1Address,
-  _token1Amount,
-  _token1Id,
-  _token1Standard,
-  _token1Accepted,
-  _token1Approved,
-  _token2Address,
-  _token2Amount,
-  _token2Id,
-  _token2Standard,
-  _token2Accepted,
-  _token2Approved
+  _contract: any,
+  _tradeIndex: any,
+  _holder1: any,
+  _holder2: any,
+  _executer: any,
+  _expirationDate: any,
+  _tradeType: number,
+  _tradeState: number,
+  _token1Address: any,
+  _token1Amount: any,
+  _token1Id: string,
+  _token1Standard: string,
+  _token1Accepted: boolean,
+  _token1Approved: boolean,
+  _token2Address: any,
+  _token2Amount: any,
+  _token2Id: any,
+  _token2Standard: any,
+  _token2Accepted: boolean,
+  _token2Approved: boolean
 ) => {
   return fullAssertTrade(
     _contract,
@@ -215,27 +236,27 @@ const assertTrade = (
 };
 
 const fullAssertTrade = async (
-  _contract,
-  _tradeIndex,
-  _holder1,
-  _holder2,
-  _executer,
-  _expirationDate,
-  _tradeType1,
-  _tradeType2,
-  _tradeState,
-  _token1Address,
-  _token1Amount,
-  _token1Id,
-  _token1Standard,
-  _token1Accepted,
-  _token1Approved,
-  _token2Address,
-  _token2Amount,
-  _token2Id,
-  _token2Standard,
-  _token2Accepted,
-  _token2Approved
+  _contract: { getTrade: (arg0: any) => any },
+  _tradeIndex: any,
+  _holder1: any,
+  _holder2: any,
+  _executer: any,
+  _expirationDate: number,
+  _tradeType1: any,
+  _tradeType2: any,
+  _tradeState: number,
+  _token1Address: any,
+  _token1Amount: any,
+  _token1Id: string,
+  _token1Standard: any,
+  _token1Accepted: boolean,
+  _token1Approved: boolean,
+  _token2Address: any,
+  _token2Amount: any,
+  _token2Id: string,
+  _token2Standard: any,
+  _token2Accepted: boolean,
+  _token2Approved: boolean
 ) => {
   const trade = await _contract.getTrade(_tradeIndex);
 
@@ -278,16 +299,20 @@ const fullAssertTrade = async (
   assert.equal(Number(trade.state), _tradeState);
 };
 
-const assertTradeState = async (_contract, _tradeIndex, _tradeState) => {
+const assertTradeState = async (
+  _contract: { getTrade: (arg0: any) => any },
+  _tradeIndex: number,
+  _tradeState: number
+) => {
   const trade = await _contract.getTrade(_tradeIndex);
   assert.equal(Number(trade.state), _tradeState);
 };
 
 const assertTradeAccepted = async (
-  _contract,
-  _tradeIndex,
-  _requester,
-  _accepted
+  _contract: { getTrade: (arg0: any) => any },
+  _tradeIndex: any,
+  _requester: any,
+  _accepted: boolean
 ) => {
   const trade = await _contract.getTrade(_tradeIndex);
   const holder1 = trade.holder1;
@@ -302,7 +327,7 @@ const assertTradeAccepted = async (
   }
 };
 
-const addressToBytes32 = (_addr, _fillTo = 32) => {
+const addressToBytes32 = (_addr: string, _fillTo = 32) => {
   const _addr2 = _addr.substring(2);
   const arr1 = [];
   for (let n = 0, l = _addr2.length; n < l; n++) {
@@ -314,7 +339,7 @@ const addressToBytes32 = (_addr, _fillTo = 32) => {
   return arr1.join('');
 };
 
-const NumToHexBytes32 = (_num, _fillTo = 32) => {
+const NumToHexBytes32 = (_num: number, _fillTo = 32) => {
   const arr1 = [];
   const _str = _num.toString(16);
   for (let n = 0, l = _str.length; n < l; n++) {
@@ -326,7 +351,7 @@ const NumToHexBytes32 = (_num, _fillTo = 32) => {
   return arr1.join('');
 };
 
-const NumToNumBytes32 = (_num, _fillTo = 32) => {
+const NumToNumBytes32 = (_num: number, _fillTo = 32) => {
   const arr1 = [];
   const _str = _num.toString(16);
   for (let n = 0, l = _str.length; n < l; n++) {
@@ -338,42 +363,42 @@ const NumToNumBytes32 = (_num, _fillTo = 32) => {
   return `0x${arr1.join('')}`;
 };
 
-const extractTokenAddress = (tokenData) => {
+const extractTokenAddress = (tokenData: { tokenAddress: string }) => {
   return web3.utils.toChecksumAddress(tokenData.tokenAddress);
   //return web3.utils.toChecksumAddress(`0x${tokenData.substr(26, 40)}`);
 };
-const extractTokenAmount = (tokenData) => {
+const extractTokenAmount = (tokenData: { tokenValue: string }) => {
   return parseInt(tokenData.tokenValue);
   //return parseInt(tokenData.substr(66, 64), 16);
 };
-const extractTokenId = (tokenData) => {
+const extractTokenId = (tokenData: { tokenId: any }) => {
   return tokenData.tokenId;
   //return `0x${tokenData.substr(130, 64)}`;
 };
-const extractTokenStandard = (tokenData) => {
+const extractTokenStandard = (tokenData: { tokenStandard: string }) => {
   return parseInt(tokenData.tokenStandard);
   //return parseInt(`0x${tokenData.substr(194, 64)}`);
 };
-const extractTokenAccepted = (tokenData) => {
+const extractTokenAccepted = (tokenData: { accepted: any }) => {
   return tokenData.accepted;
   //return `0x${tokenData.substr(258, 64)}`;
 };
-const extractTokenApproved = (tokenData) => {
+const extractTokenApproved = (tokenData: { approved: any }) => {
   return tokenData.approved;
   //return `0x${tokenData.substr(322, 64)}`;
 };
 
 const getTradeProposalData = (
-  _tradeRecipient,
-  _tradeExecuter,
-  _expirationDate,
-  _settlementDate,
-  _token2Address,
-  _token2Amount,
-  _token2Id,
-  _token2Standard,
-  _tradeType2,
-  isFake
+  _tradeRecipient: any,
+  _tradeExecuter: any,
+  _expirationDate: any,
+  _settlementDate: number,
+  _token2Address: any,
+  _token2Amount: number,
+  _token2Id: string,
+  _token2Standard: string,
+  _tradeType2: number,
+  isFake: boolean | undefined
 ) => {
   const flag = isFake ? partitionFlag : dvpTradeProposalFlag;
   const hexTradeRecipient = addressToBytes32(_tradeRecipient);
@@ -398,7 +423,10 @@ const getTradeProposalData = (
   return `${flag}${hexTradeRecipient}${hexTradeExecuter}${hexExpirationDate}${hexSettlementDate}${tradeTokenData}`;
 };
 
-const getTradeAcceptanceData = (tradeIndex, isFake) => {
+const getTradeAcceptanceData = (
+  tradeIndex: number,
+  isFake: boolean | undefined
+) => {
   const flag = isFake ? partitionFlag : dvpTradeAcceptanceFlag;
   const hexTradeIndex = NumToHexBytes32(tradeIndex);
 
@@ -406,12 +434,12 @@ const getTradeAcceptanceData = (tradeIndex, isFake) => {
 };
 
 const assertTokenEscrowed = async (
-  dvp,
-  token,
-  holder,
-  tokenStandard,
-  tokenAmount,
-  partition
+  dvp: { address: any },
+  token: any,
+  holder: any,
+  tokenStandard: string | number,
+  tokenAmount: number,
+  partition: string
 ) => {
   if (tokenStandard === ERC20STANDARD) {
     await assertBalanceOf(token, holder, issuanceAmount - tokenAmount, true);
@@ -444,15 +472,15 @@ const assertTokenEscrowed = async (
 };
 
 const assertBothTokenEscrowed = async (
-  dvp,
-  token1,
-  token2,
-  holder1,
-  holder2,
-  tokenStandard1,
-  tokenStandard2,
-  tokenAmount1,
-  tokenAmount2
+  dvp: { address: any },
+  token1: any,
+  token2: any,
+  holder1: any,
+  holder2: any,
+  tokenStandard1: string,
+  tokenStandard2: string,
+  tokenAmount1: number,
+  tokenAmount2: number
 ) => {
   if (tokenStandard1 === ERC20STANDARD) {
     await assertBalanceOf(token1, holder1, issuanceAmount - tokenAmount1, true);
@@ -517,15 +545,15 @@ const assertBothTokenEscrowed = async (
 };
 
 const assertTokenAuthorized = async (
-  dvp,
-  token1,
-  token2,
-  holder1,
-  holder2,
-  tokenStandard1,
-  tokenStandard2,
-  tokenAmount1,
-  tokenAmount2
+  dvp: any,
+  token1: any,
+  token2: any,
+  holder1: any,
+  holder2: any,
+  tokenStandard1: string,
+  tokenStandard2: string,
+  tokenAmount1: number,
+  tokenAmount2: number
 ) => {
   await assertTokenTransferred(
     dvp,
@@ -566,15 +594,15 @@ const assertTokenAuthorized = async (
 };
 
 const assertTokenTransferred = async (
-  dvp,
-  token1,
-  token2,
-  holder1,
-  holder2,
-  tokenStandard1,
-  tokenStandard2,
-  tokenAmount1,
-  tokenAmount2
+  dvp: { address: any },
+  token1: any,
+  token2: any,
+  holder1: any,
+  holder2: string,
+  tokenStandard1: string | number,
+  tokenStandard2: string | number,
+  tokenAmount1: number,
+  tokenAmount2: number
 ) => {
   if (tokenStandard1 === ERC20STANDARD) {
     await assertBalanceOf(token1, holder1, issuanceAmount - tokenAmount1, true);
@@ -638,11 +666,11 @@ const assertTokenTransferred = async (
 };
 
 const assertGlobalBalancesAreCorrect = async (
-  dvp,
-  token1,
-  token2,
-  tradeIndex,
-  requester
+  dvp: { getTrade: (arg0: any) => any },
+  token1: { address: any },
+  token2: { address: any },
+  tradeIndex: any,
+  requester: undefined
 ) => {
   const trade = await dvp.getTrade(tradeIndex);
 
@@ -790,19 +818,19 @@ const assertGlobalBalancesAreCorrect = async (
 };
 
 const createTradeRequest = async (
-  dvp,
-  token1,
-  token2,
-  tokenStandard1,
-  tokenStandard2,
-  holder1,
-  holder2,
-  executer,
-  requester,
-  realExpirationDate,
-  tradeType,
-  tokenAmount1,
-  tokenAmount2
+  dvp: any,
+  token1: undefined,
+  token2: undefined,
+  tokenStandard1: string,
+  tokenStandard2: string,
+  holder1: any,
+  holder2: any,
+  executer: string,
+  requester: any,
+  realExpirationDate: boolean,
+  tradeType: number,
+  tokenAmount1: string | number,
+  tokenAmount2: number
 ) => {
   await fullCreateTradeRequest(
     dvp,
@@ -825,22 +853,45 @@ const createTradeRequest = async (
 };
 
 const fullCreateTradeRequest = async (
-  dvp,
-  token1,
-  token2,
-  tokenStandard1,
-  tokenStandard2,
-  holder1,
-  holder2,
-  executer,
-  requester,
-  realExpirationDate,
-  tradeType1,
-  tradeType2,
-  tokenAmount1,
-  tokenAmount2,
-  settlementDate,
-  preimage
+  dvp: {
+    getNbTrades: () => any;
+    requestTrade: (
+      arg0: {
+        holder1: any;
+        holder2: any;
+        executer: any;
+        expirationDate: any;
+        tokenAddress1: any;
+        tokenValue1: any;
+        tokenId1: string;
+        tokenStandard1: any;
+        tokenAddress2: any;
+        tokenValue2: any;
+        tokenId2: string;
+        tokenStandard2: any;
+        tradeType1: any;
+        tradeType2: any;
+        settlementDate: any;
+      },
+      arg1: any,
+      arg2: { from: any; value: any }
+    ) => any;
+  },
+  token1: { address: any },
+  token2: { address: any },
+  tokenStandard1: string,
+  tokenStandard2: string,
+  holder1: any,
+  holder2: any,
+  executer: any,
+  requester: any,
+  realExpirationDate: any,
+  tradeType1: any,
+  tradeType2: any,
+  tokenAmount1: any,
+  tokenAmount2: any,
+  settlementDate: number,
+  preimage: string
 ) => {
   const tokenAmount =
     requester === holder1
@@ -963,18 +1014,29 @@ const fullCreateTradeRequest = async (
 };
 
 const createTradeRequestWithoutCallingDVP = async (
-  dvp,
-  token1,
-  token2,
-  tokenStandard2,
-  tokenId2,
-  holder1,
-  holder2,
-  executer,
-  realExpirationDate,
-  tokenAmount1,
-  tokenAmount2,
-  openMarketplace
+  dvp: { getNbTrades: () => any; address: any },
+  token1: {
+    operatorTransferByPartition: (
+      arg0: string,
+      arg1: any,
+      arg2: any,
+      arg3: any,
+      arg4: string,
+      arg5: string,
+      arg6: { from: any }
+    ) => any;
+    address: any;
+  },
+  token2: { address: any },
+  tokenStandard2: string,
+  tokenId2: string,
+  holder1: any,
+  holder2: any,
+  executer: string,
+  realExpirationDate: boolean,
+  tokenAmount1: number,
+  tokenAmount2: number,
+  openMarketplace: boolean | undefined
 ) => {
   const recipient = openMarketplace ? ZERO_ADDRESS : holder2;
 
@@ -1055,13 +1117,13 @@ const createTradeRequestWithoutCallingDVP = async (
 };
 
 const acceptTradeRequest = async (
-  dvp,
-  token1,
-  token2,
-  tradeIndex,
-  requester,
-  newTradeState,
-  acceptedTrade
+  dvp: any,
+  token1: undefined,
+  token2: undefined,
+  tradeIndex: number,
+  requester: any,
+  newTradeState: number,
+  acceptedTrade: boolean
 ) => {
   await acceptTradeRequestWithPreimage(
     dvp,
@@ -1076,14 +1138,22 @@ const acceptTradeRequest = async (
 };
 
 const acceptTradeRequestWithPreimage = async (
-  dvp,
-  token1,
-  token2,
-  tradeIndex,
-  requester,
-  newTradeState,
-  acceptedTrade,
-  preimage
+  dvp: {
+    getTrade: (arg0: any) => any;
+    getTradeAcceptanceStatus: (arg0: any) => any;
+    acceptTrade: (
+      arg0: any,
+      arg1: any,
+      arg2: { from: any; value: number }
+    ) => any;
+  },
+  token1: any,
+  token2: any,
+  tradeIndex: any,
+  requester: any,
+  newTradeState: any,
+  acceptedTrade: any,
+  preimage: string
 ) => {
   const trade = await dvp.getTrade(tradeIndex);
   const holder1 = trade.holder1;
@@ -1128,13 +1198,27 @@ const acceptTradeRequestWithPreimage = async (
 };
 
 const acceptTradeRequestWithoutCallingDVP = async (
-  dvp,
-  token1,
-  token2,
-  tradeIndex,
-  requester,
-  newTradeState,
-  acceptedTrade
+  dvp: {
+    getTrade: (arg0: any) => any;
+    getTradeAcceptanceStatus: (arg0: any) => any;
+    address: any;
+  },
+  token1: any,
+  token2: {
+    operatorTransferByPartition: (
+      arg0: string,
+      arg1: any,
+      arg2: any,
+      arg3: number,
+      arg4: string,
+      arg5: string,
+      arg6: { from: any }
+    ) => any;
+  },
+  tradeIndex: number,
+  requester: any,
+  newTradeState: number,
+  acceptedTrade: boolean
 ) => {
   const trade = await dvp.getTrade(tradeIndex);
   const holder1 = trade.holder1;
@@ -1190,13 +1274,16 @@ const acceptTradeRequestWithoutCallingDVP = async (
 };
 
 const approveTradeRequest = async (
-  dvp,
-  token1,
-  token2,
-  tradeIndex,
-  requester,
-  newTradeState,
-  approvedTrade
+  dvp: {
+    getTradeApprovalStatus: (arg0: any) => any;
+    approveTrade: (arg0: any, arg1: boolean, arg2: { from: any }) => any;
+  },
+  token1: any,
+  token2: any,
+  tradeIndex: number,
+  requester: any,
+  newTradeState: number,
+  approvedTrade: boolean
 ) => {
   assert.equal(await dvp.getTradeApprovalStatus(tradeIndex), false);
 
@@ -1211,11 +1298,11 @@ const approveTradeRequest = async (
 };
 
 const executeTradeRequest = async (
-  dvp,
-  token1,
-  token2,
-  tradeIndex,
-  requester
+  dvp: { executeTrade: (arg0: any, arg1: { from: any }) => any },
+  token1: undefined,
+  token2: undefined,
+  tradeIndex: number,
+  requester: any
 ) => {
   await assertGlobalBalancesAreCorrect(dvp, token1, token2, tradeIndex);
 
@@ -1226,11 +1313,11 @@ const executeTradeRequest = async (
 };
 
 const forceTradeRequest = async (
-  dvp,
-  token1,
-  token2,
-  tradeIndex,
-  requester
+  dvp: { forceTrade: (arg0: any, arg1: { from: any }) => any },
+  token1: any,
+  token2: any,
+  tradeIndex: number,
+  requester: any
 ) => {
   await assertGlobalBalancesAreCorrect(dvp, token1, token2, tradeIndex);
 
@@ -1241,11 +1328,11 @@ const forceTradeRequest = async (
 };
 
 const cancelTradeRequest = async (
-  dvp,
-  token1,
-  token2,
-  tradeIndex,
-  requester
+  dvp: { cancelTrade: (arg0: any, arg1: { from: any }) => any },
+  token1: any,
+  token2: any,
+  tradeIndex: number,
+  requester: any
 ) => {
   await assertGlobalBalancesAreCorrect(dvp, token1, token2, tradeIndex);
 
@@ -1283,25 +1370,25 @@ contract(
     describe('parameters', function () {
       describe('owner', function () {
         it('returns the owner of the contract', async function () {
-          this.dvp = await DVPContract.new(false);
+          const dvp: Swaps = await DVPContract.new(false);
 
-          const contractOwner = await this.dvp.owner();
+          const contractOwner = await dvp.owner();
           assert.equal(contractOwner, owner);
         });
       });
       describe('tradeExecuters', function () {
         it('returns the list of trade executers', async function () {
-          this.dvp = await DVPContract.new(true);
+          const dvp: Swaps = await DVPContract.new(true);
 
-          const tradeExecuters = await this.dvp.tradeExecuters();
+          const tradeExecuters = await dvp.tradeExecuters();
 
           assert.equal(tradeExecuters.length, 1);
           assert.equal(tradeExecuters[0], owner);
         });
         it('returns empty list of trade executers', async function () {
-          this.dvp = await DVPContract.new(false);
+          const dvp: Swaps = await DVPContract.new(false);
 
-          const tradeExecuters = await this.dvp.tradeExecuters();
+          const tradeExecuters = await dvp.tradeExecuters();
 
           assert.equal(tradeExecuters.length, 0);
         });
@@ -1311,12 +1398,13 @@ contract(
     // CANIMPLEMENTINTERFACEFORADDRESS
 
     describe('canImplementInterfaceForAddress', function () {
+      let dvp: Swaps;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
       });
       describe('when the interface label is ERC777TokensRecipient', function () {
         it('returns ERC1820_ACCEPT_MAGIC', async function () {
-          const answer = await this.dvp.canImplementInterfaceForAddress(
+          const answer = await dvp.canImplementInterfaceForAddress(
             ERC1400_TOKENS_RECIPIENT_INTERFACE_HASH,
             unknown
           );
@@ -1325,7 +1413,7 @@ contract(
       });
       describe('when the interface label is not ERC777TokensRecipient', function () {
         it('returns empty bytes32', async function () {
-          const answer = await this.dvp.canImplementInterfaceForAddress(
+          const answer = await dvp.canImplementInterfaceForAddress(
             ERC1400_TOKENS_SENDER_INTERFACE_HASH,
             unknown
           );
@@ -1337,10 +1425,17 @@ contract(
     // CANRECEIVE
 
     describe('canReceive', function () {
-      beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+      let dvp: Swaps;
+      let emoney1400: ERC1400;
+      let tradeProposalData: string;
+      let tradeAcceptanceData: string;
+      let fakeTradeProposalData: string;
+      let fakeTradeAcceptanceData: string;
 
-        this.emoney1400 = await ERC1400.new(
+      beforeEach(async function () {
+        dvp = await DVPContract.new(false);
+
+        emoney1400 = await ERC1400.new(
           'ERC1400Token',
           'DAU',
           1,
@@ -1351,46 +1446,46 @@ contract(
 
         const chainTime = (await web3.eth.getBlock('latest')).timestamp;
         const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
-        this.tradeProposalData = getTradeProposalData(
+        tradeProposalData = getTradeProposalData(
           recipient1,
           executer,
           expirationDate,
           0,
-          this.emoney1400.address,
+          emoney1400.address,
           token2Amount,
           partition1,
           ERC1400STANDARD,
           TYPE_ESCROW
         );
-        this.tradeAcceptanceData = getTradeAcceptanceData(1);
+        tradeAcceptanceData = getTradeAcceptanceData(1);
 
-        this.fakeTradeProposalData = getTradeProposalData(
+        fakeTradeProposalData = getTradeProposalData(
           recipient1,
           executer,
           expirationDate,
           0,
-          this.emoney1400.address,
+          emoney1400.address,
           token2Amount,
           partition1,
           ERC1400STANDARD,
           TYPE_ESCROW,
           true
         );
-        this.fakeTradeAcceptanceData = getTradeAcceptanceData(1, true);
+        fakeTradeAcceptanceData = getTradeAcceptanceData(1, true);
       });
       describe('when operatorData is not empty', function () {
         describe('when data has the correct length', function () {
           describe('when data has the right format', function () {
             describe('when data is formatted for a trade proposal', function () {
               it('returns true', async function () {
-                const answer = await this.dvp.canReceive(
+                const answer = await dvp.canReceive(
                   '0x00000000',
                   partition1,
                   unknown,
                   unknown,
                   unknown,
                   1,
-                  this.tradeProposalData,
+                  tradeProposalData,
                   MOCK_CERTIFICATE
                 );
                 assert.equal(answer, true);
@@ -1398,14 +1493,14 @@ contract(
             });
             describe('when data is formatted for a trade acceptance', function () {
               it('returns true', async function () {
-                const answer = await this.dvp.canReceive(
+                const answer = await dvp.canReceive(
                   '0x00000000',
                   partition1,
                   unknown,
                   unknown,
                   unknown,
                   1,
-                  this.tradeAcceptanceData,
+                  tradeAcceptanceData,
                   MOCK_CERTIFICATE
                 );
                 assert.equal(answer, true);
@@ -1414,27 +1509,27 @@ contract(
           });
           describe('when data does not have the right format', function () {
             it('returns false', async function () {
-              const answer = await this.dvp.canReceive(
+              const answer = await dvp.canReceive(
                 '0x00000000',
                 partition1,
                 unknown,
                 unknown,
                 unknown,
                 1,
-                this.fakeTradeProposalData,
+                fakeTradeProposalData,
                 MOCK_CERTIFICATE
               );
               assert.equal(answer, false);
             });
             it('returns false', async function () {
-              const answer = await this.dvp.canReceive(
+              const answer = await dvp.canReceive(
                 '0x00000000',
                 partition1,
                 unknown,
                 unknown,
                 unknown,
                 1,
-                this.fakeTradeAcceptanceData,
+                fakeTradeAcceptanceData,
                 MOCK_CERTIFICATE
               );
               assert.equal(answer, false);
@@ -1443,17 +1538,14 @@ contract(
         });
         describe('when data does not have the correct length', function () {
           it('returns false', async function () {
-            const answer = await this.dvp.canReceive(
+            const answer = await dvp.canReceive(
               '0x00000000',
               partition1,
               unknown,
               unknown,
               unknown,
               1,
-              this.tradeProposalData.substring(
-                0,
-                this.tradeProposalData.length - 1
-              ),
+              tradeProposalData.substring(0, tradeProposalData.length - 1),
               MOCK_CERTIFICATE
             );
             assert.equal(answer, false);
@@ -1462,14 +1554,14 @@ contract(
       });
       describe('when operatorData is empty', function () {
         it('returns false', async function () {
-          const answer = await this.dvp.canReceive(
+          const answer = await dvp.canReceive(
             '0x00000000',
             partition1,
             unknown,
             unknown,
             unknown,
             1,
-            this.tradeProposalData,
+            tradeProposalData,
             ZERO_BYTE
           );
           assert.equal(answer, false);
@@ -1480,10 +1572,13 @@ contract(
     // TOKENSRECEIVED (HOOK)
 
     describe('tokensReceived', function () {
+      let dvp: Swaps;
+      let security1400: ERC1400;
+      let emoney1400: ERC1400;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.security1400 = await ERC1400.new(
+        security1400 = await ERC1400.new(
           'ERC1400Token',
           'DAU',
           1,
@@ -1491,7 +1586,7 @@ contract(
           partitions,
           { from: owner }
         );
-        await this.security1400.issueByPartition(
+        await security1400.issueByPartition(
           partition1,
           tokenHolder1,
           issuanceAmount,
@@ -1499,7 +1594,7 @@ contract(
           { from: owner }
         );
 
-        this.emoney1400 = await ERC1400.new(
+        emoney1400 = await ERC1400.new(
           'ERC1400Token',
           'DAU',
           1,
@@ -1507,7 +1602,7 @@ contract(
           partitions,
           { from: owner }
         );
-        await this.emoney1400.issueByPartition(
+        await emoney1400.issueByPartition(
           partition1,
           recipient1,
           issuanceAmount,
@@ -1520,11 +1615,11 @@ contract(
           describe('when data field is valid', function () {
             describe('when received tokens correspond to a new trade proposal', function () {
               it('creates and accepts the trade request', async function () {
-                assert.equal(await this.dvp.getNbTrades(), 0);
+                assert.equal(await dvp.getNbTrades(), 0);
                 await createTradeRequestWithoutCallingDVP(
-                  this.dvp,
-                  this.security1400,
-                  this.emoney1400,
+                  dvp,
+                  security1400,
+                  emoney1400,
                   ERC1400STANDARD,
                   partition1,
                   tokenHolder1,
@@ -1534,14 +1629,14 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                assert.equal(await this.dvp.getNbTrades(), 1);
+                assert.equal(await dvp.getNbTrades(), 1);
               });
               it('creates and accepts a second trade request', async function () {
-                assert.equal(await this.dvp.getNbTrades(), 0);
+                assert.equal(await dvp.getNbTrades(), 0);
                 await createTradeRequestWithoutCallingDVP(
-                  this.dvp,
-                  this.security1400,
-                  this.emoney1400,
+                  dvp,
+                  security1400,
+                  emoney1400,
                   ERC1400STANDARD,
                   partition1,
                   tokenHolder1,
@@ -1559,22 +1654,22 @@ contract(
                   executer,
                   expirationDate,
                   0,
-                  this.emoney1400.address,
+                  emoney1400.address,
                   token2Amount,
                   partition1,
                   ERC1400STANDARD,
                   TYPE_ESCROW
                 );
-                await this.security1400.operatorTransferByPartition(
+                await security1400.operatorTransferByPartition(
                   partition1,
                   tokenHolder1,
-                  this.dvp.address,
+                  dvp.address,
                   token1Amount,
                   tradeProposalData,
                   MOCK_CERTIFICATE,
                   { from: tokenHolder1 }
                 );
-                assert.equal(await this.dvp.getNbTrades(), 2);
+                assert.equal(await dvp.getNbTrades(), 2);
               });
             });
             describe('when received tokens correspond to an existing trade acceptance', function () {
@@ -1588,9 +1683,9 @@ contract(
                             describe('when there is an executer', function () {
                               it('accepts the trade request', async function () {
                                 await createTradeRequestWithoutCallingDVP(
-                                  this.dvp,
-                                  this.security1400,
-                                  this.emoney1400,
+                                  dvp,
+                                  security1400,
+                                  emoney1400,
                                   ERC1400STANDARD,
                                   partition1,
                                   tokenHolder1,
@@ -1601,9 +1696,9 @@ contract(
                                   token2Amount
                                 );
                                 await acceptTradeRequestWithoutCallingDVP(
-                                  this.dvp,
-                                  this.security1400,
-                                  this.emoney1400,
+                                  dvp,
+                                  security1400,
+                                  emoney1400,
                                   1,
                                   recipient1,
                                   STATE_PENDING,
@@ -1614,9 +1709,9 @@ contract(
                             describe('when there is no executer', function () {
                               it('accepts and executes the trade request [USE CASE - ATOMIC DELIVERY VS PAYMENT IN 2 TRANSACTIONS ONLY]', async function () {
                                 await createTradeRequestWithoutCallingDVP(
-                                  this.dvp,
-                                  this.security1400,
-                                  this.emoney1400,
+                                  dvp,
+                                  security1400,
+                                  emoney1400,
                                   ERC1400STANDARD,
                                   partition1,
                                   tokenHolder1,
@@ -1627,9 +1722,9 @@ contract(
                                   token2Amount
                                 );
                                 await acceptTradeRequestWithoutCallingDVP(
-                                  this.dvp,
-                                  this.security1400,
-                                  this.emoney1400,
+                                  dvp,
+                                  security1400,
+                                  emoney1400,
                                   1,
                                   recipient1,
                                   STATE_EXECUTED,
@@ -1642,9 +1737,9 @@ contract(
                             describe('when there is no executer', function () {
                               it('reverts', async function () {
                                 await createTradeRequestWithoutCallingDVP(
-                                  this.dvp,
-                                  this.security1400,
-                                  this.emoney1400,
+                                  dvp,
+                                  security1400,
+                                  emoney1400,
                                   ERC1400STANDARD,
                                   partition1,
                                   tokenHolder1,
@@ -1657,10 +1752,10 @@ contract(
                                 const tradeAcceptanceData =
                                   getTradeAcceptanceData(1);
                                 await expectRevert.unspecified(
-                                  this.emoney1400.operatorTransferByPartition(
+                                  emoney1400.operatorTransferByPartition(
                                     partition1,
                                     recipient1,
-                                    this.dvp.address,
+                                    dvp.address,
                                     token2Amount + 1,
                                     tradeAcceptanceData,
                                     MOCK_CERTIFICATE,
@@ -1674,9 +1769,9 @@ contract(
                         describe('when token standard for the trade is not ERC1400', function () {
                           it('reverts', async function () {
                             await createTradeRequestWithoutCallingDVP(
-                              this.dvp,
-                              this.security1400,
-                              this.emoney1400,
+                              dvp,
+                              security1400,
+                              emoney1400,
                               ERC20STANDARD,
                               partition1,
                               tokenHolder1,
@@ -1689,10 +1784,10 @@ contract(
                             const tradeAcceptanceData =
                               getTradeAcceptanceData(1);
                             await expectRevert.unspecified(
-                              this.emoney1400.operatorTransferByPartition(
+                              emoney1400.operatorTransferByPartition(
                                 partition1,
                                 recipient1,
-                                this.dvp.address,
+                                dvp.address,
                                 token2Amount,
                                 tradeAcceptanceData,
                                 MOCK_CERTIFICATE,
@@ -1704,7 +1799,7 @@ contract(
                       });
                       describe('when partition is not the correct partition', function () {
                         beforeEach(async function () {
-                          await this.emoney1400.issueByPartition(
+                          await emoney1400.issueByPartition(
                             partition2,
                             recipient1,
                             issuanceAmount,
@@ -1714,9 +1809,9 @@ contract(
                         });
                         it('reverts', async function () {
                           await createTradeRequestWithoutCallingDVP(
-                            this.dvp,
-                            this.security1400,
-                            this.emoney1400,
+                            dvp,
+                            security1400,
+                            emoney1400,
                             ERC1400STANDARD,
                             partition1,
                             tokenHolder1,
@@ -1728,10 +1823,10 @@ contract(
                           );
                           const tradeAcceptanceData = getTradeAcceptanceData(1);
                           await expectRevert.unspecified(
-                            this.emoney1400.operatorTransferByPartition(
+                            emoney1400.operatorTransferByPartition(
                               partition2,
                               recipient1,
-                              this.dvp.address,
+                              dvp.address,
                               token2Amount,
                               tradeAcceptanceData,
                               MOCK_CERTIFICATE,
@@ -1742,8 +1837,9 @@ contract(
                       });
                     });
                     describe('when token is not the correct token', function () {
+                      let wrongEmoney1400: ERC1400;
                       beforeEach(async function () {
-                        this.wrongEmoney1400 = await ERC1400.new(
+                        wrongEmoney1400 = await ERC1400.new(
                           'ERC1400Token',
                           'DAU',
                           1,
@@ -1751,7 +1847,7 @@ contract(
                           partitions,
                           { from: owner }
                         );
-                        await this.wrongEmoney1400.issueByPartition(
+                        await wrongEmoney1400.issueByPartition(
                           partition1,
                           recipient1,
                           issuanceAmount,
@@ -1761,9 +1857,9 @@ contract(
                       });
                       it('reverts', async function () {
                         await createTradeRequestWithoutCallingDVP(
-                          this.dvp,
-                          this.security1400,
-                          this.emoney1400,
+                          dvp,
+                          security1400,
+                          emoney1400,
                           ERC1400STANDARD,
                           partition1,
                           tokenHolder1,
@@ -1775,10 +1871,10 @@ contract(
                         );
                         const tradeAcceptanceData = getTradeAcceptanceData(1);
                         await expectRevert.unspecified(
-                          this.wrongEmoney1400.operatorTransferByPartition(
+                          wrongEmoney1400.operatorTransferByPartition(
                             partition1,
                             recipient1,
-                            this.dvp.address,
+                            dvp.address,
                             token2Amount,
                             tradeAcceptanceData,
                             MOCK_CERTIFICATE,
@@ -1790,7 +1886,7 @@ contract(
                   });
                   describe('when token sender is not the holder registered in the trade', function () {
                     beforeEach(async function () {
-                      await this.emoney1400.issueByPartition(
+                      await emoney1400.issueByPartition(
                         partition1,
                         recipient2,
                         issuanceAmount,
@@ -1800,9 +1896,9 @@ contract(
                     });
                     it('reverts', async function () {
                       await createTradeRequestWithoutCallingDVP(
-                        this.dvp,
-                        this.security1400,
-                        this.emoney1400,
+                        dvp,
+                        security1400,
+                        emoney1400,
                         ERC1400STANDARD,
                         partition1,
                         tokenHolder1,
@@ -1814,10 +1910,10 @@ contract(
                       );
                       const tradeAcceptanceData = getTradeAcceptanceData(1);
                       await expectRevert.unspecified(
-                        this.emoney1400.operatorTransferByPartition(
+                        emoney1400.operatorTransferByPartition(
                           partition1,
                           recipient2,
-                          this.dvp.address,
+                          dvp.address,
                           token2Amount,
                           tradeAcceptanceData,
                           MOCK_CERTIFICATE,
@@ -1831,9 +1927,9 @@ contract(
                   describe('when there is an executer', function () {
                     it('accepts and executes the trade request [USE CASE - ATOMIC DELIVERY VS PAYMENT IN 2 TRANSACTIONS ONLY - MARKETPLACE]', async function () {
                       await createTradeRequestWithoutCallingDVP(
-                        this.dvp,
-                        this.security1400,
-                        this.emoney1400,
+                        dvp,
+                        security1400,
+                        emoney1400,
                         ERC1400STANDARD,
                         partition1,
                         tokenHolder1,
@@ -1845,9 +1941,9 @@ contract(
                         true
                       );
                       await acceptTradeRequestWithoutCallingDVP(
-                        this.dvp,
-                        this.security1400,
-                        this.emoney1400,
+                        dvp,
+                        security1400,
+                        emoney1400,
                         1,
                         recipient1,
                         STATE_EXECUTED,
@@ -1860,9 +1956,9 @@ contract(
               describe('when trade state is not PENDING', function () {
                 it('reverts', async function () {
                   await createTradeRequestWithoutCallingDVP(
-                    this.dvp,
-                    this.security1400,
-                    this.emoney1400,
+                    dvp,
+                    security1400,
+                    emoney1400,
                     ERC1400STANDARD,
                     partition1,
                     tokenHolder1,
@@ -1873,9 +1969,9 @@ contract(
                     token2Amount
                   );
                   await acceptTradeRequestWithoutCallingDVP(
-                    this.dvp,
-                    this.security1400,
-                    this.emoney1400,
+                    dvp,
+                    security1400,
+                    emoney1400,
                     1,
                     recipient1,
                     STATE_PENDING,
@@ -1883,10 +1979,10 @@ contract(
                   );
                   const tradeAcceptanceData = getTradeAcceptanceData(1);
                   await expectRevert.unspecified(
-                    this.emoney1400.operatorTransferByPartition(
+                    emoney1400.operatorTransferByPartition(
                       partition1,
                       recipient1,
-                      this.dvp.address,
+                      dvp.address,
                       token2Amount,
                       tradeAcceptanceData,
                       MOCK_CERTIFICATE,
@@ -1900,9 +1996,9 @@ contract(
           describe('when data field is not valid', function () {
             it('reverts', async function () {
               await createTradeRequestWithoutCallingDVP(
-                this.dvp,
-                this.security1400,
-                this.emoney1400,
+                dvp,
+                security1400,
+                emoney1400,
                 ERC1400STANDARD,
                 partition1,
                 tokenHolder1,
@@ -1914,10 +2010,10 @@ contract(
               );
               const fakeTradeAcceptanceData = getTradeAcceptanceData(1, true);
               await expectRevert.unspecified(
-                this.emoney1400.operatorTransferByPartition(
+                emoney1400.operatorTransferByPartition(
                   partition1,
                   recipient1,
-                  this.dvp.address,
+                  dvp.address,
                   token2Amount,
                   fakeTradeAcceptanceData,
                   MOCK_CERTIFICATE,
@@ -1928,8 +2024,9 @@ contract(
           });
         });
         describe('when recipient is not the DVP contract', function () {
+          let fakeSecurity1400: FakeERC1400Mock;
           beforeEach(async function () {
-            this.fakeSecurity1400 = await FakeERC1400.new(
+            fakeSecurity1400 = await FakeERC1400.new(
               'ERC1400Token',
               'DAU20',
               1,
@@ -1938,7 +2035,7 @@ contract(
               ZERO_ADDRESS,
               ZERO_ADDRESS
             );
-            await this.fakeSecurity1400.issueByPartition(
+            await fakeSecurity1400.issueByPartition(
               partition1,
               tokenHolder1,
               issuanceAmount,
@@ -1954,17 +2051,17 @@ contract(
               executer,
               expirationDate,
               0,
-              this.emoney1400.address,
+              emoney1400.address,
               token2Amount,
               partition1,
               ERC1400STANDARD,
               TYPE_ESCROW
             );
             await expectRevert.unspecified(
-              this.fakeSecurity1400.operatorTransferByPartition(
+              fakeSecurity1400.operatorTransferByPartition(
                 partition1,
                 tokenHolder1,
-                this.dvp.address,
+                dvp.address,
                 token1Amount,
                 tradeProposalData,
                 MOCK_CERTIFICATE,
@@ -1983,19 +2080,19 @@ contract(
             executer,
             expirationDate,
             0,
-            this.emoney1400.address,
+            emoney1400.address,
             token2Amount,
             partition1,
             ERC1400STANDARD,
             TYPE_ESCROW
           );
           await expectRevert.unspecified(
-            this.dvp.tokensReceived(
+            dvp.tokensReceived(
               '0x',
               partition1,
               tokenHolder1,
               tokenHolder1,
-              this.dvp.address,
+              dvp.address,
               token1Amount,
               tradeProposalData,
               MOCK_CERTIFICATE,
@@ -2009,16 +2106,20 @@ contract(
     // REQUESTTRADE
 
     describe('requestTrade', function () {
+      let dvp: Swaps;
+      let security20: ERC20Token;
+      let emoney20: ERC20Token;
+
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.security20 = await ERC20.new('ERC20Token', 'DAU', 18);
-        this.emoney20 = await ERC20.new('ERC20Token', 'DAU', 18);
+        security20 = await ERC20.new('ERC20Token', 'DAU', 18);
+        emoney20 = await ERC20.new('ERC20Token', 'DAU', 18);
 
-        await this.security20.mint(tokenHolder1, issuanceAmount, {
+        await security20.mint(tokenHolder1, issuanceAmount, {
           from: owner
         });
-        await this.emoney20.mint(recipient1, issuanceAmount, { from: owner });
+        await emoney20.mint(recipient1, issuanceAmount, { from: owner });
       });
       describe('when none of the 2 tokens is ETH', function () {
         describe('when the DVP contract is not controllable', function () {
@@ -2028,15 +2129,13 @@ contract(
                 describe('when DVP request is of type Escrow', function () {
                   describe('when token standard is ERC20', function () {
                     it('creates and accepts the trade request', async function () {
-                      await this.security20.approve(
-                        this.dvp.address,
-                        token1Amount,
-                        { from: tokenHolder1 }
-                      );
+                      await security20.approve(dvp.address, token1Amount, {
+                        from: tokenHolder1
+                      });
                       await createTradeRequest(
-                        this.dvp,
-                        this.security20,
-                        this.emoney20,
+                        dvp,
+                        security20,
+                        emoney20,
                         ERC20STANDARD,
                         ERC20STANDARD,
                         tokenHolder1,
@@ -2052,29 +2151,23 @@ contract(
                   });
                   describe('when token standard is ERC721', function () {
                     it('creates and accepts the trade request', async function () {
-                      this.security721 = await ERC721.new(
+                      const security721: ERC721Token = await ERC721.new(
                         'ERC721Token',
                         'DAU721',
                         '',
                         ''
                       );
-                      await this.security721.mint(
-                        tokenHolder1,
-                        issuanceTokenId,
-                        {
-                          from: owner
-                        }
-                      );
-                      await this.security721.approve(
-                        this.dvp.address,
-                        issuanceTokenId,
-                        { from: tokenHolder1 }
-                      );
+                      await security721.mint(tokenHolder1, issuanceTokenId, {
+                        from: owner
+                      });
+                      await security721.approve(dvp.address, issuanceTokenId, {
+                        from: tokenHolder1
+                      });
 
                       await createTradeRequest(
-                        this.dvp,
-                        this.security721,
-                        this.emoney20,
+                        dvp,
+                        security721,
+                        emoney20,
                         ERC721STANDARD,
                         ERC20STANDARD,
                         tokenHolder1,
@@ -2090,7 +2183,7 @@ contract(
                   });
                   describe('when token standard is ERC1400', function () {
                     it('creates and accepts the trade request', async function () {
-                      this.security1400 = await ERC1400.new(
+                      const security1400: ERC1400 = await ERC1400.new(
                         'ERC1400Token',
                         'DAU',
                         1,
@@ -2099,24 +2192,24 @@ contract(
                         { from: owner }
                       );
 
-                      await this.security1400.issueByPartition(
+                      await security1400.issueByPartition(
                         partition1,
                         tokenHolder1,
                         issuanceAmount,
                         VALID_CERTIFICATE,
                         { from: owner }
                       );
-                      await this.security1400.approveByPartition(
+                      await security1400.approveByPartition(
                         partition1,
-                        this.dvp.address,
+                        dvp.address,
                         token1Amount,
                         { from: tokenHolder1 }
                       );
 
                       await createTradeRequest(
-                        this.dvp,
-                        this.security1400,
-                        this.emoney20,
+                        dvp,
+                        security1400,
+                        emoney20,
                         ERC1400STANDARD,
                         ERC20STANDARD,
                         tokenHolder1,
@@ -2133,8 +2226,8 @@ contract(
                   describe('when payment is made off-chain', function () {
                     it('creates and accepts the trade request', async function () {
                       await createTradeRequest(
-                        this.dvp,
-                        this.security20,
+                        dvp,
+                        security20,
                         undefined,
                         ERC20STANDARD,
                         OFFCHAIN,
@@ -2153,15 +2246,13 @@ contract(
                 describe('when DVP request is of type Swap', function () {
                   describe('when token standard is ERC20', function () {
                     it('creates and accepts the trade request', async function () {
-                      await this.security20.approve(
-                        this.dvp.address,
-                        token1Amount,
-                        { from: tokenHolder1 }
-                      );
+                      await security20.approve(dvp.address, token1Amount, {
+                        from: tokenHolder1
+                      });
                       await createTradeRequest(
-                        this.dvp,
-                        this.security20,
-                        this.emoney20,
+                        dvp,
+                        security20,
+                        emoney20,
                         ERC20STANDARD,
                         ERC20STANDARD,
                         tokenHolder1,
@@ -2177,29 +2268,23 @@ contract(
                   });
                   describe('when token standard is ERC721', function () {
                     it('creates and accepts the trade request', async function () {
-                      this.security721 = await ERC721.new(
+                      const security721: ERC721Token = await ERC721.new(
                         'ERC721Token',
                         'DAU721',
                         '',
                         ''
                       );
-                      await this.security721.mint(
-                        tokenHolder1,
-                        issuanceTokenId,
-                        {
-                          from: owner
-                        }
-                      );
-                      await this.security721.approve(
-                        this.dvp.address,
-                        issuanceTokenId,
-                        { from: tokenHolder1 }
-                      );
+                      await security721.mint(tokenHolder1, issuanceTokenId, {
+                        from: owner
+                      });
+                      await security721.approve(dvp.address, issuanceTokenId, {
+                        from: tokenHolder1
+                      });
 
                       await createTradeRequest(
-                        this.dvp,
-                        this.security721,
-                        this.emoney20,
+                        dvp,
+                        security721,
+                        emoney20,
                         ERC721STANDARD,
                         ERC20STANDARD,
                         tokenHolder1,
@@ -2215,7 +2300,7 @@ contract(
                   });
                   describe('when token standard is ERC1400', function () {
                     it('creates and accepts the trade request', async function () {
-                      this.security1400 = await ERC1400.new(
+                      const security1400: ERC1400 = await ERC1400.new(
                         'ERC1400Token',
                         'DAU',
                         1,
@@ -2223,24 +2308,24 @@ contract(
                         partitions,
                         { from: owner }
                       );
-                      await this.security1400.issueByPartition(
+                      await security1400.issueByPartition(
                         partition1,
                         tokenHolder1,
                         issuanceAmount,
                         VALID_CERTIFICATE,
                         { from: owner }
                       );
-                      await this.security1400.approveByPartition(
+                      await security1400.approveByPartition(
                         partition1,
-                        this.dvp.address,
+                        dvp.address,
                         token1Amount,
                         { from: tokenHolder1 }
                       );
 
                       await createTradeRequest(
-                        this.dvp,
-                        this.security1400,
-                        this.emoney20,
+                        dvp,
+                        security1400,
+                        emoney20,
                         ERC1400STANDARD,
                         ERC20STANDARD,
                         tokenHolder1,
@@ -2257,8 +2342,8 @@ contract(
                   describe('when payment is made off-chain', function () {
                     it('creates and accepts the trade request', async function () {
                       await createTradeRequest(
-                        this.dvp,
-                        this.security20,
+                        dvp,
+                        security20,
                         undefined,
                         ERC20STANDARD,
                         OFFCHAIN,
@@ -2277,13 +2362,13 @@ contract(
               });
               describe('when sender is holder 2', function () {
                 it('creates and accepts the trade request', async function () {
-                  await this.emoney20.approve(this.dvp.address, token2Amount, {
+                  await emoney20.approve(dvp.address, token2Amount, {
                     from: recipient1
                   });
                   await createTradeRequest(
-                    this.dvp,
-                    this.security20,
-                    this.emoney20,
+                    dvp,
+                    security20,
+                    emoney20,
                     ERC20STANDARD,
                     ERC20STANDARD,
                     tokenHolder1,
@@ -2301,9 +2386,9 @@ contract(
                 describe('when the holder 1 is not the zero address', function () {
                   it('creates the trade request', async function () {
                     await createTradeRequest(
-                      this.dvp,
-                      this.security20,
-                      this.emoney20,
+                      dvp,
+                      security20,
+                      emoney20,
                       ERC20STANDARD,
                       ERC20STANDARD,
                       tokenHolder1,
@@ -2345,11 +2430,11 @@ contract(
                       executer: ZERO_ADDRESS,
                       expirationDate: expirationDate,
                       settlementDate: 0,
-                      tokenAddress1: this.security20.address,
+                      tokenAddress1: security20.address,
                       tokenValue1: token1Amount,
                       tokenId1: ZERO_BYTES32,
                       tokenStandard1: ERC20STANDARD,
-                      tokenAddress2: this.emoney20.address,
+                      tokenAddress2: emoney20.address,
                       tokenValue2: token2Amount,
                       tokenId2: ZERO_BYTES32,
                       tokenStandard2: ERC20STANDARD,
@@ -2357,7 +2442,7 @@ contract(
                       tradeType2: HEX_TYPE_SWAP
                     };
                     await expectRevert.unspecified(
-                      this.dvp.requestTrade(tradeInputData, ZERO_BYTES32, {
+                      dvp.requestTrade(tradeInputData, ZERO_BYTES32, {
                         from: unknown
                       })
                     );
@@ -2367,13 +2452,13 @@ contract(
             });
             describe('when expiration date is not defined', function () {
               it('creates the trade request', async function () {
-                await this.security20.approve(this.dvp.address, token1Amount, {
+                await security20.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.security20,
-                  this.emoney20,
+                  dvp,
+                  security20,
+                  emoney20,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -2390,18 +2475,19 @@ contract(
           });
         });
         describe('when the DVP contract is owned', function () {
+          let dvp: Swaps;
           beforeEach(async function () {
-            this.dvp = await DVPContract.new(true);
+            dvp = await DVPContract.new(true);
           });
           describe('when a valid trade executer is defined', function () {
             it('creates the trade request', async function () {
-              await this.security20.approve(this.dvp.address, token1Amount, {
+              await security20.approve(dvp.address, token1Amount, {
                 from: tokenHolder1
               });
               await createTradeRequest(
-                this.dvp,
-                this.security20,
-                this.emoney20,
+                dvp,
+                security20,
+                emoney20,
                 ERC20STANDARD,
                 ERC20STANDARD,
                 tokenHolder1,
@@ -2418,14 +2504,14 @@ contract(
           describe('when no valid trade executer is defined', function () {
             describe('when proposed executer for the trade is not in the list of DVP trade executers', function () {
               it('reverts', async function () {
-                await this.security20.approve(this.dvp.address, token1Amount, {
+                await security20.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await expectRevert.unspecified(
                   createTradeRequest(
-                    this.dvp,
-                    this.security20,
-                    this.emoney20,
+                    dvp,
+                    security20,
+                    emoney20,
                     ERC20STANDARD,
                     ERC20STANDARD,
                     tokenHolder1,
@@ -2442,14 +2528,14 @@ contract(
             });
             describe('when proposed trade executer is zero address', function () {
               it('reverts', async function () {
-                await this.security20.approve(this.dvp.address, token1Amount, {
+                await security20.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await expectRevert.unspecified(
                   createTradeRequest(
-                    this.dvp,
-                    this.security20,
-                    this.emoney20,
+                    dvp,
+                    security20,
+                    emoney20,
                     ERC20STANDARD,
                     ERC20STANDARD,
                     tokenHolder1,
@@ -2471,11 +2557,11 @@ contract(
         describe('when proposed trade type is Escrow', function () {
           describe('when sender is holder 1', function () {
             it('creates the trade request', async function () {
-              // const createTradeRequest(this.dvp, token1, token2, tokenStandard1, tokenStandard2, holder1, holder2, executer, requester, realExpirationDate, tradeType, tokenAmount1, tokenAmount2)
+              // const createTradeRequest(dvp, token1, token2, tokenStandard1, tokenStandard2, holder1, holder2, executer, requester, realExpirationDate, tradeType, tokenAmount1, tokenAmount2)
               await createTradeRequest(
-                this.dvp,
+                dvp,
                 undefined,
-                this.emoney20,
+                emoney20,
                 ETHSTANDARD,
                 ERC20STANDARD,
                 tokenHolder1,
@@ -2492,8 +2578,8 @@ contract(
           describe('when sender is holder 2', function () {
             it('creates the trade request', async function () {
               await createTradeRequest(
-                this.dvp,
-                this.security20,
+                dvp,
+                security20,
                 undefined,
                 ERC20STANDARD,
                 ETHSTANDARD,
@@ -2513,9 +2599,9 @@ contract(
           it('creates the trade request', async function () {
             await expectRevert.unspecified(
               createTradeRequest(
-                this.dvp,
-                this.security20,
-                this.emoney20,
+                dvp,
+                security20,
+                emoney20,
                 ETHSTANDARD,
                 ERC20STANDARD,
                 tokenHolder1,
@@ -2536,19 +2622,22 @@ contract(
     // ACCEPT TRADE
 
     describe('acceptTrade', function () {
+      let dvp: Swaps;
+      let security20, token1: ERC20Token;
+      let emoney20, token2: ERC20Token;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.security20 = await ERC20.new('ERC20Token', 'DAU', 18);
-        this.emoney20 = await ERC20.new('ERC20Token', 'DAU', 18);
+        security20 = await ERC20.new('ERC20Token', 'DAU', 18);
+        emoney20 = await ERC20.new('ERC20Token', 'DAU', 18);
 
-        await this.security20.mint(tokenHolder1, issuanceAmount, {
+        await security20.mint(tokenHolder1, issuanceAmount, {
           from: owner
         });
-        await this.emoney20.mint(recipient1, issuanceAmount, { from: owner });
+        await emoney20.mint(recipient1, issuanceAmount, { from: owner });
 
-        this.token1 = this.security20;
-        this.token2 = this.emoney20;
+        token1 = security20;
+        token2 = emoney20;
       });
       describe('when trade index is valid', function () {
         describe('when tokens need to be escrowed', function () {
@@ -2557,13 +2646,13 @@ contract(
               describe('when there are no token controllers', function () {
                 describe('when trade gets executed', function () {
                   it('accepts and executes the trade', async function () {
-                    await this.token1.approve(this.dvp.address, token1Amount, {
+                    await token1.approve(dvp.address, token1Amount, {
                       from: tokenHolder1
                     });
                     await createTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
+                      dvp,
+                      token1,
+                      token2,
                       ERC20STANDARD,
                       ERC20STANDARD,
                       tokenHolder1,
@@ -2575,13 +2664,13 @@ contract(
                       token1Amount,
                       token2Amount
                     );
-                    await this.token2.approve(this.dvp.address, token2Amount, {
+                    await token2.approve(dvp.address, token2Amount, {
                       from: recipient1
                     });
                     await acceptTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
+                      dvp,
+                      token1,
+                      token2,
                       1,
                       recipient1,
                       STATE_EXECUTED,
@@ -2591,11 +2680,11 @@ contract(
                 });
                 describe('when trade doesnt get executed', function () {
                   it('accepts the trade', async function () {
-                    // await this.token1.approve(this.dvp.address, token1Amount, { from: tokenHolder1 });
+                    // await token1.approve(dvp.address, token1Amount, { from: tokenHolder1 });
                     await createTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
+                      dvp,
+                      token1,
+                      token2,
                       ERC20STANDARD,
                       ERC20STANDARD,
                       tokenHolder1,
@@ -2607,13 +2696,13 @@ contract(
                       token1Amount,
                       token2Amount
                     );
-                    await this.token2.approve(this.dvp.address, token2Amount, {
+                    await token2.approve(dvp.address, token2Amount, {
                       from: recipient1
                     });
                     await acceptTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
+                      dvp,
+                      token1,
+                      token2,
                       1,
                       recipient1,
                       STATE_PENDING,
@@ -2624,20 +2713,20 @@ contract(
               });
               describe('when there are token controllers', function () {
                 beforeEach(async function () {
-                  await this.dvp.setTokenControllers(
-                    this.security20.address,
+                  await dvp.setTokenControllers(
+                    security20.address,
                     [tokenController1],
                     { from: owner }
                   );
                 });
                 it('accepts the trade', async function () {
-                  await this.token1.approve(this.dvp.address, token1Amount, {
+                  await token1.approve(dvp.address, token1Amount, {
                     from: tokenHolder1
                   });
                   await createTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
+                    dvp,
+                    token1,
+                    token2,
                     ERC20STANDARD,
                     ERC20STANDARD,
                     tokenHolder1,
@@ -2649,13 +2738,13 @@ contract(
                     token1Amount,
                     token2Amount
                   );
-                  await this.token2.approve(this.dvp.address, token2Amount, {
+                  await token2.approve(dvp.address, token2Amount, {
                     from: recipient1
                   });
                   await acceptTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
+                    dvp,
+                    token1,
+                    token2,
                     1,
                     recipient1,
                     STATE_PENDING,
@@ -2666,13 +2755,13 @@ contract(
             });
             describe('when trade has predefined executer', function () {
               it('accepts the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -2684,13 +2773,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -2702,12 +2791,12 @@ contract(
           describe('when tokens are not available', function () {
             describe('when token standard is ETH', function () {
               it('reverts', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
+                  dvp,
+                  token1,
                   undefined,
                   ERC20STANDARD,
                   ETHSTANDARD,
@@ -2721,7 +2810,7 @@ contract(
                   token2Amount
                 );
                 await expectRevert.unspecified(
-                  this.dvp.acceptTrade(1, ZERO_BYTES32, {
+                  dvp.acceptTrade(1, ZERO_BYTES32, {
                     from: recipient1,
                     value: token2Amount - 1
                   })
@@ -2730,13 +2819,13 @@ contract(
             });
             describe('when token standard is ERC20', function () {
               it('reverts', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -2748,14 +2837,14 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount - 1, {
+                await token2.approve(dvp.address, token2Amount - 1, {
                   from: recipient1
                 });
                 await expectRevert.unspecified(
                   acceptTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
+                    dvp,
+                    token1,
+                    token2,
                     1,
                     recipient1,
                     STATE_EXECUTED,
@@ -2765,8 +2854,9 @@ contract(
               });
             });
             describe('when token standard is ERC1400', function () {
+              let security1400: ERC1400;
               beforeEach(async function () {
-                this.security1400 = await ERC1400.new(
+                security1400 = await ERC1400.new(
                   'ERC1400Token',
                   'DAU',
                   1,
@@ -2774,7 +2864,7 @@ contract(
                   partitions,
                   { from: owner }
                 );
-                await this.security1400.issueByPartition(
+                await security1400.issueByPartition(
                   partition1,
                   recipient1,
                   issuanceAmount,
@@ -2783,13 +2873,13 @@ contract(
                 );
               });
               it('reverts', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.security1400,
+                  dvp,
+                  token1,
+                  security1400,
                   ERC20STANDARD,
                   ERC1400STANDARD,
                   tokenHolder1,
@@ -2801,14 +2891,14 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.security1400.approveByPartition(
+                await security1400.approveByPartition(
                   partition1,
-                  this.dvp.address,
+                  dvp.address,
                   token2Amount - 1,
                   { from: recipient1 }
                 );
                 await expectRevert.unspecified(
-                  this.dvp.acceptTrade(1, ZERO_BYTES32, { from: recipient1 })
+                  dvp.acceptTrade(1, ZERO_BYTES32, { from: recipient1 })
                 );
               });
             });
@@ -2818,13 +2908,13 @@ contract(
           describe('when token standard is ERC20', function () {
             describe('when tokens have been reserved before', function () {
               it('accepts and executes the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -2836,13 +2926,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_EXECUTED,
@@ -2852,13 +2942,13 @@ contract(
             });
             describe('when tokens have not been reserved before', function () {
               it('reverts', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -2870,12 +2960,12 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                // await this.token2.approve(this.dvp.address, token2Amount, { from: recipient1 });
+                // await token2.approve(dvp.address, token2Amount, { from: recipient1 });
                 await expectRevert.unspecified(
                   acceptTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
+                    dvp,
+                    token1,
+                    token2,
                     1,
                     recipient1,
                     STATE_EXECUTED,
@@ -2886,27 +2976,23 @@ contract(
             });
           });
           describe('when token standard is ERC721', function () {
+            let security721, token2: ERC721Token;
             beforeEach(async function () {
-              this.security721 = await ERC721.new(
-                'ERC721Token',
-                'DAU721',
-                '',
-                ''
-              );
-              this.token2 = this.security721;
-              await this.token2.mint(recipient1, issuanceTokenId, {
+              security721 = await ERC721.new('ERC721Token', 'DAU721', '', '');
+              token2 = security721;
+              await token2.mint(recipient1, issuanceTokenId, {
                 from: owner
               });
             });
             describe('when tokens have been reserved before', function () {
               it('accepts and executes the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC721STANDARD,
                   tokenHolder1,
@@ -2918,13 +3004,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, issuanceTokenId, {
+                await token2.approve(dvp.address, issuanceTokenId, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_EXECUTED,
@@ -2934,13 +3020,13 @@ contract(
             });
             describe('when tokens have not been reserved before', function () {
               it('reverts', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC721STANDARD,
                   tokenHolder1,
@@ -2952,12 +3038,12 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                // await this.token2.approve(this.dvp.address, issuanceTokenId, { from: recipient1 });
+                // await token2.approve(dvp.address, issuanceTokenId, { from: recipient1 });
                 await expectRevert.unspecified(
                   acceptTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
+                    dvp,
+                    token1,
+                    token2,
                     1,
                     recipient1,
                     STATE_EXECUTED,
@@ -2968,8 +3054,9 @@ contract(
             });
           });
           describe('when token standard is ERC1400', function () {
+            let security1400, token2: ERC1400;
             beforeEach(async function () {
-              this.security1400 = await ERC1400.new(
+              security1400 = await ERC1400.new(
                 'ERC1400Token',
                 'DAU',
                 1,
@@ -2977,24 +3064,24 @@ contract(
                 partitions,
                 { from: owner }
               );
-              await this.security1400.issueByPartition(
+              await security1400.issueByPartition(
                 partition1,
                 recipient1,
                 issuanceAmount,
                 VALID_CERTIFICATE,
                 { from: owner }
               );
-              this.token2 = this.security1400;
+              token2 = security1400;
             });
             describe('when tokens have been reserved before', function () {
               it('accepts and executes the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC1400STANDARD,
                   tokenHolder1,
@@ -3006,16 +3093,16 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approveByPartition(
+                await token2.approveByPartition(
                   partition1,
-                  this.dvp.address,
+                  dvp.address,
                   token2Amount,
                   { from: recipient1 }
                 );
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_EXECUTED,
@@ -3025,13 +3112,13 @@ contract(
             });
             describe('when tokens have not been reserved before', function () {
               it('reverts', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC1400STANDARD,
                   tokenHolder1,
@@ -3043,12 +3130,12 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                // await this.token2.approveByPartition(partition1, this.dvp.address, token2Amount, { from: recipient1 });
+                // await token2.approveByPartition(partition1, dvp.address, token2Amount, { from: recipient1 });
                 await expectRevert.unspecified(
                   acceptTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
+                    dvp,
+                    token1,
+                    token2,
                     1,
                     recipient1,
                     STATE_EXECUTED,
@@ -3060,13 +3147,13 @@ contract(
           });
           describe('when payment is made off-chain', function () {
             it('accepts and executes the trade', async function () {
-              await this.token1.approve(this.dvp.address, token1Amount, {
+              await token1.approve(dvp.address, token1Amount, {
                 from: tokenHolder1
               });
               await createTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
+                dvp,
+                token1,
+                token2,
                 ERC20STANDARD,
                 OFFCHAIN,
                 tokenHolder1,
@@ -3079,9 +3166,9 @@ contract(
                 token2Amount
               );
               await acceptTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
+                dvp,
+                token1,
+                token2,
                 1,
                 recipient1,
                 STATE_EXECUTED,
@@ -3094,13 +3181,13 @@ contract(
       describe('when trade index is not valid', function () {
         describe('when trade with indicated index doesn t exist', function () {
           it('reverts', async function () {
-            await this.token1.approve(this.dvp.address, token1Amount, {
+            await token1.approve(dvp.address, token1Amount, {
               from: tokenHolder1
             });
             await createTradeRequest(
-              this.dvp,
-              this.token1,
-              this.token2,
+              dvp,
+              token1,
+              token2,
               ERC20STANDARD,
               ERC20STANDARD,
               tokenHolder1,
@@ -3112,23 +3199,23 @@ contract(
               token1Amount,
               token2Amount
             );
-            await this.token2.approve(this.dvp.address, token2Amount, {
+            await token2.approve(dvp.address, token2Amount, {
               from: recipient1
             });
             await expectRevert.unspecified(
-              this.dvp.acceptTrade(999, ZERO_BYTES32, { from: recipient1 })
+              dvp.acceptTrade(999, ZERO_BYTES32, { from: recipient1 })
             );
           });
         });
         describe('when trade with indicated index is not in state pending', function () {
           it('reverts', async function () {
-            await this.token1.approve(this.dvp.address, token1Amount, {
+            await token1.approve(dvp.address, token1Amount, {
               from: tokenHolder1
             });
             await createTradeRequest(
-              this.dvp,
-              this.token1,
-              this.token2,
+              dvp,
+              token1,
+              token2,
               ERC20STANDARD,
               ERC20STANDARD,
               tokenHolder1,
@@ -3140,12 +3227,12 @@ contract(
               token1Amount,
               token2Amount
             );
-            await this.token2.approve(this.dvp.address, token2Amount, {
+            await token2.approve(dvp.address, token2Amount, {
               from: recipient1
             });
-            await this.dvp.acceptTrade(1, ZERO_BYTES32, { from: recipient1 });
+            await dvp.acceptTrade(1, ZERO_BYTES32, { from: recipient1 });
             await expectRevert.unspecified(
-              this.dvp.acceptTrade(1, ZERO_BYTES32, { from: recipient1 })
+              dvp.acceptTrade(1, ZERO_BYTES32, { from: recipient1 })
             );
           });
         });
@@ -3155,38 +3242,39 @@ contract(
     // APPROVE TRADE
 
     describe('approveTrade', function () {
+      let dvp: Swaps;
+      let security20, token1: ERC20Token;
+      let emoney20, token2: ERC20Token;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.security20 = await ERC20.new('ERC20Token', 'DAU', 18);
-        this.emoney20 = await ERC20.new('ERC20Token', 'DAU', 18);
+        security20 = await ERC20.new('ERC20Token', 'DAU', 18);
+        emoney20 = await ERC20.new('ERC20Token', 'DAU', 18);
 
-        await this.security20.mint(tokenHolder1, issuanceAmount, {
+        await security20.mint(tokenHolder1, issuanceAmount, {
           from: owner
         });
-        await this.emoney20.mint(recipient1, issuanceAmount, { from: owner });
+        await emoney20.mint(recipient1, issuanceAmount, { from: owner });
 
-        this.token1 = this.security20;
-        this.token2 = this.emoney20;
+        token1 = security20;
+        token2 = emoney20;
 
-        await this.dvp.setTokenControllers(
-          this.token1.address,
-          [tokenController1],
-          { from: owner }
-        );
+        await dvp.setTokenControllers(token1.address, [tokenController1], {
+          from: owner
+        });
       });
       describe('when trade index is valid', function () {
         describe('when sender is token controller', function () {
           describe('when one single approval is required', function () {
             describe('when trade is executed', function () {
               it('approves and executes the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -3198,13 +3286,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -3212,9 +3300,9 @@ contract(
                 );
 
                 await approveTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   tokenController1,
                   STATE_EXECUTED,
@@ -3224,13 +3312,13 @@ contract(
             });
             describe('when trade is not executed', function () {
               it('approves the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -3242,13 +3330,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -3256,9 +3344,9 @@ contract(
                 );
 
                 await approveTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   tokenController1,
                   STATE_PENDING,
@@ -3266,13 +3354,13 @@ contract(
                 );
               });
               it('approves, disapproves and re-approves the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -3284,35 +3372,35 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
                   ACCEPTED_TRUE
                 );
 
-                assert.equal(await this.dvp.getTradeApprovalStatus(1), false);
+                assert.equal(await dvp.getTradeApprovalStatus(1), false);
 
-                await this.dvp.approveTrade(1, true, {
+                await dvp.approveTrade(1, true, {
                   from: tokenController1
                 });
-                assert.equal(await this.dvp.getTradeApprovalStatus(1), true);
+                assert.equal(await dvp.getTradeApprovalStatus(1), true);
 
-                await this.dvp.approveTrade(1, false, {
+                await dvp.approveTrade(1, false, {
                   from: tokenController1
                 });
-                assert.equal(await this.dvp.getTradeApprovalStatus(1), false);
+                assert.equal(await dvp.getTradeApprovalStatus(1), false);
 
                 await approveTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   tokenController1,
                   STATE_PENDING,
@@ -3323,21 +3411,21 @@ contract(
           });
           describe('when two approvals are required', function () {
             beforeEach(async function () {
-              await this.dvp.setTokenControllers(
-                this.token2.address,
+              await dvp.setTokenControllers(
+                token2.address,
                 [tokenController2],
                 { from: owner }
               );
             });
             describe('when trade is executed', function () {
               it('approves and executes the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -3349,13 +3437,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -3363,18 +3451,18 @@ contract(
                 );
 
                 await approveTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   tokenController1,
                   STATE_PENDING,
                   APPROVED_FALSE
                 );
                 await approveTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   tokenController2,
                   STATE_EXECUTED,
@@ -3384,13 +3472,13 @@ contract(
             });
             describe('when trade is not executed', function () {
               it('approves the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -3402,13 +3490,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -3416,18 +3504,18 @@ contract(
                 );
 
                 await approveTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   tokenController1,
                   STATE_PENDING,
                   APPROVED_FALSE
                 );
                 await approveTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   tokenController2,
                   STATE_PENDING,
@@ -3439,13 +3527,13 @@ contract(
         });
         describe('when sender is not token controller', function () {
           it('reverts', async function () {
-            await this.token1.approve(this.dvp.address, token1Amount, {
+            await token1.approve(dvp.address, token1Amount, {
               from: tokenHolder1
             });
             await createTradeRequest(
-              this.dvp,
-              this.token1,
-              this.token2,
+              dvp,
+              token1,
+              token2,
               ERC20STANDARD,
               ERC20STANDARD,
               tokenHolder1,
@@ -3457,23 +3545,23 @@ contract(
               token1Amount,
               token2Amount
             );
-            await this.token2.approve(this.dvp.address, token2Amount, {
+            await token2.approve(dvp.address, token2Amount, {
               from: recipient1
             });
             await acceptTradeRequest(
-              this.dvp,
-              this.token1,
-              this.token2,
+              dvp,
+              token1,
+              token2,
               1,
               recipient1,
               STATE_PENDING,
               ACCEPTED_TRUE
             );
 
-            assert.equal(await this.dvp.getTradeApprovalStatus(1), false);
+            assert.equal(await dvp.getTradeApprovalStatus(1), false);
 
             await expectRevert.unspecified(
-              this.dvp.approveTrade(1, true, { from: unknown })
+              dvp.approveTrade(1, true, { from: unknown })
             );
           });
         });
@@ -3481,13 +3569,13 @@ contract(
       describe('when trade index is not valid', function () {
         describe('when trade with indicated index doesn t exist', function () {
           it('reverts', async function () {
-            await this.token1.approve(this.dvp.address, token1Amount, {
+            await token1.approve(dvp.address, token1Amount, {
               from: tokenHolder1
             });
             await createTradeRequest(
-              this.dvp,
-              this.token1,
-              this.token2,
+              dvp,
+              token1,
+              token2,
               ERC20STANDARD,
               ERC20STANDARD,
               tokenHolder1,
@@ -3499,35 +3587,35 @@ contract(
               token1Amount,
               token2Amount
             );
-            await this.token2.approve(this.dvp.address, token2Amount, {
+            await token2.approve(dvp.address, token2Amount, {
               from: recipient1
             });
             await acceptTradeRequest(
-              this.dvp,
-              this.token1,
-              this.token2,
+              dvp,
+              token1,
+              token2,
               1,
               recipient1,
               STATE_PENDING,
               ACCEPTED_TRUE
             );
 
-            assert.equal(await this.dvp.getTradeApprovalStatus(1), false);
+            assert.equal(await dvp.getTradeApprovalStatus(1), false);
 
             await expectRevert.unspecified(
-              this.dvp.approveTrade(999, true, { from: tokenController1 })
+              dvp.approveTrade(999, true, { from: tokenController1 })
             );
           });
         });
         describe('when trade with indicated index is not in state pending', function () {
           it('reverts', async function () {
-            await this.token1.approve(this.dvp.address, token1Amount, {
+            await token1.approve(dvp.address, token1Amount, {
               from: tokenHolder1
             });
             await createTradeRequest(
-              this.dvp,
-              this.token1,
-              this.token2,
+              dvp,
+              token1,
+              token2,
               ERC20STANDARD,
               ERC20STANDARD,
               tokenHolder1,
@@ -3539,26 +3627,26 @@ contract(
               token1Amount,
               token2Amount
             );
-            await this.token2.approve(this.dvp.address, token2Amount, {
+            await token2.approve(dvp.address, token2Amount, {
               from: recipient1
             });
             await acceptTradeRequest(
-              this.dvp,
-              this.token1,
-              this.token2,
+              dvp,
+              token1,
+              token2,
               1,
               recipient1,
               STATE_PENDING,
               ACCEPTED_TRUE
             );
 
-            assert.equal(await this.dvp.getTradeApprovalStatus(1), false);
+            assert.equal(await dvp.getTradeApprovalStatus(1), false);
 
-            await this.dvp.approveTrade(1, true, { from: tokenController1 });
-            await assertTradeState(this.dvp, 1, STATE_EXECUTED);
+            await dvp.approveTrade(1, true, { from: tokenController1 });
+            await assertTradeState(dvp, 1, STATE_EXECUTED);
 
             await expectRevert.unspecified(
-              this.dvp.approveTrade(1, true, { from: tokenController1 })
+              dvp.approveTrade(1, true, { from: tokenController1 })
             );
           });
         });
@@ -3568,19 +3656,22 @@ contract(
     // EXECUTE TRADE
 
     describe('executeTrade', function () {
+      let dvp: Swaps;
+      let security20, token1: ERC20Token;
+      let emoney20, token2: ERC20Token;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.security20 = await ERC20.new('ERC20Token', 'DAU', 18);
-        this.emoney20 = await ERC20.new('ERC20Token', 'DAU', 18);
+        security20 = await ERC20.new('ERC20Token', 'DAU', 18);
+        emoney20 = await ERC20.new('ERC20Token', 'DAU', 18);
 
-        await this.security20.mint(tokenHolder1, issuanceAmount, {
+        await security20.mint(tokenHolder1, issuanceAmount, {
           from: owner
         });
-        await this.emoney20.mint(recipient1, issuanceAmount, { from: owner });
+        await emoney20.mint(recipient1, issuanceAmount, { from: owner });
 
-        this.token1 = this.security20;
-        this.token2 = this.emoney20;
+        token1 = security20;
+        token2 = emoney20;
       });
       describe('when trade index is valid', function () {
         describe('when caller is executer defined at trade creation', function () {
@@ -3591,15 +3682,13 @@ contract(
                   describe('when token standard is ERC20 vs ERC20', function () {
                     describe('when trade type is Escrow', function () {
                       it('executes the trade', async function () {
-                        await this.token1.approve(
-                          this.dvp.address,
-                          token1Amount,
-                          { from: tokenHolder1 }
-                        );
+                        await token1.approve(dvp.address, token1Amount, {
+                          from: tokenHolder1
+                        });
                         await createTradeRequest(
-                          this.dvp,
-                          this.token1,
-                          this.token2,
+                          dvp,
+                          token1,
+                          token2,
                           ERC20STANDARD,
                           ERC20STANDARD,
                           tokenHolder1,
@@ -3611,24 +3700,22 @@ contract(
                           token1Amount,
                           token2Amount
                         );
-                        await this.token2.approve(
-                          this.dvp.address,
-                          token2Amount,
-                          { from: recipient1 }
-                        );
+                        await token2.approve(dvp.address, token2Amount, {
+                          from: recipient1
+                        });
                         await acceptTradeRequest(
-                          this.dvp,
-                          this.token1,
-                          this.token2,
+                          dvp,
+                          token1,
+                          token2,
                           1,
                           recipient1,
                           STATE_PENDING,
                           ACCEPTED_TRUE
                         );
                         await executeTradeRequest(
-                          this.dvp,
-                          this.token1,
-                          this.token2,
+                          dvp,
+                          token1,
+                          token2,
                           1,
                           executer
                         );
@@ -3638,15 +3725,13 @@ contract(
                       describe('when trade is executed by an executer', function () {
                         describe('when tokens are available', function () {
                           it('executes the trade', async function () {
-                            await this.token1.approve(
-                              this.dvp.address,
-                              token1Amount,
-                              { from: tokenHolder1 }
-                            );
+                            await token1.approve(dvp.address, token1Amount, {
+                              from: tokenHolder1
+                            });
                             await createTradeRequest(
-                              this.dvp,
-                              this.token1,
-                              this.token2,
+                              dvp,
+                              token1,
+                              token2,
                               ERC20STANDARD,
                               ERC20STANDARD,
                               tokenHolder1,
@@ -3658,24 +3743,22 @@ contract(
                               token1Amount,
                               token2Amount
                             );
-                            await this.token2.approve(
-                              this.dvp.address,
-                              token2Amount,
-                              { from: recipient1 }
-                            );
+                            await token2.approve(dvp.address, token2Amount, {
+                              from: recipient1
+                            });
                             await acceptTradeRequest(
-                              this.dvp,
-                              this.token1,
-                              this.token2,
+                              dvp,
+                              token1,
+                              token2,
                               1,
                               recipient1,
                               STATE_PENDING,
                               ACCEPTED_TRUE
                             );
                             await executeTradeRequest(
-                              this.dvp,
-                              this.token1,
-                              this.token2,
+                              dvp,
+                              token1,
+                              token2,
                               1,
                               executer
                             );
@@ -3683,15 +3766,13 @@ contract(
                         });
                         describe('when tokens are not available', function () {
                           it('executes the trade', async function () {
-                            await this.token1.approve(
-                              this.dvp.address,
-                              token1Amount,
-                              { from: tokenHolder1 }
-                            );
+                            await token1.approve(dvp.address, token1Amount, {
+                              from: tokenHolder1
+                            });
                             await createTradeRequest(
-                              this.dvp,
-                              this.token1,
-                              this.token2,
+                              dvp,
+                              token1,
+                              token2,
                               ERC20STANDARD,
                               ERC20STANDARD,
                               tokenHolder1,
@@ -3703,28 +3784,26 @@ contract(
                               token1Amount,
                               token2Amount
                             );
-                            await this.token2.approve(
-                              this.dvp.address,
-                              token2Amount,
-                              { from: recipient1 }
-                            );
+                            await token2.approve(dvp.address, token2Amount, {
+                              from: recipient1
+                            });
                             await acceptTradeRequest(
-                              this.dvp,
-                              this.token1,
-                              this.token2,
+                              dvp,
+                              token1,
+                              token2,
                               1,
                               recipient1,
                               STATE_PENDING,
                               ACCEPTED_TRUE
                             );
-                            await this.token2.approve(this.dvp.address, 0, {
+                            await token2.approve(dvp.address, 0, {
                               from: recipient1
                             });
                             await expectRevert.unspecified(
                               executeTradeRequest(
-                                this.dvp,
-                                this.token1,
-                                this.token2,
+                                dvp,
+                                token1,
+                                token2,
                                 1,
                                 executer
                               )
@@ -3734,22 +3813,20 @@ contract(
                       });
                       describe('when trade is executed by a holder', function () {
                         beforeEach(async function () {
-                          await this.dvp.setTokenControllers(
-                            this.token1.address,
+                          await dvp.setTokenControllers(
+                            token1.address,
                             [tokenController1],
                             { from: owner }
                           );
                         });
                         it('executes the trade', async function () {
-                          await this.token1.approve(
-                            this.dvp.address,
-                            token1Amount,
-                            { from: tokenHolder1 }
-                          );
+                          await token1.approve(dvp.address, token1Amount, {
+                            from: tokenHolder1
+                          });
                           await createTradeRequest(
-                            this.dvp,
-                            this.token1,
-                            this.token2,
+                            dvp,
+                            token1,
+                            token2,
                             ERC20STANDARD,
                             ERC20STANDARD,
                             tokenHolder1,
@@ -3761,38 +3838,36 @@ contract(
                             token1Amount,
                             token2Amount
                           );
-                          await this.token2.approve(
-                            this.dvp.address,
-                            token2Amount,
-                            { from: recipient1 }
-                          );
+                          await token2.approve(dvp.address, token2Amount, {
+                            from: recipient1
+                          });
                           await acceptTradeRequest(
-                            this.dvp,
-                            this.token1,
-                            this.token2,
+                            dvp,
+                            token1,
+                            token2,
                             1,
                             recipient1,
                             STATE_PENDING,
                             ACCEPTED_TRUE
                           );
-                          await this.token1.decreaseAllowance(
-                            this.dvp.address,
+                          await token1.decreaseAllowance(
+                            dvp.address,
                             token1Amount,
                             { from: tokenHolder1 }
                           );
-                          await this.dvp.approveTrade(1, true, {
+                          await dvp.approveTrade(1, true, {
                             from: tokenController1
                           });
                           // -- trade doesn't get executed because allowance had been decreased
-                          await this.token1.increaseAllowance(
-                            this.dvp.address,
+                          await token1.increaseAllowance(
+                            dvp.address,
                             token1Amount,
                             { from: tokenHolder1 }
                           );
                           await executeTradeRequest(
-                            this.dvp,
-                            this.token1,
-                            this.token2,
+                            dvp,
+                            token1,
+                            token2,
                             1,
                             tokenHolder1
                           );
@@ -3813,9 +3888,9 @@ contract(
                           10 ** 18;
 
                         await createTradeRequest(
-                          this.dvp,
+                          dvp,
                           undefined,
-                          this.token2,
+                          token2,
                           ETHSTANDARD,
                           ERC20STANDARD,
                           tokenHolder1,
@@ -3827,24 +3902,22 @@ contract(
                           token0Amount,
                           token2Amount
                         );
-                        await this.token2.approve(
-                          this.dvp.address,
-                          token2Amount,
-                          { from: recipient1 }
-                        );
+                        await token2.approve(dvp.address, token2Amount, {
+                          from: recipient1
+                        });
                         await acceptTradeRequest(
-                          this.dvp,
+                          dvp,
                           undefined,
-                          this.token2,
+                          token2,
                           1,
                           recipient1,
                           STATE_PENDING,
                           ACCEPTED_TRUE
                         );
                         await executeTradeRequest(
-                          this.dvp,
+                          dvp,
                           undefined,
-                          this.token2,
+                          token2,
                           1,
                           executer
                         );
@@ -3856,7 +3929,7 @@ contract(
                           parseInt(await web3.eth.getBalance(recipient1)) /
                           10 ** 18;
 
-                        await assertEtherBalance(this.dvp.address, 0, true);
+                        await assertEtherBalance(dvp.address, 0, true);
                         assert.equal(
                           Math.abs(
                             initialEthBalance1 - finalEthBalance1 - 0.5
@@ -3875,14 +3948,12 @@ contract(
                   describe('when token standard is ERC20 vs off-chain payment', function () {
                     describe('when trade type is Escrow', function () {
                       it('executes the trade', async function () {
-                        await this.token1.approve(
-                          this.dvp.address,
-                          token1Amount,
-                          { from: tokenHolder1 }
-                        );
+                        await token1.approve(dvp.address, token1Amount, {
+                          from: tokenHolder1
+                        });
                         await createTradeRequest(
-                          this.dvp,
-                          this.token1,
+                          dvp,
+                          token1,
                           undefined,
                           ERC20STANDARD,
                           OFFCHAIN,
@@ -3896,8 +3967,8 @@ contract(
                           token2Amount
                         );
                         await acceptTradeRequest(
-                          this.dvp,
-                          this.token1,
+                          dvp,
+                          token1,
                           undefined,
                           1,
                           recipient1,
@@ -3905,8 +3976,8 @@ contract(
                           ACCEPTED_TRUE
                         );
                         await executeTradeRequest(
-                          this.dvp,
-                          this.token1,
+                          dvp,
+                          token1,
                           undefined,
                           1,
                           executer
@@ -3915,29 +3986,24 @@ contract(
                     });
                   });
                   describe('when token standard is ERC721 vs ERC20', function () {
+                    let security721: ERC721Token;
                     beforeEach(async function () {
-                      this.security721 = await ERC721.new(
+                      security721 = await ERC721.new(
                         'ERC721Token',
                         'DAU721',
                         '',
                         ''
                       );
-                      await this.security721.mint(
-                        tokenHolder1,
-                        issuanceTokenId,
-                        {
-                          from: owner
-                        }
-                      );
+                      await security721.mint(tokenHolder1, issuanceTokenId, {
+                        from: owner
+                      });
                     });
                     it('setTokenURI sets the URI for the tokenId', async function () {
-                      await this.security721.setTokenURI(
+                      await security721.setTokenURI(
                         issuanceTokenId,
                         'https://consensys.org/' + issuanceTokenId
                       );
-                      const uri = await this.security721.tokenURI(
-                        issuanceTokenId
-                      );
+                      const uri = await security721.tokenURI(issuanceTokenId);
 
                       assert.equal(
                         uri,
@@ -3946,15 +4012,15 @@ contract(
                     });
                     describe('when trade type is Escrow', function () {
                       it('executes the trade', async function () {
-                        await this.security721.approve(
-                          this.dvp.address,
+                        await security721.approve(
+                          dvp.address,
                           issuanceTokenId,
                           { from: tokenHolder1 }
                         );
                         await createTradeRequest(
-                          this.dvp,
-                          this.security721,
-                          this.token2,
+                          dvp,
+                          security721,
+                          token2,
                           ERC721STANDARD,
                           ERC20STANDARD,
                           tokenHolder1,
@@ -3966,24 +4032,22 @@ contract(
                           0,
                           token2Amount
                         );
-                        await this.token2.approve(
-                          this.dvp.address,
-                          token2Amount,
-                          { from: recipient1 }
-                        );
+                        await token2.approve(dvp.address, token2Amount, {
+                          from: recipient1
+                        });
                         await acceptTradeRequest(
-                          this.dvp,
-                          this.security721,
-                          this.token2,
+                          dvp,
+                          security721,
+                          token2,
                           1,
                           recipient1,
                           STATE_PENDING,
                           ACCEPTED_TRUE
                         );
                         await executeTradeRequest(
-                          this.dvp,
-                          this.security721,
-                          this.token2,
+                          dvp,
+                          security721,
+                          token2,
                           1,
                           executer
                         );
@@ -3992,8 +4056,9 @@ contract(
                   });
                   describe('when token standard is ERC1400 vs ERC20', function () {
                     describe('when trade type is Escrow', function () {
+                      let security1400: ERC1400;
                       beforeEach(async function () {
-                        this.security1400 = await ERC1400.new(
+                        security1400 = await ERC1400.new(
                           'ERC1400Token',
                           'DAU',
                           1,
@@ -4001,7 +4066,7 @@ contract(
                           partitions,
                           { from: owner }
                         );
-                        await this.security1400.issueByPartition(
+                        await security1400.issueByPartition(
                           partition1,
                           tokenHolder1,
                           issuanceAmount,
@@ -4010,16 +4075,16 @@ contract(
                         );
                       });
                       it('executes the trade', async function () {
-                        await this.security1400.approveByPartition(
+                        await security1400.approveByPartition(
                           partition1,
-                          this.dvp.address,
+                          dvp.address,
                           token1Amount,
                           { from: tokenHolder1 }
                         );
                         await createTradeRequest(
-                          this.dvp,
-                          this.security1400,
-                          this.token2,
+                          dvp,
+                          security1400,
+                          token2,
                           ERC1400STANDARD,
                           ERC20STANDARD,
                           tokenHolder1,
@@ -4031,24 +4096,22 @@ contract(
                           token1Amount,
                           token2Amount
                         );
-                        await this.token2.approve(
-                          this.dvp.address,
-                          token2Amount,
-                          { from: recipient1 }
-                        );
+                        await token2.approve(dvp.address, token2Amount, {
+                          from: recipient1
+                        });
                         await acceptTradeRequest(
-                          this.dvp,
-                          this.security1400,
-                          this.token2,
+                          dvp,
+                          security1400,
+                          token2,
                           1,
                           recipient1,
                           STATE_PENDING,
                           ACCEPTED_TRUE
                         );
                         await executeTradeRequest(
-                          this.dvp,
-                          this.security1400,
-                          this.token2,
+                          dvp,
+                          security1400,
+                          token2,
                           1,
                           executer
                         );
@@ -4058,13 +4121,13 @@ contract(
                 });
                 describe('when expiration date is past', function () {
                   it('reverts', async function () {
-                    await this.token1.approve(this.dvp.address, token1Amount, {
+                    await token1.approve(dvp.address, token1Amount, {
                       from: tokenHolder1
                     });
                     await createTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
+                      dvp,
+                      token1,
+                      token2,
                       ERC20STANDARD,
                       ERC20STANDARD,
                       tokenHolder1,
@@ -4076,13 +4139,13 @@ contract(
                       token1Amount,
                       token2Amount
                     );
-                    await this.token2.approve(this.dvp.address, token2Amount, {
+                    await token2.approve(dvp.address, token2Amount, {
                       from: recipient1
                     });
                     await acceptTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
+                      dvp,
+                      token1,
+                      token2,
                       1,
                       recipient1,
                       STATE_PENDING,
@@ -4093,58 +4156,48 @@ contract(
                     await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
 
                     await expectRevert.unspecified(
-                      executeTradeRequest(
-                        this.dvp,
-                        this.token1,
-                        this.token2,
-                        1,
-                        executer
-                      )
+                      executeTradeRequest(dvp, token1, token2, 1, executer)
                     );
                   });
                 });
               });
               describe('when trade is not executed at initially defined price', function () {
                 it('creates and accepts the trade request', async function () {
-                  await this.dvp.setPriceOracles(
-                    this.token1.address,
-                    [oracle],
-                    {
-                      from: owner
-                    }
-                  );
+                  await dvp.setPriceOracles(token1.address, [oracle], {
+                    from: owner
+                  });
                   let chainTime = (await web3.eth.getBlock('latest')).timestamp;
                   let variablePriceStartDate =
                     chainTime + SECONDS_IN_A_WEEK + 10;
-                  await this.dvp.setVariablePriceStartDate(
-                    this.token1.address,
+                  await dvp.setVariablePriceStartDate(
+                    token1.address,
                     variablePriceStartDate,
                     { from: oracle }
                   );
                   assert.equal(
-                    await this.dvp.variablePriceStartDate(this.token1.address),
+                    await dvp.variablePriceStartDate(token1.address),
                     variablePriceStartDate
                   );
                   // Wait for 1 week
                   await advanceTimeAndBlock(SECONDS_IN_A_WEEK + 100);
 
-                  await this.dvp.setPriceOwnership(
-                    this.token1.address,
-                    this.token2.address,
+                  await dvp.setPriceOwnership(
+                    token1.address,
+                    token2.address,
                     true,
                     { from: oracle }
                   );
                   const multiple2 = 2;
-                  await this.dvp.setTokenPrice(
-                    this.token1.address,
-                    this.token2.address,
+                  await dvp.setTokenPrice(
+                    token1.address,
+                    token2.address,
                     ALL_PARTITIONS,
                     ALL_PARTITIONS,
                     multiple2,
                     { from: oracle }
                   );
 
-                  await this.token1.approve(this.dvp.address, token1Amount, {
+                  await token1.approve(dvp.address, token1Amount, {
                     from: tokenHolder1
                   });
                   const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
@@ -4171,25 +4224,25 @@ contract(
                     executer: ZERO_ADDRESS,
                     expirationDate: expirationDate,
                     settlementDate: 0,
-                    tokenAddress1: this.token1.address,
+                    tokenAddress1: token1.address,
                     tokenValue1: token1Amount,
                     tokenId1: ZERO_BYTES32,
                     tokenStandard1: ERC20STANDARD,
-                    tokenAddress2: this.token2.address,
+                    tokenAddress2: token2.address,
                     tokenValue2: token2Amount,
                     tokenId2: ZERO_BYTES32,
                     tokenStandard2: ERC20STANDARD,
                     tradeType1: HEX_TYPE_SWAP,
                     tradeType2: HEX_TYPE_SWAP
                   };
-                  await this.dvp.requestTrade(tradeInputData, ZERO_BYTES32, {
+                  await dvp.requestTrade(tradeInputData, ZERO_BYTES32, {
                     from: tokenHolder1
                   });
 
-                  await this.token2.approve(this.dvp.address, token2Amount, {
+                  await token2.approve(dvp.address, token2Amount, {
                     from: recipient1
                   });
-                  await this.dvp.acceptTrade(1, ZERO_BYTES32, {
+                  await dvp.acceptTrade(1, ZERO_BYTES32, {
                     from: recipient1
                   });
                 });
@@ -4197,13 +4250,13 @@ contract(
             });
             describe('when trade has not been accepted', function () {
               it('reverts', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -4215,38 +4268,32 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
-                // await acceptTradeRequest(this.dvp, this.token1, this.token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
+                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
                 await expectRevert.unspecified(
-                  executeTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
-                    1,
-                    executer
-                  )
+                  executeTradeRequest(dvp, token1, token2, 1, executer)
                 );
               });
             });
           });
           describe('when trade has not been approved', function () {
             beforeEach(async function () {
-              await this.dvp.setTokenControllers(
-                this.token1.address,
+              await dvp.setTokenControllers(
+                token1.address,
                 [tokenController1],
                 { from: owner }
               );
             });
             it('reverts', async function () {
-              await this.token1.approve(this.dvp.address, token1Amount, {
+              await token1.approve(dvp.address, token1Amount, {
                 from: tokenHolder1
               });
               await createTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
+                dvp,
+                token1,
+                token2,
                 ERC20STANDARD,
                 ERC20STANDARD,
                 tokenHolder1,
@@ -4258,39 +4305,33 @@ contract(
                 token1Amount,
                 token2Amount
               );
-              await this.token2.approve(this.dvp.address, token2Amount, {
+              await token2.approve(dvp.address, token2Amount, {
                 from: recipient1
               });
               await acceptTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
+                dvp,
+                token1,
+                token2,
                 1,
                 recipient1,
                 STATE_PENDING,
                 ACCEPTED_TRUE
               );
               await expectRevert.unspecified(
-                executeTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
-                  1,
-                  executer
-                )
+                executeTradeRequest(dvp, token1, token2, 1, executer)
               );
             });
           });
         });
         describe('when caller is not executer defined at trade creation', function () {
           it('reverts', async function () {
-            await this.token1.approve(this.dvp.address, token1Amount, {
+            await token1.approve(dvp.address, token1Amount, {
               from: tokenHolder1
             });
             await createTradeRequest(
-              this.dvp,
-              this.token1,
-              this.token2,
+              dvp,
+              token1,
+              token2,
               ERC20STANDARD,
               ERC20STANDARD,
               tokenHolder1,
@@ -4302,26 +4343,20 @@ contract(
               token1Amount,
               token2Amount
             );
-            await this.token2.approve(this.dvp.address, token2Amount, {
+            await token2.approve(dvp.address, token2Amount, {
               from: recipient1
             });
             await acceptTradeRequest(
-              this.dvp,
-              this.token1,
-              this.token2,
+              dvp,
+              token1,
+              token2,
               1,
               recipient1,
               STATE_PENDING,
               ACCEPTED_TRUE
             );
             await expectRevert.unspecified(
-              executeTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
-                1,
-                unknown
-              )
+              executeTradeRequest(dvp, token1, token2, 1, unknown)
             );
           });
         });
@@ -4329,7 +4364,7 @@ contract(
       describe('when trade index is not valid', function () {
         it('reverts', async function () {
           await expectRevert.unspecified(
-            this.dvp.executeTrade(999, { from: executer })
+            dvp.executeTrade(999, { from: executer })
           );
         });
       });
@@ -4338,19 +4373,23 @@ contract(
     // FORCE TRADE
 
     describe('forceTrade', function () {
+      let dvp: Swaps;
+      let security20, token1: ERC20Token;
+      let emoney20, token2: ERC20Token;
+
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.security20 = await ERC20.new('ERC20Token', 'DAU', 18);
-        this.emoney20 = await ERC20.new('ERC20Token', 'DAU', 18);
+        security20 = await ERC20.new('ERC20Token', 'DAU', 18);
+        emoney20 = await ERC20.new('ERC20Token', 'DAU', 18);
 
-        await this.security20.mint(tokenHolder1, issuanceAmount, {
+        await security20.mint(tokenHolder1, issuanceAmount, {
           from: owner
         });
-        await this.emoney20.mint(recipient1, issuanceAmount, { from: owner });
+        await emoney20.mint(recipient1, issuanceAmount, { from: owner });
 
-        this.token1 = this.security20;
-        this.token2 = this.emoney20;
+        token1 = security20;
+        token2 = emoney20;
       });
       describe('when trade index is valid', function () {
         describe('when trade has not been accepted by both parties', function () {
@@ -4359,13 +4398,13 @@ contract(
               describe('when trade has been accepted by holder1', function () {
                 describe('when sender is holder1', function () {
                   it('forces the trade', async function () {
-                    await this.token1.approve(this.dvp.address, token1Amount, {
+                    await token1.approve(dvp.address, token1Amount, {
                       from: tokenHolder1
                     });
                     await createTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
+                      dvp,
+                      token1,
+                      token2,
                       ERC20STANDARD,
                       ERC20STANDARD,
                       tokenHolder1,
@@ -4378,9 +4417,9 @@ contract(
                       token2Amount
                     );
                     await forceTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
+                      dvp,
+                      token1,
+                      token2,
                       1,
                       tokenHolder1
                     );
@@ -4388,13 +4427,13 @@ contract(
                 });
                 describe('when sender is not holder1', function () {
                   it('reverts', async function () {
-                    await this.token1.approve(this.dvp.address, token1Amount, {
+                    await token1.approve(dvp.address, token1Amount, {
                       from: tokenHolder1
                     });
                     await createTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
+                      dvp,
+                      token1,
+                      token2,
                       ERC20STANDARD,
                       ERC20STANDARD,
                       tokenHolder1,
@@ -4407,13 +4446,7 @@ contract(
                       token2Amount
                     );
                     await expectRevert.unspecified(
-                      forceTradeRequest(
-                        this.dvp,
-                        this.token1,
-                        this.token2,
-                        1,
-                        recipient1
-                      )
+                      forceTradeRequest(dvp, token1, token2, 1, recipient1)
                     );
                   });
                 });
@@ -4421,13 +4454,13 @@ contract(
               describe('when trade has been accepted by holder2', function () {
                 describe('when sender is holder2', function () {
                   it('forces the trade', async function () {
-                    await this.token2.approve(this.dvp.address, token2Amount, {
+                    await token2.approve(dvp.address, token2Amount, {
                       from: recipient1
                     });
                     await createTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
+                      dvp,
+                      token1,
+                      token2,
                       ERC20STANDARD,
                       ERC20STANDARD,
                       tokenHolder1,
@@ -4439,24 +4472,18 @@ contract(
                       token1Amount,
                       token2Amount
                     );
-                    await forceTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
-                      1,
-                      recipient1
-                    );
+                    await forceTradeRequest(dvp, token1, token2, 1, recipient1);
                   });
                 });
                 describe('when sender is not holder2', function () {
                   it('reverts', async function () {
-                    await this.token2.approve(this.dvp.address, token2Amount, {
+                    await token2.approve(dvp.address, token2Amount, {
                       from: recipient1
                     });
                     await createTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
+                      dvp,
+                      token1,
+                      token2,
                       ERC20STANDARD,
                       ERC20STANDARD,
                       tokenHolder1,
@@ -4469,13 +4496,7 @@ contract(
                       token2Amount
                     );
                     await expectRevert.unspecified(
-                      forceTradeRequest(
-                        this.dvp,
-                        this.token1,
-                        this.token2,
-                        1,
-                        tokenHolder1
-                      )
+                      forceTradeRequest(dvp, token1, token2, 1, tokenHolder1)
                     );
                   });
                 });
@@ -4483,9 +4504,9 @@ contract(
               describe('when trade has been accepted neither by holder1, nor by holder2', function () {
                 it('reverts', async function () {
                   await createTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
+                    dvp,
+                    token1,
+                    token2,
                     ERC20STANDARD,
                     ERC20STANDARD,
                     tokenHolder1,
@@ -4498,13 +4519,7 @@ contract(
                     token2Amount
                   );
                   await expectRevert.unspecified(
-                    forceTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
-                      1,
-                      unknown
-                    )
+                    forceTradeRequest(dvp, token1, token2, 1, unknown)
                   );
                 });
               });
@@ -4512,13 +4527,13 @@ contract(
             describe('when executer has been defined at trade creation', function () {
               describe('when caller is executer defined at trade creation', function () {
                 it('executes the trade', async function () {
-                  await this.token1.approve(this.dvp.address, token1Amount, {
+                  await token1.approve(dvp.address, token1Amount, {
                     from: tokenHolder1
                   });
                   await createTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
+                    dvp,
+                    token1,
+                    token2,
                     ERC20STANDARD,
                     ERC20STANDARD,
                     tokenHolder1,
@@ -4530,24 +4545,18 @@ contract(
                     token1Amount,
                     token2Amount
                   );
-                  await forceTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
-                    1,
-                    executer
-                  );
+                  await forceTradeRequest(dvp, token1, token2, 1, executer);
                 });
               });
               describe('when caller is not executer defined at trade creation', function () {
                 it('executes the trade', async function () {
-                  await this.token1.approve(this.dvp.address, token1Amount, {
+                  await token1.approve(dvp.address, token1Amount, {
                     from: tokenHolder1
                   });
                   await createTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
+                    dvp,
+                    token1,
+                    token2,
                     ERC20STANDARD,
                     ERC20STANDARD,
                     tokenHolder1,
@@ -4560,13 +4569,7 @@ contract(
                     token2Amount
                   );
                   await expectRevert.unspecified(
-                    forceTradeRequest(
-                      this.dvp,
-                      this.token1,
-                      this.token2,
-                      1,
-                      tokenHolder1
-                    )
+                    forceTradeRequest(dvp, token1, token2, 1, tokenHolder1)
                   );
                 });
               });
@@ -4574,20 +4577,20 @@ contract(
           });
           describe('when at least one of traded tokens has controllers', function () {
             beforeEach(async function () {
-              await this.dvp.setTokenControllers(
-                this.token1.address,
+              await dvp.setTokenControllers(
+                token1.address,
                 [tokenController1],
                 { from: owner }
               );
             });
             it('reverts', async function () {
-              await this.token1.approve(this.dvp.address, token1Amount, {
+              await token1.approve(dvp.address, token1Amount, {
                 from: tokenHolder1
               });
               await createTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
+                dvp,
+                token1,
+                token2,
                 ERC20STANDARD,
                 ERC20STANDARD,
                 tokenHolder1,
@@ -4600,26 +4603,20 @@ contract(
                 token2Amount
               );
               await expectRevert.unspecified(
-                forceTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
-                  1,
-                  tokenHolder1
-                )
+                forceTradeRequest(dvp, token1, token2, 1, tokenHolder1)
               );
             });
           });
         });
         describe('when trade has been accepted by both parties', function () {
           it('reverts', async function () {
-            await this.token1.approve(this.dvp.address, token1Amount, {
+            await token1.approve(dvp.address, token1Amount, {
               from: tokenHolder1
             });
             await createTradeRequest(
-              this.dvp,
-              this.token1,
-              this.token2,
+              dvp,
+              token1,
+              token2,
               ERC20STANDARD,
               ERC20STANDARD,
               tokenHolder1,
@@ -4631,20 +4628,20 @@ contract(
               token1Amount,
               token2Amount
             );
-            await this.token2.approve(this.dvp.address, token2Amount, {
+            await token2.approve(dvp.address, token2Amount, {
               from: recipient1
             });
             await acceptTradeRequest(
-              this.dvp,
-              this.token1,
-              this.token2,
+              dvp,
+              token1,
+              token2,
               1,
               recipient1,
               STATE_PENDING,
               ACCEPTED_TRUE
             );
             await expectRevert.unspecified(
-              forceTradeRequest(this.dvp, this.token1, this.token2, 1, executer)
+              forceTradeRequest(dvp, token1, token2, 1, executer)
             );
           });
         });
@@ -4652,7 +4649,7 @@ contract(
       describe('when trade index is not valid', function () {
         it('reverts', async function () {
           await expectRevert.unspecified(
-            this.dvp.forceTrade(999, { from: executer })
+            dvp.forceTrade(999, { from: executer })
           );
         });
       });
@@ -4661,32 +4658,35 @@ contract(
     // CANCEL TRADE
 
     describe('cancelTrade', function () {
+      let dvp: Swaps;
+      let security20, token1: ERC20Token;
+      let emoney20, token2: ERC20Token;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.security20 = await ERC20.new('ERC20Token', 'DAU', 18);
-        this.emoney20 = await ERC20.new('ERC20Token', 'DAU', 18);
+        security20 = await ERC20.new('ERC20Token', 'DAU', 18);
+        emoney20 = await ERC20.new('ERC20Token', 'DAU', 18);
 
-        await this.security20.mint(tokenHolder1, issuanceAmount, {
+        await security20.mint(tokenHolder1, issuanceAmount, {
           from: owner
         });
-        await this.emoney20.mint(recipient1, issuanceAmount, { from: owner });
+        await emoney20.mint(recipient1, issuanceAmount, { from: owner });
 
-        this.token1 = this.security20;
-        this.token2 = this.emoney20;
+        token1 = security20;
+        token2 = emoney20;
       });
       describe('when trade index is valid', function () {
         describe('when trade has been accepted by both parties', function () {
           describe('when caller is trade executer', function () {
             describe('when trade type is Escrow', function () {
               it('cancels the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -4698,37 +4698,31 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
                   ACCEPTED_TRUE
                 );
 
-                await cancelTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
-                  1,
-                  executer
-                );
+                await cancelTradeRequest(dvp, token1, token2, 1, executer);
               });
             });
             describe('when trade type is Swap', function () {
               it('cancels the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -4740,39 +4734,33 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
                   ACCEPTED_TRUE
                 );
 
-                await cancelTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
-                  1,
-                  executer
-                );
+                await cancelTradeRequest(dvp, token1, token2, 1, executer);
               });
             });
           });
           describe('when caller is holder1', function () {
             describe('when expiration date is past', function () {
               it('cancels the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -4784,13 +4772,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -4800,24 +4788,18 @@ contract(
                 // Wait for 1 hour
                 await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
 
-                await cancelTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
-                  1,
-                  tokenHolder1
-                );
+                await cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1);
               });
             });
             describe('when expiration date is not past', function () {
               it('reverts', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -4829,13 +4811,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -4843,13 +4825,7 @@ contract(
                 );
 
                 await expectRevert.unspecified(
-                  cancelTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
-                    1,
-                    tokenHolder1
-                  )
+                  cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1)
                 );
               });
             });
@@ -4857,13 +4833,13 @@ contract(
           describe('when caller is holder2', function () {
             describe('when expiration date is past', function () {
               it('cancels the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -4875,13 +4851,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -4891,24 +4867,18 @@ contract(
                 // Wait for 1 hour
                 await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
 
-                await cancelTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
-                  1,
-                  recipient1
-                );
+                await cancelTradeRequest(dvp, token1, token2, 1, recipient1);
               });
             });
             describe('when expiration date is not past', function () {
               it('reverts', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -4920,13 +4890,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -4934,13 +4904,7 @@ contract(
                 );
 
                 await expectRevert.unspecified(
-                  cancelTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
-                    1,
-                    recipient1
-                  )
+                  cancelTradeRequest(dvp, token1, token2, 1, recipient1)
                 );
               });
             });
@@ -4950,13 +4914,13 @@ contract(
           describe('when caller is trade executer', function () {
             describe('when trade type is Escrow', function () {
               it('cancels the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -4968,27 +4932,21 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                // await this.token2.approve(this.dvp.address, token2Amount, { from: recipient1 });
-                // await acceptTradeRequest(this.dvp, this.token1, this.token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
+                // await token2.approve(dvp.address, token2Amount, { from: recipient1 });
+                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
 
-                await cancelTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
-                  1,
-                  executer
-                );
+                await cancelTradeRequest(dvp, token1, token2, 1, executer);
               });
             });
             describe('when trade type is Swap', function () {
               it('cancels the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -5000,29 +4958,23 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                // await this.token2.approve(this.dvp.address, token2Amount, { from: recipient1 });
-                // await acceptTradeRequest(this.dvp, this.token1, this.token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
+                // await token2.approve(dvp.address, token2Amount, { from: recipient1 });
+                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
 
-                await cancelTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
-                  1,
-                  executer
-                );
+                await cancelTradeRequest(dvp, token1, token2, 1, executer);
               });
             });
           });
           describe('when caller is holder1', function () {
             describe('when expiration date is past', function () {
               it('cancels the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -5034,30 +4986,24 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                // await this.token2.approve(this.dvp.address, token2Amount, { from: recipient1 });
-                // await acceptTradeRequest(this.dvp, this.token1, this.token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
+                // await token2.approve(dvp.address, token2Amount, { from: recipient1 });
+                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
 
                 // Wait for 1 hour
                 await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
 
-                await cancelTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
-                  1,
-                  tokenHolder1
-                );
+                await cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1);
               });
             });
             describe('when expiration date is not past', function () {
               it('reverts', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -5069,17 +5015,11 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                // await this.token2.approve(this.dvp.address, token2Amount, { from: recipient1 });
-                // await acceptTradeRequest(this.dvp, this.token1, this.token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
+                // await token2.approve(dvp.address, token2Amount, { from: recipient1 });
+                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
 
                 await expectRevert.unspecified(
-                  cancelTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
-                    1,
-                    tokenHolder1
-                  )
+                  cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1)
                 );
               });
             });
@@ -5087,13 +5027,13 @@ contract(
           describe('when caller is holder2', function () {
             describe('when expiration date is past', function () {
               it('cancels the trade', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -5105,32 +5045,26 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                // await this.token2.approve(this.dvp.address, token2Amount, { from: recipient1 });
-                // await acceptTradeRequest(this.dvp, this.token1, this.token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
+                // await token2.approve(dvp.address, token2Amount, { from: recipient1 });
+                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
 
                 // Wait for 1 hour
                 await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
 
                 await expectRevert.unspecified(
-                  cancelTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
-                    1,
-                    recipient1
-                  )
+                  cancelTradeRequest(dvp, token1, token2, 1, recipient1)
                 );
               });
             });
             describe('when expiration date is not past', function () {
               it('reverts', async function () {
-                await this.token1.approve(this.dvp.address, token1Amount, {
+                await token1.approve(dvp.address, token1Amount, {
                   from: tokenHolder1
                 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -5142,17 +5076,11 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                // await this.token2.approve(this.dvp.address, token2Amount, { from: recipient1 });
-                // await acceptTradeRequest(this.dvp, this.token1, this.token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
+                // await token2.approve(dvp.address, token2Amount, { from: recipient1 });
+                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
 
                 await expectRevert.unspecified(
-                  cancelTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
-                    1,
-                    recipient1
-                  )
+                  cancelTradeRequest(dvp, token1, token2, 1, recipient1)
                 );
               });
             });
@@ -5162,11 +5090,11 @@ contract(
           describe('when caller is trade executer', function () {
             describe('when trade type is Escrow', function () {
               it('cancels the trade', async function () {
-                // await this.token1.approve(this.dvp.address, token1Amount, { from: tokenHolder1 });
+                // await token1.approve(dvp.address, token1Amount, { from: tokenHolder1 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -5178,35 +5106,29 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
                   ACCEPTED_FALSE
                 );
 
-                await cancelTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
-                  1,
-                  executer
-                );
+                await cancelTradeRequest(dvp, token1, token2, 1, executer);
               });
             });
             describe('when trade type is Swap', function () {
               it('cancels the trade', async function () {
-                // await this.token1.approve(this.dvp.address, token1Amount, { from: tokenHolder1 });
+                // await token1.approve(dvp.address, token1Amount, { from: tokenHolder1 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -5218,37 +5140,31 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
                   ACCEPTED_FALSE
                 );
 
-                await cancelTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
-                  1,
-                  executer
-                );
+                await cancelTradeRequest(dvp, token1, token2, 1, executer);
               });
             });
           });
           describe('when caller is holder1', function () {
             describe('when expiration date is past', function () {
               it('cancels the trade', async function () {
-                // await this.token1.approve(this.dvp.address, token1Amount, { from: tokenHolder1 });
+                // await token1.approve(dvp.address, token1Amount, { from: tokenHolder1 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -5260,13 +5176,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -5277,23 +5193,17 @@ contract(
                 await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
 
                 await expectRevert.unspecified(
-                  cancelTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
-                    1,
-                    tokenHolder1
-                  )
+                  cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1)
                 );
               });
             });
             describe('when expiration date is not past', function () {
               it('reverts', async function () {
-                // await this.token1.approve(this.dvp.address, token1Amount, { from: tokenHolder1 });
+                // await token1.approve(dvp.address, token1Amount, { from: tokenHolder1 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -5305,13 +5215,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -5319,13 +5229,7 @@ contract(
                 );
 
                 await expectRevert.unspecified(
-                  cancelTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
-                    1,
-                    tokenHolder1
-                  )
+                  cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1)
                 );
               });
             });
@@ -5333,11 +5237,11 @@ contract(
           describe('when caller is holder2', function () {
             describe('when expiration date is past', function () {
               it('cancels the trade', async function () {
-                // await this.token1.approve(this.dvp.address, token1Amount, { from: tokenHolder1 });
+                // await token1.approve(dvp.address, token1Amount, { from: tokenHolder1 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -5349,13 +5253,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -5365,22 +5269,16 @@ contract(
                 // Wait for 1 hour
                 await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
 
-                await cancelTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
-                  1,
-                  recipient1
-                );
+                await cancelTradeRequest(dvp, token1, token2, 1, recipient1);
               });
             });
             describe('when expiration date is not past', function () {
               it('reverts', async function () {
-                // await this.token1.approve(this.dvp.address, token1Amount, { from: tokenHolder1 });
+                // await token1.approve(dvp.address, token1Amount, { from: tokenHolder1 });
                 await createTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   ERC20STANDARD,
                   ERC20STANDARD,
                   tokenHolder1,
@@ -5392,13 +5290,13 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await this.token2.approve(this.dvp.address, token2Amount, {
+                await token2.approve(dvp.address, token2Amount, {
                   from: recipient1
                 });
                 await acceptTradeRequest(
-                  this.dvp,
-                  this.token1,
-                  this.token2,
+                  dvp,
+                  token1,
+                  token2,
                   1,
                   recipient1,
                   STATE_PENDING,
@@ -5406,13 +5304,7 @@ contract(
                 );
 
                 await expectRevert.unspecified(
-                  cancelTradeRequest(
-                    this.dvp,
-                    this.token1,
-                    this.token2,
-                    1,
-                    recipient1
-                  )
+                  cancelTradeRequest(dvp, token1, token2, 1, recipient1)
                 );
               });
             });
@@ -5422,9 +5314,9 @@ contract(
           describe('when caller is trade executer', function () {
             it('cancels the trade', async function () {
               await createTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
+                dvp,
+                token1,
+                token2,
                 ERC20STANDARD,
                 ERC20STANDARD,
                 tokenHolder1,
@@ -5437,21 +5329,15 @@ contract(
                 token2Amount
               );
 
-              await cancelTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
-                1,
-                executer
-              );
+              await cancelTradeRequest(dvp, token1, token2, 1, executer);
             });
           });
           describe('when caller is holder1', function () {
             it('cancels the trade', async function () {
               await createTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
+                dvp,
+                token1,
+                token2,
                 ERC20STANDARD,
                 ERC20STANDARD,
                 tokenHolder1,
@@ -5464,21 +5350,15 @@ contract(
                 token2Amount
               );
 
-              await cancelTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
-                1,
-                tokenHolder1
-              );
+              await cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1);
             });
           });
           describe('when caller is holder2', function () {
             it('cancels the trade', async function () {
               await createTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
+                dvp,
+                token1,
+                token2,
                 ERC20STANDARD,
                 ERC20STANDARD,
                 tokenHolder1,
@@ -5491,21 +5371,15 @@ contract(
                 token2Amount
               );
 
-              await cancelTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
-                1,
-                recipient1
-              );
+              await cancelTradeRequest(dvp, token1, token2, 1, recipient1);
             });
           });
           describe('when caller is neither the executer nor one of the 2 holders', function () {
             it('cancels the trade', async function () {
               await createTradeRequest(
-                this.dvp,
-                this.token1,
-                this.token2,
+                dvp,
+                token1,
+                token2,
                 ERC20STANDARD,
                 ERC20STANDARD,
                 tokenHolder1,
@@ -5519,7 +5393,7 @@ contract(
               );
 
               await expectRevert.unspecified(
-                this.dvp.cancelTrade(1, { from: unknown })
+                dvp.cancelTrade(1, { from: unknown })
               );
             });
           });
@@ -5528,7 +5402,7 @@ contract(
       describe('when trade index is not valid', function () {
         it('reverts', async function () {
           await expectRevert.unspecified(
-            this.dvp.cancelTrade(999, { from: executer })
+            dvp.cancelTrade(999, { from: executer })
           );
         });
       });
@@ -5537,29 +5411,30 @@ contract(
     // RENOUNCE OWNERSHIP
 
     describe('renounceOwnership', function () {
+      let dvp: Swaps;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(true);
+        dvp = await DVPContract.new(true);
       });
       describe('when the caller is the contract owner', function () {
         it('renounces to ownership', async function () {
-          assert.equal(await this.dvp.owner(), owner);
+          assert.equal(await dvp.owner(), owner);
 
           // can set trade executers
-          await this.dvp.setTradeExecuters([owner, executer], { from: owner });
+          await dvp.setTradeExecuters([owner, executer], { from: owner });
 
-          await this.dvp.renounceOwnership({ from: owner });
-          assert.equal(await this.dvp.owner(), ZERO_ADDRESS);
+          await dvp.renounceOwnership({ from: owner });
+          assert.equal(await dvp.owner(), ZERO_ADDRESS);
 
           // can not set trade executers anymore
           await expectRevert.unspecified(
-            this.dvp.setTradeExecuters([owner, executer], { from: owner })
+            dvp.setTradeExecuters([owner, executer], { from: owner })
           );
         });
       });
       describe('when the caller is not the contract owner', function () {
         it('reverts', async function () {
           await expectRevert.unspecified(
-            this.dvp.renounceOwnership({ from: unknown })
+            dvp.renounceOwnership({ from: unknown })
           );
         });
       });
@@ -5568,31 +5443,33 @@ contract(
     // SET TRADE EXECUTER
 
     describe('setTradeExecuters', function () {
+      let dvp: Swaps;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(true);
+        dvp = await DVPContract.new(true);
       });
       describe('when the caller is the contract owner', function () {
         describe('when the dvp contract is owned', function () {
           it('sets the operators as trade executers', async function () {
-            const tradeExecuters1 = await this.dvp.tradeExecuters();
+            const tradeExecuters1 = await dvp.tradeExecuters();
             assert.equal(tradeExecuters1.length, 1);
             assert.equal(tradeExecuters1[0], owner);
-            await this.dvp.setTradeExecuters([owner, executer], {
+            await dvp.setTradeExecuters([owner, executer], {
               from: owner
             });
-            const tradeExecuters2 = await this.dvp.tradeExecuters();
+            const tradeExecuters2 = await dvp.tradeExecuters();
             assert.equal(tradeExecuters2.length, 2);
             assert.equal(tradeExecuters2[0], owner);
             assert.equal(tradeExecuters2[1], executer);
           });
         });
         describe('when the dvp contract is not owned', function () {
+          let dvp: Swaps;
           beforeEach(async function () {
-            this.dvp = await DVPContract.new(false);
+            dvp = await DVPContract.new(false);
           });
           it('reverts', async function () {
             await expectRevert.unspecified(
-              this.dvp.setTradeExecuters([owner, executer], { from: owner })
+              dvp.setTradeExecuters([owner, executer], { from: owner })
             );
           });
         });
@@ -5600,7 +5477,7 @@ contract(
       describe('when the caller is not the contract owner', function () {
         it('reverts', async function () {
           await expectRevert.unspecified(
-            this.dvp.setTradeExecuters([owner, executer], { from: executer })
+            dvp.setTradeExecuters([owner, executer], { from: executer })
           );
         });
       });
@@ -5609,29 +5486,27 @@ contract(
     // SET TOKEN CONTROLLERS
 
     describe('setTokenControllers', function () {
+      let dvp: Swaps;
+      let token1: ERC20Token;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.token1 = await ERC20.new('ERC20Token', 'DAU', 18, {
+        token1 = await ERC20.new('ERC20Token', 'DAU', 18, {
           from: tokenHolder1
         });
       });
       describe('when the caller is the token contract owner', function () {
         it('sets the operators as token controllers', async function () {
-          let tokenControllers = await this.dvp.tokenControllers(
-            this.token1.address
-          );
+          let tokenControllers = await dvp.tokenControllers(token1.address);
           assert.equal(tokenControllers.length, 0);
 
-          await this.dvp.setTokenControllers(
-            this.token1.address,
+          await dvp.setTokenControllers(
+            token1.address,
             [tokenController1, tokenController2],
             { from: tokenHolder1 }
           );
 
-          tokenControllers = await this.dvp.tokenControllers(
-            this.token1.address
-          );
+          tokenControllers = await dvp.tokenControllers(token1.address);
           assert.equal(tokenControllers.length, 2);
           assert.equal(tokenControllers[0], tokenController1);
           assert.equal(tokenControllers[1], tokenController2);
@@ -5639,32 +5514,24 @@ contract(
       });
       describe('when the caller is an other token controller', function () {
         it('sets the operators as token controllers', async function () {
-          let tokenControllers = await this.dvp.tokenControllers(
-            this.token1.address
-          );
+          let tokenControllers = await dvp.tokenControllers(token1.address);
           assert.equal(tokenControllers.length, 0);
 
-          await this.dvp.setTokenControllers(
-            this.token1.address,
-            [tokenController2],
-            { from: tokenHolder1 }
-          );
+          await dvp.setTokenControllers(token1.address, [tokenController2], {
+            from: tokenHolder1
+          });
 
-          tokenControllers = await this.dvp.tokenControllers(
-            this.token1.address
-          );
+          tokenControllers = await dvp.tokenControllers(token1.address);
           assert.equal(tokenControllers.length, 1);
           assert.equal(tokenControllers[0], tokenController2);
 
-          await this.dvp.setTokenControllers(
-            this.token1.address,
+          await dvp.setTokenControllers(
+            token1.address,
             [tokenController1, unknown],
             { from: tokenController2 }
           );
 
-          tokenControllers = await this.dvp.tokenControllers(
-            this.token1.address
-          );
+          tokenControllers = await dvp.tokenControllers(token1.address);
           assert.equal(tokenControllers.length, 2);
           assert.equal(tokenControllers[0], tokenController1);
           assert.equal(tokenControllers[1], unknown);
@@ -5673,8 +5540,8 @@ contract(
       describe('when the caller is neither the token contract owner nor a token controller', function () {
         it('reverts', async function () {
           await expectRevert.unspecified(
-            this.dvp.setTokenControllers(
-              this.token1.address,
+            dvp.setTokenControllers(
+              token1.address,
               [tokenController1, tokenController2],
               { from: tokenHolder2 }
             )
@@ -5686,27 +5553,25 @@ contract(
     // SET PRICE ORACLES
 
     describe('setPriceOracles', function () {
+      let dvp: Swaps;
+      let token1: ERC20Token;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.token1 = await ERC20.new('ERC20Token', 'DAU', 18, {
+        token1 = await ERC20.new('ERC20Token', 'DAU', 18, {
           from: tokenHolder1
         });
       });
       describe('when the caller is the token contract owner', function () {
         it('sets the operators as token price oracle', async function () {
-          let priceOracles = await this.dvp.priceOracles(this.token1.address);
+          let priceOracles = await dvp.priceOracles(token1.address);
           assert.equal(priceOracles.length, 0);
 
-          await this.dvp.setPriceOracles(
-            this.token1.address,
-            [oracle, unknown],
-            {
-              from: tokenHolder1
-            }
-          );
+          await dvp.setPriceOracles(token1.address, [oracle, unknown], {
+            from: tokenHolder1
+          });
 
-          priceOracles = await this.dvp.priceOracles(this.token1.address);
+          priceOracles = await dvp.priceOracles(token1.address);
           assert.equal(priceOracles.length, 2);
           assert.equal(priceOracles[0], oracle);
           assert.equal(priceOracles[1], unknown);
@@ -5714,26 +5579,22 @@ contract(
       });
       describe('when the caller is an other price oracle', function () {
         it('sets the operators as token price oracle', async function () {
-          let priceOracles = await this.dvp.priceOracles(this.token1.address);
+          let priceOracles = await dvp.priceOracles(token1.address);
           assert.equal(priceOracles.length, 0);
 
-          await this.dvp.setPriceOracles(this.token1.address, [oracle], {
+          await dvp.setPriceOracles(token1.address, [oracle], {
             from: tokenHolder1
           });
 
-          priceOracles = await this.dvp.priceOracles(this.token1.address);
+          priceOracles = await dvp.priceOracles(token1.address);
           assert.equal(priceOracles.length, 1);
           assert.equal(priceOracles[0], oracle);
 
-          await this.dvp.setPriceOracles(
-            this.token1.address,
-            [oracle, unknown],
-            {
-              from: oracle
-            }
-          );
+          await dvp.setPriceOracles(token1.address, [oracle, unknown], {
+            from: oracle
+          });
 
-          priceOracles = await this.dvp.priceOracles(this.token1.address);
+          priceOracles = await dvp.priceOracles(token1.address);
           assert.equal(priceOracles.length, 2);
           assert.equal(priceOracles[0], oracle);
           assert.equal(priceOracles[1], unknown);
@@ -5742,7 +5603,7 @@ contract(
       describe('when the caller is neither the token contract owner nor a token price oracle', function () {
         it('reverts', async function () {
           await expectRevert.unspecified(
-            this.dvp.setPriceOracles(this.token1.address, [oracle, unknown], {
+            dvp.setPriceOracles(token1.address, [oracle, unknown], {
               from: tokenHolder2
             })
           );
@@ -5752,54 +5613,42 @@ contract(
 
     // SET PRICE OWNERSHIP
     describe('setPriceOwnership', function () {
+      let dvp: Swaps;
+      let token1: ERC20Token;
+      let token2: ERC20Token;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.token1 = await ERC20.new('ERC20Token', 'DAU', 18, { from: owner });
-        await this.dvp.setPriceOracles(this.token1.address, [oracle], {
+        token1 = await ERC20.new('ERC20Token', 'DAU', 18, { from: owner });
+        await dvp.setPriceOracles(token1.address, [oracle], {
           from: owner
         });
 
-        this.token2 = await ERC20.new('ERC20Token', 'DAU', 18, { from: owner });
-        await this.dvp.setPriceOracles(this.token2.address, [unknown], {
+        token2 = await ERC20.new('ERC20Token', 'DAU', 18, { from: owner });
+        await dvp.setPriceOracles(token2.address, [unknown], {
           from: owner
         });
       });
       describe('when sender is price oracle of the token', function () {
         it('takes the price ownership for a given token', async function () {
           assert.equal(
-            await this.dvp.getPriceOwnership(
-              this.token1.address,
-              this.token2.address
-            ),
+            await dvp.getPriceOwnership(token1.address, token2.address),
             false
           );
 
-          await this.dvp.setPriceOwnership(
-            this.token1.address,
-            this.token2.address,
-            true,
-            { from: oracle }
-          );
+          await dvp.setPriceOwnership(token1.address, token2.address, true, {
+            from: oracle
+          });
           assert.equal(
-            await this.dvp.getPriceOwnership(
-              this.token1.address,
-              this.token2.address
-            ),
+            await dvp.getPriceOwnership(token1.address, token2.address),
             true
           );
 
-          await this.dvp.setPriceOwnership(
-            this.token1.address,
-            this.token2.address,
-            false,
-            { from: oracle }
-          );
+          await dvp.setPriceOwnership(token1.address, token2.address, false, {
+            from: oracle
+          });
           assert.equal(
-            await this.dvp.getPriceOwnership(
-              this.token1.address,
-              this.token2.address
-            ),
+            await dvp.getPriceOwnership(token1.address, token2.address),
             false
           );
         });
@@ -5807,12 +5656,9 @@ contract(
       describe('when sender is not price oracle of the token', function () {
         it('reverts', async function () {
           await expectRevert.unspecified(
-            this.dvp.setPriceOwnership(
-              this.token1.address,
-              this.token2.address,
-              true,
-              { from: unknown }
-            )
+            dvp.setPriceOwnership(token1.address, token2.address, true, {
+              from: unknown
+            })
           );
         });
       });
@@ -5821,17 +5667,19 @@ contract(
     // SET TOKEN PRICE
     describe('setTokenPrice', function () {
       const newTokenPrice = 2;
-
+      let dvp: Swaps;
+      let token1: ERC20Token;
+      let token2: ERC20Token;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.token1 = await ERC20.new('ERC20Token', 'DAU', 18, { from: owner });
-        await this.dvp.setPriceOracles(this.token1.address, [oracle], {
+        token1 = await ERC20.new('ERC20Token', 'DAU', 18, { from: owner });
+        await dvp.setPriceOracles(token1.address, [oracle], {
           from: owner
         });
 
-        this.token2 = await ERC20.new('ERC20Token', 'DAU', 18, { from: owner });
-        await this.dvp.setPriceOracles(this.token2.address, [unknown], {
+        token2 = await ERC20.new('ERC20Token', 'DAU', 18, { from: owner });
+        await dvp.setPriceOracles(token2.address, [unknown], {
           from: owner
         });
       });
@@ -5839,48 +5687,42 @@ contract(
         describe('when the price ownership is taken', function () {
           describe('when the price ownership is taken by the right person', function () {
             it('sets the price for token1', async function () {
-              await this.dvp.setPriceOwnership(
-                this.token1.address,
-                this.token2.address,
+              await dvp.setPriceOwnership(
+                token1.address,
+                token2.address,
                 true,
                 { from: oracle }
               );
               assert.equal(
-                await this.dvp.getPriceOwnership(
-                  this.token1.address,
-                  this.token2.address
-                ),
+                await dvp.getPriceOwnership(token1.address, token2.address),
                 true
               );
               assert.equal(
-                await this.dvp.getPriceOwnership(
-                  this.token2.address,
-                  this.token1.address
-                ),
+                await dvp.getPriceOwnership(token2.address, token1.address),
                 false
               );
 
               assert.equal(
-                await this.dvp.getTokenPrice(
-                  this.token1.address,
-                  this.token2.address,
+                await dvp.getTokenPrice(
+                  token1.address,
+                  token2.address,
                   partition1,
                   partition2
                 ),
                 0
               );
-              await this.dvp.setTokenPrice(
-                this.token1.address,
-                this.token2.address,
+              await dvp.setTokenPrice(
+                token1.address,
+                token2.address,
                 partition1,
                 partition2,
                 newTokenPrice,
                 { from: oracle }
               );
               assert.equal(
-                await this.dvp.getTokenPrice(
-                  this.token1.address,
-                  this.token2.address,
+                await dvp.getTokenPrice(
+                  token1.address,
+                  token2.address,
                   partition1,
                   partition2
                 ),
@@ -5888,48 +5730,42 @@ contract(
               );
             });
             it('sets the price for token2', async function () {
-              await this.dvp.setPriceOwnership(
-                this.token2.address,
-                this.token1.address,
+              await dvp.setPriceOwnership(
+                token2.address,
+                token1.address,
                 true,
                 { from: unknown }
               );
               assert.equal(
-                await this.dvp.getPriceOwnership(
-                  this.token1.address,
-                  this.token2.address
-                ),
+                await dvp.getPriceOwnership(token1.address, token2.address),
                 false
               );
               assert.equal(
-                await this.dvp.getPriceOwnership(
-                  this.token2.address,
-                  this.token1.address
-                ),
+                await dvp.getPriceOwnership(token2.address, token1.address),
                 true
               );
 
               assert.equal(
-                await this.dvp.getTokenPrice(
-                  this.token1.address,
-                  this.token2.address,
+                await dvp.getTokenPrice(
+                  token1.address,
+                  token2.address,
                   partition1,
                   partition2
                 ),
                 0
               );
-              await this.dvp.setTokenPrice(
-                this.token1.address,
-                this.token2.address,
+              await dvp.setTokenPrice(
+                token1.address,
+                token2.address,
                 partition1,
                 partition2,
                 newTokenPrice,
                 { from: unknown }
               );
               assert.equal(
-                await this.dvp.getTokenPrice(
-                  this.token1.address,
-                  this.token2.address,
+                await dvp.getTokenPrice(
+                  token1.address,
+                  token2.address,
                   partition1,
                   partition2
                 ),
@@ -5939,31 +5775,25 @@ contract(
           });
           describe('when the price ownership is not taken by the right person', function () {
             it('reverts', async function () {
-              await this.dvp.setPriceOwnership(
-                this.token1.address,
-                this.token2.address,
+              await dvp.setPriceOwnership(
+                token1.address,
+                token2.address,
                 true,
                 { from: oracle }
               );
               assert.equal(
-                await this.dvp.getPriceOwnership(
-                  this.token1.address,
-                  this.token2.address
-                ),
+                await dvp.getPriceOwnership(token1.address, token2.address),
                 true
               );
               assert.equal(
-                await this.dvp.getPriceOwnership(
-                  this.token2.address,
-                  this.token1.address
-                ),
+                await dvp.getPriceOwnership(token2.address, token1.address),
                 false
               );
 
               await expectRevert.unspecified(
-                this.dvp.setTokenPrice(
-                  this.token1.address,
-                  this.token2.address,
+                dvp.setTokenPrice(
+                  token1.address,
+                  token2.address,
                   partition1,
                   partition2,
                   newTokenPrice,
@@ -5972,31 +5802,25 @@ contract(
               );
             });
             it('reverts', async function () {
-              await this.dvp.setPriceOwnership(
-                this.token2.address,
-                this.token1.address,
+              await dvp.setPriceOwnership(
+                token2.address,
+                token1.address,
                 true,
                 { from: unknown }
               );
               assert.equal(
-                await this.dvp.getPriceOwnership(
-                  this.token1.address,
-                  this.token2.address
-                ),
+                await dvp.getPriceOwnership(token1.address, token2.address),
                 false
               );
               assert.equal(
-                await this.dvp.getPriceOwnership(
-                  this.token2.address,
-                  this.token1.address
-                ),
+                await dvp.getPriceOwnership(token2.address, token1.address),
                 true
               );
 
               await expectRevert.unspecified(
-                this.dvp.setTokenPrice(
-                  this.token1.address,
-                  this.token2.address,
+                dvp.setTokenPrice(
+                  token1.address,
+                  token2.address,
                   partition1,
                   partition2,
                   newTokenPrice,
@@ -6009,9 +5833,9 @@ contract(
         describe('when the price ownership is not taken', function () {
           it('sets the price for token1', async function () {
             await expectRevert.unspecified(
-              this.dvp.setTokenPrice(
-                this.token1.address,
-                this.token2.address,
+              dvp.setTokenPrice(
+                token1.address,
+                token2.address,
                 partition1,
                 partition2,
                 newTokenPrice,
@@ -6023,24 +5847,18 @@ contract(
       });
       describe('when there is competition on the price ownership', function () {
         beforeEach(async function () {
-          await this.dvp.setPriceOwnership(
-            this.token1.address,
-            this.token2.address,
-            true,
-            { from: oracle }
-          );
-          await this.dvp.setPriceOwnership(
-            this.token2.address,
-            this.token1.address,
-            true,
-            { from: unknown }
-          );
+          await dvp.setPriceOwnership(token1.address, token2.address, true, {
+            from: oracle
+          });
+          await dvp.setPriceOwnership(token2.address, token1.address, true, {
+            from: unknown
+          });
         });
         it('reverts', async function () {
           await expectRevert.unspecified(
-            this.dvp.setTokenPrice(
-              this.token1.address,
-              this.token2.address,
+            dvp.setTokenPrice(
+              token1.address,
+              token2.address,
               partition1,
               partition2,
               newTokenPrice,
@@ -6053,11 +5871,13 @@ contract(
 
     // SET VARIABLE PRICE START DATE
     describe('setVariablePriceStartDate', function () {
+      let dvp: Swaps;
+      let token1: ERC20Token;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.token1 = await ERC20.new('ERC20Token', 'DAU', 18, { from: owner });
-        await this.dvp.setPriceOracles(this.token1.address, [oracle], {
+        token1 = await ERC20.new('ERC20Token', 'DAU', 18, { from: owner });
+        await dvp.setPriceOracles(token1.address, [oracle], {
           from: owner
         });
       });
@@ -6066,28 +5886,22 @@ contract(
           it('sets the variable price start date for a given token', async function () {
             let chainTime = (await web3.eth.getBlock('latest')).timestamp;
             let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
-            assert.equal(
-              await this.dvp.variablePriceStartDate(this.token1.address),
-              0
-            );
+            assert.equal(await dvp.variablePriceStartDate(token1.address), 0);
 
-            await this.dvp.setVariablePriceStartDate(
-              this.token1.address,
+            await dvp.setVariablePriceStartDate(
+              token1.address,
               variablePriceStartDate,
               { from: oracle }
             );
             assert.equal(
-              await this.dvp.variablePriceStartDate(this.token1.address),
+              await dvp.variablePriceStartDate(token1.address),
               variablePriceStartDate
             );
 
-            await this.dvp.setVariablePriceStartDate(this.token1.address, 0, {
+            await dvp.setVariablePriceStartDate(token1.address, 0, {
               from: oracle
             });
-            assert.equal(
-              await this.dvp.variablePriceStartDate(this.token1.address),
-              0
-            );
+            assert.equal(await dvp.variablePriceStartDate(token1.address), 0);
           });
         });
         describe('when start date is not further than a week', function () {
@@ -6095,8 +5909,8 @@ contract(
             let chainTime = (await web3.eth.getBlock('latest')).timestamp;
             let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK - 1;
             await expectRevert.unspecified(
-              this.dvp.setVariablePriceStartDate(
-                this.token1.address,
+              dvp.setVariablePriceStartDate(
+                token1.address,
                 variablePriceStartDate,
                 { from: oracle }
               )
@@ -6109,8 +5923,8 @@ contract(
           let chainTime = (await web3.eth.getBlock('latest')).timestamp;
           let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
           await expectRevert.unspecified(
-            this.dvp.setVariablePriceStartDate(
-              this.token1.address,
+            dvp.setVariablePriceStartDate(
+              token1.address,
               variablePriceStartDate,
               { from: unknown }
             )
@@ -6128,11 +5942,12 @@ contract(
 
     describe('getPrice', function () {
       const newTokenPrice = 2;
-
+      let dvp: Swaps;
+      let token1, token2: ERC1400;
       beforeEach(async function () {
-        this.dvp = await DVPContract.new(false);
+        dvp = await DVPContract.new(false);
 
-        this.token1 = await ERC1400.new(
+        token1 = await ERC1400.new(
           'ERC1400Token',
           'DAU',
           1,
@@ -6140,18 +5955,18 @@ contract(
           partitions,
           { from: owner }
         );
-        await this.token1.issueByPartition(
+        await token1.issueByPartition(
           partition1,
           tokenHolder1,
           issuanceAmount,
           MOCK_CERTIFICATE,
           { from: owner }
         );
-        await this.dvp.setPriceOracles(this.token1.address, [oracle], {
+        await dvp.setPriceOracles(token1.address, [oracle], {
           from: owner
         });
 
-        this.token2 = await ERC1400.new(
+        token2 = await ERC1400.new(
           'ERC1400Token',
           'DAU',
           1,
@@ -6159,14 +5974,14 @@ contract(
           partitions,
           { from: owner }
         );
-        await this.token2.issueByPartition(
+        await token2.issueByPartition(
           partition2,
           recipient1,
           issuanceAmount,
           MOCK_CERTIFICATE,
           { from: owner }
         );
-        await this.dvp.setPriceOracles(this.token2.address, [unknown], {
+        await dvp.setPriceOracles(token2.address, [unknown], {
           from: owner
         });
 
@@ -6178,26 +5993,26 @@ contract(
           executer,
           expirationDate,
           0,
-          this.token2.address,
+          token2.address,
           token2Amount,
           partition2,
           ERC1400STANDARD,
           TYPE_ESCROW
         );
-        await this.token1.operatorTransferByPartition(
+        await token1.operatorTransferByPartition(
           partition1,
           tokenHolder1,
-          this.dvp.address,
+          dvp.address,
           token1Amount,
           tradeProposalData,
           MOCK_CERTIFICATE,
           { from: tokenHolder1 }
         );
         let tradeAcceptanceData = getTradeAcceptanceData(1);
-        await this.token2.operatorTransferByPartition(
+        await token2.operatorTransferByPartition(
           partition2,
           recipient1,
-          this.dvp.address,
+          dvp.address,
           token2Amount,
           tradeAcceptanceData,
           MOCK_CERTIFICATE,
@@ -6205,13 +6020,10 @@ contract(
         );
 
         let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
-        assert.equal(
-          await this.dvp.variablePriceStartDate(this.token1.address),
-          0
-        );
+        assert.equal(await dvp.variablePriceStartDate(token1.address), 0);
 
-        await this.dvp.setVariablePriceStartDate(
-          this.token1.address,
+        await dvp.setVariablePriceStartDate(
+          token1.address,
           variablePriceStartDate,
           { from: oracle }
         );
@@ -6220,8 +6032,8 @@ contract(
         beforeEach(async function () {
           let chainTime = (await web3.eth.getBlock('latest')).timestamp;
           let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
-          await this.dvp.setVariablePriceStartDate(
-            this.token1.address,
+          await dvp.setVariablePriceStartDate(
+            token1.address,
             variablePriceStartDate,
             { from: oracle }
           );
@@ -6233,9 +6045,9 @@ contract(
             describe('when the first token has more value than the second token', function () {
               describe('when the price ownership is taken for the first token', function () {
                 beforeEach(async function () {
-                  await this.dvp.setPriceOwnership(
-                    this.token1.address,
-                    this.token2.address,
+                  await dvp.setPriceOwnership(
+                    token1.address,
+                    token2.address,
                     true,
                     { from: oracle }
                   );
@@ -6243,9 +6055,9 @@ contract(
                 describe('when the price is set (case 1)', function () {
                   const multiple2 = 2;
                   beforeEach(async function () {
-                    await this.dvp.setTokenPrice(
-                      this.token1.address,
-                      this.token2.address,
+                    await dvp.setTokenPrice(
+                      token1.address,
+                      token2.address,
                       ALL_PARTITIONS,
                       ALL_PARTITIONS,
                       multiple2,
@@ -6254,16 +6066,16 @@ contract(
                   });
                   it('returns the updatedprice', async function () {
                     assert.equal(
-                      await this.dvp.getPrice(1),
+                      await dvp.getPrice(1),
                       multiple2 * token1Amount
                     );
                   });
                   describe('when the price is set (case 2)', function () {
                     const multiple3 = 3;
                     beforeEach(async function () {
-                      await this.dvp.setTokenPrice(
-                        this.token1.address,
-                        this.token2.address,
+                      await dvp.setTokenPrice(
+                        token1.address,
+                        token2.address,
                         ALL_PARTITIONS,
                         partition2,
                         multiple3,
@@ -6272,16 +6084,16 @@ contract(
                     });
                     it('returns the updatedprice', async function () {
                       assert.equal(
-                        await this.dvp.getPrice(1),
+                        await dvp.getPrice(1),
                         multiple3 * token1Amount
                       );
                     });
                     describe('when the price is set (case 3)', function () {
                       const multiple4 = 4;
                       beforeEach(async function () {
-                        await this.dvp.setTokenPrice(
-                          this.token1.address,
-                          this.token2.address,
+                        await dvp.setTokenPrice(
+                          token1.address,
+                          token2.address,
                           partition1,
                           ALL_PARTITIONS,
                           multiple4,
@@ -6290,16 +6102,16 @@ contract(
                       });
                       it('returns the updatedprice', async function () {
                         assert.equal(
-                          await this.dvp.getPrice(1),
+                          await dvp.getPrice(1),
                           multiple4 * token1Amount
                         );
                       });
                       describe('when the price is set (case 4)', function () {
                         const multiple5 = 5;
                         beforeEach(async function () {
-                          await this.dvp.setTokenPrice(
-                            this.token1.address,
-                            this.token2.address,
+                          await dvp.setTokenPrice(
+                            token1.address,
+                            token2.address,
                             partition1,
                             partition2,
                             multiple5,
@@ -6308,80 +6120,80 @@ contract(
                         });
                         it('returns the updatedprice', async function () {
                           assert.equal(
-                            await this.dvp.getPrice(1),
+                            await dvp.getPrice(1),
                             multiple5 * token1Amount
                           );
                         });
                         it('executes the trade at correct price', async function () {
                           await assertBalanceOfByPartition(
-                            this.token1,
+                            token1,
                             tokenHolder1,
                             partition1,
                             issuanceAmount - token1Amount
                           );
                           await assertBalanceOfByPartition(
-                            this.token1,
-                            this.dvp.address,
+                            token1,
+                            dvp.address,
                             partition1,
                             token1Amount
                           );
                           await assertBalanceOfByPartition(
-                            this.token1,
+                            token1,
                             recipient1,
                             partition1,
                             0
                           );
                           await assertBalanceOfByPartition(
-                            this.token2,
+                            token2,
                             recipient1,
                             partition2,
                             issuanceAmount - token2Amount
                           );
                           await assertBalanceOfByPartition(
-                            this.token2,
-                            this.dvp.address,
+                            token2,
+                            dvp.address,
                             partition2,
                             token2Amount
                           );
                           await assertBalanceOfByPartition(
-                            this.token2,
+                            token2,
                             tokenHolder1,
                             partition2,
                             0
                           );
-                          await this.dvp.executeTrade(1, { from: executer });
+                          await dvp.executeTrade(1, { from: executer });
                           await assertBalanceOfByPartition(
-                            this.token1,
+                            token1,
                             tokenHolder1,
                             partition1,
                             issuanceAmount - token1Amount
                           );
                           await assertBalanceOfByPartition(
-                            this.token1,
-                            this.dvp.address,
+                            token1,
+                            dvp.address,
                             partition1,
                             0
                           );
                           await assertBalanceOfByPartition(
-                            this.token1,
+                            token1,
                             recipient1,
                             partition1,
                             token1Amount
                           );
                           await assertBalanceOfByPartition(
-                            this.token2,
+                            token2,
                             recipient1,
                             partition2,
                             issuanceAmount - multiple5 * token1Amount
                           );
                           await assertBalanceOfByPartition(
-                            this.token2,
-                            this.dvp.address,
+                            token2,
+                            dvp.address,
                             partition2,
                             0
                           );
                           await assertBalanceOfByPartition(
-                            this.token2,
+                            token2,
                             tokenHolder1,
                             partition2,
                             multiple5 * token1Amount
@@ -6393,15 +6205,15 @@ contract(
                 });
                 describe('when the price is not set', function () {
                   it('returns the price defined in the trade', async function () {
-                    assert.equal(await this.dvp.getPrice(1), token2Amount);
+                    assert.equal(await dvp.getPrice(1), token2Amount);
                   });
                 });
               });
               describe('when the price ownership is taken for the second token', function () {
                 beforeEach(async function () {
-                  await this.dvp.setPriceOwnership(
-                    this.token2.address,
-                    this.token1.address,
+                  await dvp.setPriceOwnership(
+                    token2.address,
+                    token1.address,
                     true,
                     { from: unknown }
                   );
@@ -6409,9 +6221,9 @@ contract(
                 describe('when the price is set (case 1)', function () {
                   const multiple2 = 2;
                   beforeEach(async function () {
-                    await this.dvp.setTokenPrice(
-                      this.token1.address,
-                      this.token2.address,
+                    await dvp.setTokenPrice(
+                      token1.address,
+                      token2.address,
                       ALL_PARTITIONS,
                       ALL_PARTITIONS,
                       multiple2,
@@ -6420,7 +6232,7 @@ contract(
                   });
                   it('returns the updatedprice', async function () {
                     assert.equal(
-                      await this.dvp.getPrice(1),
+                      await dvp.getPrice(1),
                       multiple2 * token1Amount
                     );
                   });
@@ -6428,8 +6240,9 @@ contract(
               });
             });
             describe('when the second token has more value than the first token', function () {
+              let token3, token4: ERC1400;
               beforeEach(async function () {
-                this.token3 = await ERC1400.new(
+                token3 = await ERC1400.new(
                   'ERC1400Token',
                   'DAU',
                   1,
@@ -6437,18 +6250,18 @@ contract(
                   partitions,
                   { from: owner }
                 );
-                await this.token3.issueByPartition(
+                await token3.issueByPartition(
                   partition1,
                   tokenHolder1,
                   issuanceAmount,
                   MOCK_CERTIFICATE,
                   { from: owner }
                 );
-                await this.dvp.setPriceOracles(this.token3.address, [oracle], {
+                await dvp.setPriceOracles(token3.address, [oracle], {
                   from: owner
                 });
 
-                this.token4 = await ERC1400.new(
+                token4 = await ERC1400.new(
                   'ERC1400Token',
                   'DAU',
                   1,
@@ -6456,14 +6269,14 @@ contract(
                   partitions,
                   { from: owner }
                 );
-                await this.token4.issueByPartition(
+                await token4.issueByPartition(
                   partition2,
                   recipient1,
                   issuanceAmount,
                   MOCK_CERTIFICATE,
                   { from: owner }
                 );
-                await this.dvp.setPriceOracles(this.token4.address, [unknown], {
+                await dvp.setPriceOracles(token4.address, [unknown], {
                   from: owner
                 });
 
@@ -6475,26 +6288,26 @@ contract(
                   executer,
                   expirationDate,
                   0,
-                  this.token4.address,
+                  token4.address,
                   token4Amount,
                   partition2,
                   ERC1400STANDARD,
                   TYPE_ESCROW
                 );
-                await this.token3.operatorTransferByPartition(
+                await token3.operatorTransferByPartition(
                   partition1,
                   tokenHolder1,
-                  this.dvp.address,
+                  dvp.address,
                   token3Amount,
                   tradeProposalData,
                   MOCK_CERTIFICATE,
                   { from: tokenHolder1 }
                 );
                 const tradeAcceptanceData = getTradeAcceptanceData(2);
-                await this.token4.operatorTransferByPartition(
+                await token4.operatorTransferByPartition(
                   partition2,
                   recipient1,
-                  this.dvp.address,
+                  dvp.address,
                   token4Amount,
                   tradeAcceptanceData,
                   MOCK_CERTIFICATE,
@@ -6502,8 +6315,8 @@ contract(
                 );
 
                 let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
-                await this.dvp.setVariablePriceStartDate(
-                  this.token3.address,
+                await dvp.setVariablePriceStartDate(
+                  token3.address,
                   variablePriceStartDate,
                   { from: oracle }
                 );
@@ -6512,9 +6325,9 @@ contract(
               });
               describe('when the price ownership is taken for the first token', function () {
                 beforeEach(async function () {
-                  await this.dvp.setPriceOwnership(
-                    this.token3.address,
-                    this.token4.address,
+                  await dvp.setPriceOwnership(
+                    token3.address,
+                    token4.address,
                     true,
                     { from: oracle }
                   );
@@ -6522,9 +6335,9 @@ contract(
                 describe('when the price is set (case 1)', function () {
                   const multiple2 = 2;
                   beforeEach(async function () {
-                    await this.dvp.setTokenPrice(
-                      this.token4.address,
-                      this.token3.address,
+                    await dvp.setTokenPrice(
+                      token4.address,
+                      token3.address,
                       ALL_PARTITIONS,
                       ALL_PARTITIONS,
                       multiple2,
@@ -6533,16 +6346,16 @@ contract(
                   });
                   it('returns the updatedprice', async function () {
                     assert.equal(
-                      await this.dvp.getPrice(2),
+                      await dvp.getPrice(2),
                       Math.round(token3Amount / multiple2)
                     );
                   });
                   describe('when the price is set (case 2)', function () {
                     const multiple3 = 3;
                     beforeEach(async function () {
-                      await this.dvp.setTokenPrice(
-                        this.token4.address,
-                        this.token3.address,
+                      await dvp.setTokenPrice(
+                        token4.address,
+                        token3.address,
                         partition2,
                         ALL_PARTITIONS,
                         multiple3,
@@ -6551,16 +6364,16 @@ contract(
                     });
                     it('returns the updatedprice', async function () {
                       assert.equal(
-                        await this.dvp.getPrice(2),
+                        await dvp.getPrice(2),
                         Math.round(token3Amount / multiple3)
                       );
                     });
                     describe('when the price is set (case 3)', function () {
                       const multiple4 = 4;
                       beforeEach(async function () {
-                        await this.dvp.setTokenPrice(
-                          this.token4.address,
-                          this.token3.address,
+                        await dvp.setTokenPrice(
+                          token4.address,
+                          token3.address,
                           ALL_PARTITIONS,
                           partition1,
                           multiple4,
@@ -6569,16 +6382,16 @@ contract(
                       });
                       it('returns the updatedprice', async function () {
                         assert.equal(
-                          await this.dvp.getPrice(2),
+                          await dvp.getPrice(2),
                           Math.round(token3Amount / multiple4)
                         );
                       });
                       describe('when the price is set (case 4)', function () {
                         const multiple5 = 5;
                         beforeEach(async function () {
-                          await this.dvp.setTokenPrice(
-                            this.token4.address,
-                            this.token3.address,
+                          await dvp.setTokenPrice(
+                            token4.address,
+                            token3.address,
                             partition2,
                             partition1,
                             multiple5,
@@ -6587,56 +6400,56 @@ contract(
                         });
                         it('returns the updatedprice', async function () {
                           assert.equal(
-                            await this.dvp.getPrice(2),
+                            await dvp.getPrice(2),
                             Math.round(token3Amount / multiple5)
                           );
                         });
                         it('reverts when price is higher than amount escrowed/authorized', async function () {
                           await assertBalanceOfByPartition(
-                            this.token3,
+                            token3,
                             tokenHolder1,
                             partition1,
                             issuanceAmount - token3Amount
                           );
                           await assertBalanceOfByPartition(
-                            this.token3,
-                            this.dvp.address,
+                            token3,
+                            dvp.address,
                             partition1,
                             token3Amount
                           );
                           await assertBalanceOfByPartition(
-                            this.token3,
+                            token3,
                             recipient1,
                             partition1,
                             0
                           );
                           await assertBalanceOfByPartition(
-                            this.token4,
+                            token4,
                             recipient1,
                             partition2,
                             issuanceAmount - token4Amount
                           );
                           await assertBalanceOfByPartition(
-                            this.token4,
-                            this.dvp.address,
+                            token4,
+                            dvp.address,
                             partition2,
                             token4Amount
                           );
                           await assertBalanceOfByPartition(
-                            this.token4,
+                            token4,
                             tokenHolder1,
                             partition2,
                             0
                           );
                           await expectRevert.unspecified(
-                            this.dvp.executeTrade(2, { from: executer })
+                            dvp.executeTrade(2, { from: executer })
                           );
-                          // await assertBalanceOfByPartition(this.token3, tokenHolder1, partition1, issuanceAmount - token3Amount);
-                          // await assertBalanceOfByPartition(this.token3, this.dvp.address, partition1, 0);
-                          // await assertBalanceOfByPartition(this.token3, recipient1, partition1, token3Amount);
-                          // await assertBalanceOfByPartition(this.token4, recipient1, partition2, issuanceAmount - Math.round(token3Amount/multiple5));
-                          // await assertBalanceOfByPartition(this.token4, this.dvp.address, partition2, 0);
-                          // await assertBalanceOfByPartition(this.token4, tokenHolder1, partition2, Math.round(token3Amount/multiple5));
+                          // await assertBalanceOfByPartition(token3, tokenHolder1, partition1, issuanceAmount - token3Amount);
+                          // await assertBalanceOfByPartition(token3, dvp.address, partition1, 0);
+                          // await assertBalanceOfByPartition(token3, recipient1, partition1, token3Amount);
+                          // await assertBalanceOfByPartition(token4, recipient1, partition2, issuanceAmount - Math.round(token3Amount/multiple5));
+                          // await assertBalanceOfByPartition(token4, dvp.address, partition2, 0);
+                          // await assertBalanceOfByPartition(token4, tokenHolder1, partition2, Math.round(token3Amount/multiple5));
                         });
                       });
                     });
@@ -6644,15 +6457,15 @@ contract(
                 });
                 describe('when the price is not set', function () {
                   it('returns the price defined in the trade', async function () {
-                    assert.equal(await this.dvp.getPrice(2), token4Amount);
+                    assert.equal(await dvp.getPrice(2), token4Amount);
                   });
                 });
               });
               describe('when the price ownership is taken for the second token', function () {
                 beforeEach(async function () {
-                  await this.dvp.setPriceOwnership(
-                    this.token4.address,
-                    this.token3.address,
+                  await dvp.setPriceOwnership(
+                    token4.address,
+                    token3.address,
                     true,
                     { from: unknown }
                   );
@@ -6660,9 +6473,9 @@ contract(
                 describe('when the price is set (case 1)', function () {
                   const multiple2 = 2;
                   beforeEach(async function () {
-                    await this.dvp.setTokenPrice(
-                      this.token4.address,
-                      this.token3.address,
+                    await dvp.setTokenPrice(
+                      token4.address,
+                      token3.address,
                       ALL_PARTITIONS,
                       ALL_PARTITIONS,
                       multiple2,
@@ -6671,7 +6484,7 @@ contract(
                   });
                   it('returns the updatedprice', async function () {
                     assert.equal(
-                      await this.dvp.getPrice(2),
+                      await dvp.getPrice(2),
                       token3Amount / multiple2
                     );
                   });
@@ -6681,48 +6494,39 @@ contract(
           });
           describe('when the price ownership is not taken', function () {
             it('returns the price defined in the trade', async function () {
-              assert.equal(await this.dvp.getPrice(1), token2Amount);
+              assert.equal(await dvp.getPrice(1), token2Amount);
             });
           });
         });
         describe('when there is competition on the price ownership', function () {
           beforeEach(async function () {
-            await this.dvp.setPriceOwnership(
-              this.token1.address,
-              this.token2.address,
-              true,
-              { from: oracle }
-            );
-            await this.dvp.setPriceOwnership(
-              this.token2.address,
-              this.token1.address,
-              true,
-              { from: unknown }
-            );
+            await dvp.setPriceOwnership(token1.address, token2.address, true, {
+              from: oracle
+            });
+            await dvp.setPriceOwnership(token2.address, token1.address, true, {
+              from: unknown
+            });
           });
           it('reverts', async function () {
-            await expectRevert.unspecified(this.dvp.getPrice(1));
+            await expectRevert.unspecified(dvp.getPrice(1));
           });
         });
       });
       describe('when the variable price start date has been set', function () {
         it('returns the non-updated price', async function () {
-          await this.dvp.setPriceOwnership(
-            this.token1.address,
-            this.token2.address,
-            true,
-            { from: oracle }
-          );
+          await dvp.setPriceOwnership(token1.address, token2.address, true, {
+            from: oracle
+          });
           const multiple2 = 2;
-          await this.dvp.setTokenPrice(
-            this.token1.address,
-            this.token2.address,
+          await dvp.setTokenPrice(
+            token1.address,
+            token2.address,
             ALL_PARTITIONS,
             ALL_PARTITIONS,
             multiple2,
             { from: oracle }
           );
-          assert.equal(await this.dvp.getPrice(1), token2Amount);
+          assert.equal(await dvp.getPrice(1), token2Amount);
         });
       });
     });

@@ -456,9 +456,11 @@ $ brew install yarn
 
 Test the smart contract, by running the following commands:
 
-```
+```bash
 $ yarn
-$ yarn test test/ERC1400.test.js
+$ yarn test test/ERC1400.test.js --grep "when the variable price start date has been set"
+$ # or run all
+$ yarn test:all
 ```
 
 ## How to deploy the contract on a blockchain network?

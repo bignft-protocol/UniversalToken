@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "test": "hardhat test --no-compile",
+    "test:all": "hardhat test --no-compile --parallel",
     "compile": "hardhat compile",
     "build": "yarn clean && yarn compile",
     "clean": "rm -rf artifacts",

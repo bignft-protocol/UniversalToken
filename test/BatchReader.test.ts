@@ -1,12 +1,23 @@
-const {
+import {
   ZERO_ADDRESS,
   ZERO_BYTES32
-} = require('@openzeppelin/test-helpers/src/constants');
-const { web3 } = require('@openzeppelin/test-helpers/src/setup');
+  // @ts-ignore
+} from '@openzeppelin/test-helpers/src/constants';
 
-const { newSecretHashPair, newHoldId } = require('./utils/crypto');
+import {
+  CERTIFICATE_VALIDATION_NONE,
+  CERTIFICATE_VALIDATION_SALT,
+  setAllowListActivated,
+  setBlockListActivated,
+  setGranularityByPartitionActivated,
+  setHoldsActivated,
+  addTokenController
+} from './common/extension';
 
-const BatchReader = artifacts.require('BatchReader.sol');
+import { artifacts, contract, web3, assert } from 'hardhat';
+import { newSecretHashPair, newHoldId } from './utils/crypto';
+
+const BatchReader = artifacts.require('BatchReader');
 
 const ERC1820Registry = artifacts.require('ERC1820Registry');
 
@@ -15,17 +26,6 @@ const ERC1400HoldableCertificate = artifacts.require(
   'ERC1400HoldableCertificateToken'
 );
 const ERC1400TokensValidator = artifacts.require('ERC1400TokensValidator');
-
-const {
-  CERTIFICATE_VALIDATION_NONE,
-  CERTIFICATE_VALIDATION_SALT,
-  setAllowListActivated,
-  setBlockListActivated,
-  setGranularityByPartitionActivated,
-  setHoldsActivated,
-  addTokenController
-} = require('./common/extension');
-const { assert } = require('chai');
 
 const EMPTY_CERTIFICATE = '0x';
 
@@ -67,7 +67,7 @@ const token2DefaultPartitions = [
   partition3,
   partition4
 ];
-const token3DefaultPartitions = [];
+const token3DefaultPartitions: string | any[] = [];
 const token4DefaultPartitions = [partition3, partition4];
 
 const token1Partitions = [partition1, partition2, partition3];
@@ -656,13 +656,13 @@ contract(
         assert.equal(batchOwners.length, tokenAddresses.length);
         //
         // Token1
-        assert.equal(parseInt(batchOwners[0]), controller1);
+        assert.equal(batchOwners[0], controller1);
         // Token2
-        assert.equal(parseInt(batchOwners[1]), controller1);
+        assert.equal(batchOwners[1], controller1);
         // Token3
-        assert.equal(parseInt(batchOwners[2]), owner);
+        assert.equal(batchOwners[2], owner);
         // Token4
-        assert.equal(parseInt(batchOwners[3]), controller3);
+        assert.equal(batchOwners[3], controller3);
 
         // CONTROLLERS LENGTH
         //

@@ -1,26 +1,26 @@
-const { ZERO_ADDRESS } = require("@openzeppelin/test-helpers/src/constants");
+import { artifacts, contract, assert } from 'hardhat';
 
-const BatchBalanceReader = artifacts.require("BatchBalanceReader.sol");
+const BatchBalanceReader = artifacts.require('BatchBalanceReader');
 
-const ERC1400 = artifacts.require("ERC1400");
+const ERC1400 = artifacts.require('ERC1400');
 
-const CERTIFICATE_SIGNER = "0xe31C41f0f70C5ff39f73B4B94bcCD767b3071630";
+const CERTIFICATE_SIGNER = '0xe31C41f0f70C5ff39f73B4B94bcCD767b3071630';
 
 const VALID_CERTIFICATE =
-  "0x1000000000000000000000000000000000000000000000000000000000000000";
+  '0x1000000000000000000000000000000000000000000000000000000000000000';
 
 const partition1_short =
-  "7265736572766564000000000000000000000000000000000000000000000000"; // reserved in hex
+  '7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
 const partition2_short =
-  "6973737565640000000000000000000000000000000000000000000000000000"; // issued in hex
+  '6973737565640000000000000000000000000000000000000000000000000000'; // issued in hex
 const partition3_short =
-  "6c6f636b65640000000000000000000000000000000000000000000000000000"; // locked in hex
+  '6c6f636b65640000000000000000000000000000000000000000000000000000'; // locked in hex
 const partition4_short =
-  "636f6c6c61746572616c00000000000000000000000000000000000000000000"; // collateral in hex
-const partition1 = "0x".concat(partition1_short);
-const partition2 = "0x".concat(partition2_short);
-const partition3 = "0x".concat(partition3_short);
-const partition4 = "0x".concat(partition4_short);
+  '636f6c6c61746572616c00000000000000000000000000000000000000000000'; // collateral in hex
+const partition1 = '0x'.concat(partition1_short);
+const partition2 = '0x'.concat(partition2_short);
+const partition3 = '0x'.concat(partition3_short);
+const partition4 = '0x'.concat(partition4_short);
 
 const partitions = [partition1, partition2, partition3, partition4];
 
@@ -41,20 +41,20 @@ const issuanceAmount42 = 42;
 const issuanceAmount43 = 43;
 
 contract(
-  "BatchBalanceReader",
+  'BatchBalanceReader',
   ([owner, controller, tokenHolder1, tokenHolder2, tokenHolder3, unknown]) => {
     beforeEach(async function () {
       this.token1 = await ERC1400.new(
-        "ERC1400Token",
-        "DAU",
+        'ERC1400Token',
+        'DAU',
         1,
         [controller],
         partitions,
         { from: controller }
       );
       this.token2 = await ERC1400.new(
-        "ERC1400Token",
-        "DAU",
+        'ERC1400Token',
+        'DAU',
         1,
         [controller],
         partitions,
@@ -241,17 +241,18 @@ contract(
       );
     });
 
-    describe("balancesOfByPartition", function () {
-      it("returns the partition balances list", async function () {
+    describe('balancesOfByPartition', function () {
+      it('returns the partition balances list', async function () {
         const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
         const tokenAddresses = [this.token1.address, this.token2.address];
 
-        const balancesOfByPartition = await this.balanceReader.balancesOfByPartition(
-          tokenHolders,
-          tokenAddresses,
-          partitions,
-          { from: unknown }
-        );
+        const balancesOfByPartition =
+          await this.balanceReader.balancesOfByPartition(
+            tokenHolders,
+            tokenAddresses,
+            partitions,
+            { from: unknown }
+          );
 
         assert.equal(balancesOfByPartition.length, 24);
 
@@ -290,8 +291,8 @@ contract(
       });
     });
 
-    describe("balancesOf", function () {
-      it("returns the balances list", async function () {
+    describe('balancesOf', function () {
+      it('returns the balances list', async function () {
         const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
         const tokenAddresses = [this.token1.address, this.token2.address];
 
@@ -356,15 +357,16 @@ contract(
       });
     });
 
-    describe("totalSuppliesByPartition", function () {
-      it("returns the partition total supplies list", async function () {
+    describe('totalSuppliesByPartition', function () {
+      it('returns the partition total supplies list', async function () {
         const tokenAddresses = [this.token1.address, this.token2.address];
 
-        const totalSuppliesByPartition = await this.balanceReader.totalSuppliesByPartition(
-          partitions,
-          tokenAddresses,
-          { from: unknown }
-        );
+        const totalSuppliesByPartition =
+          await this.balanceReader.totalSuppliesByPartition(
+            partitions,
+            tokenAddresses,
+            { from: unknown }
+          );
 
         assert.equal(totalSuppliesByPartition.length, 8);
 
@@ -418,8 +420,8 @@ contract(
       });
     });
 
-    describe("totalSupplies", function () {
-      it("returns the total supplies list", async function () {
+    describe('totalSupplies', function () {
+      it('returns the total supplies list', async function () {
         const tokenAddresses = [this.token1.address, this.token2.address];
 
         const totalSupplies = await this.balanceReader.totalSupplies(

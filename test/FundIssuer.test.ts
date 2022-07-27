@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  ***************************************************************************************************************
  **************************************** CAUTION: work in progress ********************************************
@@ -10,9 +11,11 @@
  ***************************************************************************************************************
  */
 
-const { expectRevert } = require('@openzeppelin/test-helpers');
-const { soliditySha3 } = require('web3-utils');
-const { advanceTimeAndBlock } = require('./utils/time');
+import { artifacts, assert, ethers, web3 } from 'hardhat';
+
+import { advanceTimeAndBlock } from './utils/time';
+
+import { expectRevert } from '@openzeppelin/test-helpers';
 
 const FundIssuerContract = artifacts.require('FundIssuer');
 const ERC1400 = artifacts.require('ERC1400');
@@ -121,7 +124,7 @@ const partitionFlag =
 const bypassFlag =
   '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
-const ERC1820_ACCEPT_MAGIC = soliditySha3('ERC1820_ACCEPT_MAGIC');
+const ERC1820_ACCEPT_MAGIC = ethers.utils.id('ERC1820_ACCEPT_MAGIC');
 
 const OFF_CHAIN_PAYMENT = 0;
 const ETH_PAYMENT = 1;
@@ -159,10 +162,10 @@ const DEFAULT_VALUATION_PERIOD_LENGTH = SECONDS_IN_A_WEEK;
 const DEFAULT_PAYMENT_PERIOD_LENGTH = SECONDS_IN_A_WEEK;
 
 const assertBalanceOf = async (
-  _contract,
-  _tokenHolder,
-  _amount,
-  _balanceIsExact
+  _contract: { balanceOf: (arg0: any) => any },
+  _tokenHolder: any,
+  _amount: number,
+  _balanceIsExact: any
 ) => {
   const balance = (await _contract.balanceOf(_tokenHolder)).toNumber();
 
@@ -174,10 +177,10 @@ const assertBalanceOf = async (
 };
 
 const assertBalanceOfByPartition = async (
-  _contract,
-  _tokenHolder,
-  _partition,
-  _amount
+  _contract: { balanceOfByPartition: (arg0: any, arg1: any) => any },
+  _tokenHolder: any,
+  _partition: any,
+  _amount: any
 ) => {
   const balanceByPartition = (
     await _contract.balanceOfByPartition(_partition, _tokenHolder)
@@ -185,17 +188,21 @@ const assertBalanceOfByPartition = async (
   assert.equal(balanceByPartition, _amount);
 };
 
-const assertTokenOf = async (_contract, _tokenHolder, _tokenId) => {
+const assertTokenOf = async (
+  _contract: { ownerOf: (arg0: any) => any },
+  _tokenHolder: any,
+  _tokenId: any
+) => {
   const ownerOf = await _contract.ownerOf(_tokenId);
 
   assert.equal(ownerOf, _tokenHolder);
 };
 
 const assertERC20Allowance = async (
-  _contract,
-  _tokenHolder,
-  _spender,
-  _amount
+  _contract: { allowance: (arg0: any, arg1: any) => any },
+  _tokenHolder: any,
+  _spender: any,
+  _amount: any
 ) => {
   const allowance = (
     await _contract.allowance(_tokenHolder, _spender)
@@ -204,10 +211,12 @@ const assertERC20Allowance = async (
 };
 
 const assertERC1400Allowance = async (
-  _contract,
-  _tokenHolder,
-  _spender,
-  _amount
+  _contract: {
+    allowanceByPartition: (arg0: string, arg1: any, arg2: any) => any;
+  },
+  _tokenHolder: any,
+  _spender: any,
+  _amount: any
 ) => {
   const allowance = (
     await _contract.allowanceByPartition(partition1, _tokenHolder, _spender)
@@ -215,12 +224,20 @@ const assertERC1400Allowance = async (
   assert.equal(allowance, _amount);
 };
 
-const assertERC721Allowance = async (_contract, _tokenHolder, _tokenId) => {
+const assertERC721Allowance = async (
+  _contract: { getApproved: (arg0: any) => any },
+  _tokenHolder: any,
+  _tokenId: any
+) => {
   const approvedOf = await _contract.getApproved(_tokenId);
   assert.equal(approvedOf, _tokenHolder);
 };
 
-const assertEtherBalance = async (_etherHolder, _balance, _balanceIsExact) => {
+const assertEtherBalance = async (
+  _etherHolder: any,
+  _balance: number,
+  _balanceIsExact: any
+) => {
   const balance = await web3.eth.getBalance(_etherHolder);
   if (_balanceIsExact) {
     assert.equal(balance, _balance);
@@ -230,21 +247,24 @@ const assertEtherBalance = async (_etherHolder, _balance, _balanceIsExact) => {
 };
 
 const assertAssetRules = async (
-  _contract,
-  _assetAddress,
-  _assetClass,
-  _firstStartTime,
-  _subscriptionPeriodLength,
-  _valuationPeriodLength,
-  _paymentPeriodLength,
-  _assetValueType,
-  _assetValue,
-  _reverseAssetValue,
-  _paymentType,
-  _paymentAddress,
-  _paymentPartition,
-  _fundAddress,
-  _subscriptionsOpened
+  _contract: {
+    getAssetRules: (arg0: any, arg1: any) => any;
+    getAssetValueRules: (arg0: any, arg1: any) => any;
+  },
+  _assetAddress: any,
+  _assetClass: any,
+  _firstStartTime: any,
+  _subscriptionPeriodLength: any,
+  _valuationPeriodLength: any,
+  _paymentPeriodLength: any,
+  _assetValueType: number,
+  _assetValue: number,
+  _reverseAssetValue: number,
+  _paymentType: any,
+  _paymentAddress: any,
+  _paymentPartition: any,
+  _fundAddress: any,
+  _subscriptionsOpened: any
 ) => {
   const rules = await _contract.getAssetRules(_assetAddress, _assetClass);
 
@@ -272,18 +292,18 @@ const assertAssetRules = async (
 };
 
 const assertCycle = async (
-  _contract,
-  _cycleIndex,
-  _assetAddress,
-  _assetClass,
-  _startTime,
-  _subscriptionPeriodLength,
-  _valuationPeriodLength,
-  _paymentPeriodLength,
-  _paymentType,
-  _paymentAddress,
-  _paymentPartition,
-  _finalized
+  _contract: { getCycle: (arg0: any) => any },
+  _cycleIndex: any,
+  _assetAddress: any,
+  _assetClass: any,
+  _startTime: any,
+  _subscriptionPeriodLength: any,
+  _valuationPeriodLength: any,
+  _paymentPeriodLength: any,
+  _paymentType: any,
+  _paymentAddress: any,
+  _paymentPartition: any,
+  _finalized: boolean
 ) => {
   const cycle = await _contract.getCycle(_cycleIndex);
 
@@ -304,10 +324,13 @@ const assertCycle = async (
 };
 
 const assertCycleState = async (
-  _contract,
-  _assetAddress,
-  _assetClass,
-  _state
+  _contract: {
+    getLastCycleIndex: (arg0: any, arg1: any) => any;
+    getCycleState: (arg0: any) => any;
+  },
+  _assetAddress: any,
+  _assetClass: string,
+  _state: string
 ) => {
   const cycleIndex = (
     await _contract.getLastCycleIndex(_assetAddress, _assetClass)
@@ -318,11 +341,11 @@ const assertCycleState = async (
 };
 
 const assertCycleAssetValue = async (
-  _contract,
-  _cycleIndex,
-  _assetValueType,
-  _assetValue,
-  _reverseAssetValue
+  _contract: { getCycleAssetValue: (arg0: any) => any },
+  _cycleIndex: any,
+  _assetValueType: number,
+  _assetValue: number,
+  _reverseAssetValue: number
 ) => {
   const valueData = await _contract.getCycleAssetValue(_cycleIndex);
 
@@ -332,14 +355,14 @@ const assertCycleAssetValue = async (
 };
 
 const assertOrder = async (
-  _contract,
-  _orderIndex,
-  _cycleIndex,
-  _investor,
-  _value,
-  _amount,
-  _orderType,
-  _state
+  _contract: { getOrder: (arg0: any) => any },
+  _orderIndex: any,
+  _cycleIndex: number,
+  _investor: any,
+  _value: number,
+  _amount: number,
+  _orderType: string,
+  _state: string
 ) => {
   const order = await _contract.getOrder(_orderIndex);
 
@@ -352,7 +375,7 @@ const assertOrder = async (
   assert.equal(order[5].toNumber(), _state);
 };
 
-const addressToBytes32 = (_addr, _fillTo = 32) => {
+const addressToBytes32 = (_addr: string, _fillTo = 32) => {
   const _addr2 = _addr.substring(2);
   const arr1 = [];
   for (let n = 0, l = _addr2.length; n < l; n++) {
@@ -364,7 +387,10 @@ const addressToBytes32 = (_addr, _fillTo = 32) => {
   return arr1.join('');
 };
 
-const NumToHexBytes32 = (_num, _fillTo = 32) => {
+const NumToHexBytes32 = (
+  _num: { toString: (arg0: number) => any },
+  _fillTo = 32
+) => {
   const arr1 = [];
   const _str = _num.toString(16);
   for (let n = 0, l = _str.length; n < l; n++) {
@@ -376,7 +402,7 @@ const NumToHexBytes32 = (_num, _fillTo = 32) => {
   return arr1.join('');
 };
 
-const NumToNumBytes32 = (_num, _fillTo = 32) => {
+const NumToNumBytes32 = (_num: { toString: () => any }, _fillTo = 32) => {
   const arr1 = [];
   const _str = _num.toString();
   for (let n = 0, l = _str.length; n < l; n++) {
@@ -389,12 +415,12 @@ const NumToNumBytes32 = (_num, _fillTo = 32) => {
 };
 
 const getOrderCreationData = (
-  _assetAddress,
-  _assetClass,
-  _orderValue,
-  _orderAmount,
-  _orderType,
-  isFake
+  _assetAddress: any,
+  _assetClass: string,
+  _orderValue: number,
+  _orderAmount: number,
+  _orderType: string,
+  isFake: undefined
 ) => {
   const flag = isFake ? partitionFlag : orderCreationFlag;
   const hexAssetAddress = addressToBytes32(_assetAddress);
@@ -409,7 +435,7 @@ const getOrderCreationData = (
   return `${flag}${hexAssetAddress}${hexAssetClass}${orderData}`;
 };
 
-const getOrderPaymentData = (orderIndex, isFake) => {
+const getOrderPaymentData = (orderIndex: number, isFake: undefined) => {
   const flag = isFake ? partitionFlag : orderPaymentFlag;
   const hexOrderIndex = NumToHexBytes32(orderIndex);
 
@@ -417,19 +443,34 @@ const getOrderPaymentData = (orderIndex, isFake) => {
 };
 
 const setAssetRules = async (
-  _contract,
-  _issuerAddress,
-  _assetAddress,
-  _assetClass,
-  _firstStartTime,
-  _subscriptionPeriodLength,
-  _valuationPeriodLength,
-  _paymentPeriodLength,
-  _paymentType,
-  _paymentAddress,
-  _paymentPartition,
-  _fundAddress,
-  _subscriptionsOpened
+  _contract: {
+    setAssetRules: (
+      arg0: any,
+      arg1: any,
+      arg2: any,
+      arg3: any,
+      arg4: any,
+      arg5: any,
+      arg6: any,
+      arg7: any,
+      arg8: any,
+      arg9: any,
+      arg10: any,
+      arg11: { from: any }
+    ) => any;
+  },
+  _issuerAddress: any,
+  _assetAddress: any,
+  _assetClass: string,
+  _firstStartTime: number | undefined,
+  _subscriptionPeriodLength: number | undefined,
+  _valuationPeriodLength: number | undefined,
+  _paymentPeriodLength: number | undefined,
+  _paymentType: number,
+  _paymentAddress: string,
+  _paymentPartition: string,
+  _fundAddress: any,
+  _subscriptionsOpened: boolean
 ) => {
   const chainTime = (await web3.eth.getBlock('latest')).timestamp;
   const firstStartTime = _firstStartTime || chainTime + 20;
@@ -478,17 +519,31 @@ const setAssetRules = async (
 };
 
 const subscribe = async (
-  _contract,
-  _assetAddress,
-  _assetClass,
-  _value,
-  _amount,
-  _orderType,
-  _investorAddress,
-  _setAssetRules,
-  _issuerAddress,
-  _fundAddress,
-  _newCycle
+  _contract: {
+    getNbCycles: () => any;
+    getLastCycleIndex: (arg0: any, arg1: any) => any;
+    getNbOrders: () => any;
+    getInvestorOrders: (arg0: any) => any;
+    subscribe: (
+      arg0: any,
+      arg1: any,
+      arg2: any,
+      arg3: any,
+      arg4: any,
+      arg5: boolean,
+      arg6: { from: any }
+    ) => any;
+  },
+  _assetAddress: any,
+  _assetClass: string,
+  _value: number,
+  _amount: number,
+  _orderType: string,
+  _investorAddress: any,
+  _setAssetRules: boolean,
+  _issuerAddress: any,
+  _fundAddress: any,
+  _newCycle: boolean
 ) => {
   if (_setAssetRules) {
     await setAssetRules(
@@ -565,17 +620,17 @@ const subscribe = async (
 };
 
 const launchCycleForAssetClass = async (
-  _contract,
-  _assetAddress,
-  _assetClass,
-  _firstStartTime,
-  _subscriptionPeriodLength,
-  _valuationPeriodLength,
-  _paymentPeriodLength,
-  _paymentType,
-  _paymentAddress,
-  _paymentPartition,
-  _subscriptionsOpened
+  _contract: any,
+  _assetAddress: any,
+  _assetClass: any,
+  _firstStartTime: any,
+  _subscriptionPeriodLength: number,
+  _valuationPeriodLength: number,
+  _paymentPeriodLength: number,
+  _paymentType: any,
+  _paymentAddress: any,
+  _paymentPartition: any,
+  _subscriptionsOpened: any
 ) => {
   const chainTime = (await web3.eth.getBlock('latest')).timestamp;
   const firstStartTime = _firstStartTime || chainTime;
@@ -1116,7 +1171,7 @@ contract(
           let interfaceFundImplementer =
             await this.registry.getInterfaceImplementer(
               this.fic.address,
-              soliditySha3(ERC1400_TOKENS_RECIPIENT_INTERFACE)
+              ethers.utils.id(ERC1400_TOKENS_RECIPIENT_INTERFACE)
             );
           assert.equal(interfaceFundImplementer, this.fic.address);
         });
@@ -1132,7 +1187,7 @@ contract(
       describe('when interface hash is correct', function () {
         it('returns ERC1820_ACCEPT_MAGIC', async function () {
           const canImplement = await this.fic.canImplementInterfaceForAddress(
-            soliditySha3(ERC1400_TOKENS_RECIPIENT_INTERFACE),
+            ethers.utils.id(ERC1400_TOKENS_RECIPIENT_INTERFACE),
             ZERO_ADDRESS
           );
           assert.equal(ERC1820_ACCEPT_MAGIC, canImplement);
@@ -1141,7 +1196,7 @@ contract(
       describe('when interface hash is not correct', function () {
         it('returns empty bytes32', async function () {
           const canImplement = await this.fic.canImplementInterfaceForAddress(
-            soliditySha3('FakeInterfaceName'),
+            ethers.utils.id('FakeInterfaceName'),
             ZERO_ADDRESS
           );
           assert.equal(ZERO_BYTES32, canImplement);
