@@ -7,7 +7,7 @@ import type {
 
 const BatchBalanceReader = artifacts.require('BatchBalanceReader'); // deprecated
 const BatchReader = artifacts.require('BatchReader');
-const ERC1820Registry = artifacts.require('IERC1820Registry');
+const ERC1820Registry = artifacts.require('ERC1820Registry');
 
 const BALANCE_READER = 'BatchBalanceReader';
 const READER = 'BatchReader';
@@ -22,9 +22,7 @@ export default async function () {
     batchReader.address
   );
 
-  const registry: ERC1820Registry = await ERC1820Registry.at(
-    '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'
-  );
+  const registry: ERC1820Registry = await ERC1820Registry.deployed();
 
   await registry.setInterfaceImplementer(
     owner.address,

@@ -4,7 +4,7 @@ const { soliditySha3 } = require('web3-utils');
 
 const ERC1400 = artifacts.require('ERC1400');
 
-const ERC1820Registry = artifacts.require('IERC1820Registry');
+const ERC1820Registry = artifacts.require('ERC1820Registry');
 
 const FakeERC1400 = artifacts.require('FakeERC1400Mock');
 
@@ -225,9 +225,7 @@ contract(
     unknown
   ]) {
     before(async function () {
-      this.registry = await ERC1820Registry.at(
-        '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'
-      );
+      this.registry = await ERC1820Registry.deployed();
     });
 
     describe('contract creation', function () {

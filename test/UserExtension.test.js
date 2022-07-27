@@ -3,7 +3,7 @@ const { expectRevert } = require('@openzeppelin/test-helpers');
 const { soliditySha3 } = require('web3-utils');
 
 const ERC1400 = artifacts.require('ERC1400');
-const ERC1820Registry = artifacts.require('IERC1820Registry');
+const ERC1820Registry = artifacts.require('ERC1820Registry');
 
 const ERC1400TokensSender = artifacts.require('ERC1400TokensSenderMock');
 const ERC1400TokensRecipient = artifacts.require('ERC1400TokensRecipientMock');
@@ -41,9 +41,7 @@ contract(
   'ERC1400 with sender and recipient hooks',
   function ([owner, operator, controller, tokenHolder, recipient, unknown]) {
     beforeEach(async function () {
-      this.registry = await ERC1820Registry.at(
-        '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'
-      );
+      this.registry = await ERC1820Registry.deployed();
     });
 
     // HOOKS
@@ -61,9 +59,7 @@ contract(
           partitions,
           { from: owner }
         );
-        this.registry = await ERC1820Registry.at(
-          '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'
-        );
+        this.registry = await ERC1820Registry.deployed();
 
         this.senderContract = await ERC1400TokensSender.new({
           from: tokenHolder

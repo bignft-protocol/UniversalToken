@@ -8,7 +8,7 @@ const { newSecretHashPair, newHoldId } = require('./utils/crypto');
 
 const BatchReader = artifacts.require('BatchReader.sol');
 
-const ERC1820Registry = artifacts.require('IERC1820Registry');
+const ERC1820Registry = artifacts.require('ERC1820Registry');
 
 const ERC721Token = artifacts.require('ERC721Token');
 const ERC1400HoldableCertificate = artifacts.require(
@@ -93,9 +93,7 @@ contract(
     unknown
   ]) => {
     before(async function () {
-      this.registry = await ERC1820Registry.at(
-        '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'
-      );
+      this.registry = await ERC1820Registry.deployed();
 
       this.extension = await ERC1400TokensValidator.new({
         from: deployer

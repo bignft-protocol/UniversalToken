@@ -1,5 +1,5 @@
 import { artifacts, ethers } from 'hardhat';
-import type { IERC1820Registry, Swaps } from '../../typechain-types';
+import type { ERC1820Registry, Swaps } from '../../typechain-types';
 
 const DVPContract = artifacts.require('Swaps');
 
@@ -14,7 +14,7 @@ export default async function () {
   DVPContract.setAsDeployed(dvpContract);
   console.log('\n   > DVP deployment: Success -->', dvpContract.address);
 
-  const registry: IERC1820Registry = await ERC1820Registry.deployed();
+  const registry: ERC1820Registry = await ERC1820Registry.deployed();
 
   await registry.setInterfaceImplementer(
     owner.address,

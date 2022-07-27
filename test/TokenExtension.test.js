@@ -28,7 +28,7 @@ const Account = require('eth-lib/lib/account');
 const ERC1400HoldableCertificate = artifacts.require(
   'ERC1400HoldableCertificateToken'
 );
-const ERC1820Registry = artifacts.require('IERC1820Registry');
+const ERC1820Registry = artifacts.require('ERC1820Registry');
 
 const ERC1400TokensValidator = artifacts.require('ERC1400TokensValidator');
 const ERC1400TokensValidatorMock = artifacts.require(
@@ -376,9 +376,7 @@ contract(
     tokenController2
   ]) {
     before(async function () {
-      this.registry = await ERC1820Registry.at(
-        '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'
-      );
+      this.registry = await ERC1820Registry.deployed();
 
       this.clock = await ClockMock.new();
 
