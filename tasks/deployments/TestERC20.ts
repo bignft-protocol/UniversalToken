@@ -1,6 +1,6 @@
 import { ethers, artifacts } from 'hardhat';
 
-async function main() {
+export default async function () {
   const ERC20HoldableToken = artifacts.require('ERC20HoldableToken');
 
   const [owner] = await ethers.getSigners();
@@ -19,11 +19,4 @@ async function main() {
   await erc20.mint(owner, '1000000000000000000000000000');
 
   console.log('ERC20HoldableToken deployed at: ' + erc20.address);
-
-  process.exit();
 }
-
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});

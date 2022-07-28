@@ -1,5 +1,6 @@
 import { ethers } from 'hardhat';
 import fs from 'fs';
+import path from 'path';
 
 module.exports = async () => {
   const network = await ethers.provider.getNetwork();
@@ -11,7 +12,7 @@ module.exports = async () => {
     .sort(
       (f1, f2) => parseInt(f1.split('_')[0]) - parseInt(f2.split('_')[0])
     )) {
-    const { default: fn } = await import('./' + file);
+    const { default: fn } = await import(path.resolve(file));
     await fn();
   }
 };

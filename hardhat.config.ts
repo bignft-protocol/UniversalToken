@@ -1,5 +1,5 @@
 import 'dotenv/config';
-
+import { task, types } from 'hardhat/config';
 import { HardhatUserConfig } from 'hardhat/types';
 import '@nomiclabs/hardhat-ethers';
 import '@nomiclabs/hardhat-truffle5';
@@ -7,6 +7,7 @@ import '@nomiclabs/hardhat-etherscan';
 import '@typechain/hardhat';
 import 'solidity-coverage';
 import 'hardhat-contract-sizer';
+import path from 'path';
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const accounts = PRIVATE_KEY ? [PRIVATE_KEY] : [];
@@ -49,5 +50,14 @@ const config: HardhatUserConfig = {
     timeout: process.env.TIMEOUT || 100000
   }
 };
+
+task('task', 'Run a script task with custom input')
+  .addPositionalParam('script', 'The deploy script')
+  .addParam('input', 'The json input for deploy script', {}, types.json)
+  .setAction(async (args) => {
+    const { script, input } = args;
+    const { default: fn } = await import(path.resolve(script));
+    await fn(input);
+  });
 
 export default config;

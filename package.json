@@ -9,6 +9,8 @@
   "scripts": {
     "test": "hardhat test --no-compile",
     "test:all": "hardhat test --no-compile --parallel",
+    "task": "hardhat task",
+    "verify": "hardhat verify --no-compile",
     "compile": "hardhat compile",
     "build": "yarn clean && yarn compile",
     "clean": "rm -rf artifacts",
