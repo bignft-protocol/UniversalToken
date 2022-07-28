@@ -3,7 +3,7 @@ import type {
   ERC1820Registry,
   BatchReader,
   BatchBalanceReader
-} from '../../typechain-types';
+} from 'typechain-types';
 
 const BatchBalanceReader = artifacts.require('BatchBalanceReader'); // deprecated
 const BatchReader = artifacts.require('BatchReader');

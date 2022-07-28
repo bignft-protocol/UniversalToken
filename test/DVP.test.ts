@@ -6,7 +6,7 @@ import type {
   FakeERC1400Mock,
   ERC20Token,
   ERC721Token
-} from '../typechain-types';
+} from 'typechain-types';
 import { advanceTimeAndBlock } from './utils/time';
 
 import { expectRevert } from '@openzeppelin/test-helpers';

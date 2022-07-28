@@ -1,5 +1,5 @@
 import { artifacts, ethers } from 'hardhat';
-import type { ERC1820Registry, BatchTokenIssuer } from '../../typechain-types';
+import type { ERC1820Registry, BatchTokenIssuer } from 'typechain-types';
 
 const BatchTokenIssuer = artifacts.require('BatchTokenIssuer');
 

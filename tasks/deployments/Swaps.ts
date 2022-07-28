@@ -6,7 +6,7 @@ export default async function () {
   const [owner] = await ethers.getSigners();
 
   const swaps = await Swaps.new(false, {
-    from: owner
+    from: owner.address
   });
 
   Swaps.setAsDeployed(swaps);

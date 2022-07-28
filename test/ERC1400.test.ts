@@ -1,7 +1,7 @@
 // @ts-nocheck
 
 import { ethers, artifacts, network, assert, contract } from 'hardhat';
-import type { ERC1400, ERC1820Registry, MinterMock } from '../typechain-types';
+import type { ERC1400, ERC1820Registry, MinterMock } from 'typechain-types';
 
 import { expectRevert } from '@openzeppelin/test-helpers';
 

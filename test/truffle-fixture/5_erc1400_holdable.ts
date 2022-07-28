@@ -2,7 +2,7 @@ import { artifacts, ethers } from 'hardhat';
 import type {
   ERC1400HoldableToken,
   ERC1400TokensValidator
-} from '../../typechain-types';
+} from 'typechain-types';
 
 const ERC1400HoldableToken = artifacts.require('ERC1400HoldableToken');
 const Extension = artifacts.require('ERC1400TokensValidator');

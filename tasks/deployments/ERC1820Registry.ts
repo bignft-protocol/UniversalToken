@@ -14,8 +14,12 @@ export default async function () {
     value: web3.utils.toWei('0.1')
   });
 
-  console.log(owner.address, receipt);
   const res = await web3.eth.sendSignedTransaction(rawTx);
 
-  console.log('\n   > ERC1820 deployment: Success -->', res.contractAddress);
+  console.log(
+    '\n   > ERC1820 deployment: Success -->',
+    res.contractAddress,
+    'txHash',
+    receipt.transactionHash
+  );
 }

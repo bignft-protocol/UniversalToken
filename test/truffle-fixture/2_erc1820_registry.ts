@@ -1,5 +1,5 @@
 import { web3, ethers, artifacts } from 'hardhat';
-import type { ERC1820Registry } from '../../typechain-types';
+import type { ERC1820Registry } from 'typechain-types';
 
 // meta transaction
 const deployerAddress = '0xa990077c3205cbDf861e17Fa532eeB069cE9fF96';

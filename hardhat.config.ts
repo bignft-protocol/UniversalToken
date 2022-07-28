@@ -56,7 +56,7 @@ task('task', 'Run a script task with custom input')
   .addParam('input', 'The json input for deploy script', {}, types.json)
   .setAction(async (args) => {
     const { script, input } = args;
-    const { default: fn } = await import(path.resolve(script));
+    const { default: fn } = await import(path.resolve(__dirname, script));
     await fn(input);
   });
 

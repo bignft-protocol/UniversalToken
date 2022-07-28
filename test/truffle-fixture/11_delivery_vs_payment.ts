@@ -1,5 +1,5 @@
 import { artifacts, ethers } from 'hardhat';
-import type { ERC1820Registry, Swaps } from '../../typechain-types';
+import type { ERC1820Registry, Swaps } from 'typechain-types';
 
 const DVPContract = artifacts.require('Swaps');
 

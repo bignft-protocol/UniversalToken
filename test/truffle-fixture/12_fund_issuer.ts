@@ -1,5 +1,5 @@
 import { artifacts, ethers } from 'hardhat';
-import type { ERC1820Registry, FundIssuer } from '../../typechain-types';
+import type { ERC1820Registry, FundIssuer } from 'typechain-types';
 
 const FundIssuer = artifacts.require('FundIssuer');
 const ERC1820Registry = artifacts.require('ERC1820Registry');
