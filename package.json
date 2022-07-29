@@ -14,7 +14,6 @@
     "compile": "hardhat compile",
     "build": "yarn clean && yarn compile",
     "clean": "rm -rf artifacts",
-    "env": "node setup.js",
     "size:contracts": "hardhat size-contracts --no-compile",
     "lint": "eslint ./test",
     "lint:fix": "eslint ./test --fix",
