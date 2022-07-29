@@ -70,5 +70,19 @@ export default class ContractHelper {
 }
 `;
 
+  // write the generated file
   fs.writeFileSync(path.resolve('typechain-types', 'ContractHelper.ts'), tpl);
+  // append ContractHelper to index.ts of the typechain-types package
+
+  if (
+    fs
+      .readFileSync(path.resolve('typechain-types', 'index.ts'))
+      .toString()
+      .indexOf('ContractHelper') === -1
+  ) {
+    fs.appendFileSync(
+      path.resolve('typechain-types', 'index.ts'),
+      `\nexport { default as ContractHelper } from "./ContractHelper";`
+    );
+  }
 }
