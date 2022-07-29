@@ -8,7 +8,7 @@
         "resolveJsonModule": true,
         "moduleResolution": "node",
         "forceConsistentCasingInFileNames": true,
-        "outDir": "dist"
+        "outDir": "dist",
     },
     "ts-node": {
         "transpileOnly": true,
@@ -16,7 +16,7 @@
     "include": [
         "./tasks",
         "./test",
-        "./typechain-types"
+        "./typechain-types",
     ],
     "files": [
         "./hardhat.config.ts",

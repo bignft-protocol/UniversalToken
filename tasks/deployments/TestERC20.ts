@@ -1,18 +1,21 @@
-import { ethers, artifacts } from 'hardhat';
-import type { ERC20HoldableToken } from 'typechain-types';
+import { ethers } from 'hardhat';
+import { ContractHelper } from '../../typechain-types';
 
-export default async function () {
-  const ERC20HoldableToken = artifacts.require('ERC20HoldableToken');
+type Args = {
+  name?: string;
+  symbol?: string;
+  decimal?: number;
+};
+
+export default async function (args: Args) {
   const [owner] = await ethers.getSigners();
-  const erc20: ERC20HoldableToken = await ERC20HoldableToken.new(
-    'Test Holdable ERC20',
-    'TEST',
-    18,
-    {
-      from: owner.address
-    }
+  ContractHelper.setSigner(owner);
+  const erc20 = await ContractHelper.ERC20HoldableToken.deploy(
+    args.name ?? 'Test Holdable ERC20',
+    args.symbol ?? 'TEST',
+    args.decimal ?? 18
   );
-  ERC20HoldableToken.setAsDeployed(erc20);
+
   await erc20.mint(owner.address, '1000000000000000000000000000');
   console.log('ERC20HoldableToken deployed at: ' + erc20.address);
 }

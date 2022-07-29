@@ -1,15 +1,11 @@
-import { ethers, artifacts } from 'hardhat';
+import { ethers } from 'hardhat';
+import { ContractHelper } from '../../typechain-types';
 
 export default async function () {
-  const Swaps = artifacts.require('Swaps');
-
   const [owner] = await ethers.getSigners();
+  ContractHelper.setSigner(owner);
 
-  const swaps = await Swaps.new(false, {
-    from: owner.address
-  });
+  const swaps = await ContractHelper.Swaps.deploy(false);
 
-  Swaps.setAsDeployed(swaps);
-
-  console.log('Swaps deployed at: ' + swaps.address);
+  console.log('Swaps deployed at:', swaps.address);
 }

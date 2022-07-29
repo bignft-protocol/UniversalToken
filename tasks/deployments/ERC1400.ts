@@ -1,8 +1,7 @@
-import { ethers, artifacts } from 'hardhat';
+import { ethers } from 'hardhat';
+import { ContractHelper } from '../../typechain-types';
 import fs from 'fs';
 import path from 'path';
-
-const ERC1400 = artifacts.require('ERC1400');
 
 const partition1 =
   '0x7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
@@ -21,6 +20,7 @@ type Args = {
 
 export default async function (args: Args) {
   const [owner] = await ethers.getSigners();
+  ContractHelper.setSigner(owner);
 
   fs.writeFileSync(
     path.join(__dirname, '..', '..', 'contract-arguments.js'),
@@ -34,16 +34,13 @@ export default async function (args: Args) {
   `
   );
 
-  const erc1400 = await ERC1400.new(
+  const erc1400 = await ContractHelper.ERC1400.deploy(
     args.name,
     args.symbol,
     1,
     [args.address ?? owner.address],
-    partitions,
-    { from: owner.address }
+    partitions
   );
-
-  ERC1400.setAsDeployed(erc1400);
 
   console.log('ERC1400 deployed at: ' + erc1400.address);
 }

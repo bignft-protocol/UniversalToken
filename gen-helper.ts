@@ -1,77 +1,59 @@
-// @ts-nocheck
-import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
-const readdir = promisify(fs.readdir);
-const stat = promisify(fs.stat);
-
-const isValidABI = (file: string) => {
-  if (!file.match(/\/[a-zA-Z0-9]+\.json$/)) return false;
-  const json = JSON.parse(fs.readFileSync(file).toString());
-  return json.abi.length > 0;
-};
-
-async function getFiles(dir: string): Promise<string[]> {
-  const dirs = Array.isArray(dir) ? dir : [dir];
-  const files: string[] = [];
-  for (const dir of dirs) {
-    const subdirs = await readdir(dir);
-    files.push(
-      ...(await Promise.all(
-        subdirs.map(async (subdir) => {
-          const res = path.join(dir, subdir);
-
-          return (await stat(res)).isDirectory()
-            ? getFiles(res)
-            : isValidABI(res)
-            ? res
-            : [];
-        })
-      ))
-    );
-  }
-
-  return files.reduce((a, f) => a.concat(f), []);
-}
 
 export default async function () {
-  const files = await getFiles(path.join('artifacts', 'contracts'));
-  const fileEntries = Object.fromEntries(
-    files.map((file) => [path.basename(file).slice(0, -5), '../' + file])
-  );
-  const typesVals = Object.keys(fileEntries).map(
-    (key) => `import type { ${key} } from './${key}';`
+  const entries = fs
+    .readdirSync(path.join('typechain-types', 'factories'))
+    .filter((file) => file !== 'ContractHelper.ts')
+    .map((file) => file.split('__')[0]);
+
+  const typesVals = entries.map(
+    (entry) => `import { ${entry}__factory } from './${entry}__factory';`
   );
 
-  const funcVals: string[] = [];
+  const funcVals = entries.map((entry) => {
+    // fast check constructor method
+    const hasConstructor =
+      fs
+        .readFileSync(
+          path.join('typechain-types', 'factories', `${entry}__factory.ts`)
+        )
+        .toString()
+        .indexOf('"constructor"') !== -1;
 
-  for (const key in fileEntries) {
-    funcVals.push(`public static async ${key}(address: string): Promise<${key}> {
-  const artifacts = await import(
-    '${fileEntries[key]}'
-  );
-  const ContractFactory = TruffleContract(artifacts);
-  ContractFactory.setProvider(this._provider);
-  return ContractFactory.at(address);
-}`);
-  }
+    if (!hasConstructor) {
+      typesVals.push(`import { ${entry} } from '../${entry}';`);
+    }
 
-  const tpl = `// @ts-ignore
-import TruffleContract from '@nomiclabs/truffle-contract';
+    return `  
+  public static get ${entry}(): ${
+      hasConstructor ? `${entry}__factory` : entry
+    } {    
+    return ${
+      hasConstructor
+        ? `new ${entry}__factory(this._signer)`
+        : `${entry}__factory.connect('', this._signer)`
+    };
+  }`;
+  });
+
+  const tpl = `import { Signer } from 'ethers';
 ${typesVals.join('\n')}
 
 export default class ContractHelper {
-  private static _provider: any;
-  public static setProvider(provider: any) {
-    this._provider = provider;
+  private static _signer: Signer;
+  public static setSigner(signer: Signer) {
+    this._signer = signer;
   }
-
-  ${funcVals.join('\n\n')}
+  ${funcVals.join('\n')}
 }
 `;
 
   // write the generated file
-  fs.writeFileSync(path.resolve('typechain-types', 'ContractHelper.ts'), tpl);
+  fs.writeFileSync(
+    path.resolve('typechain-types', 'factories', 'ContractHelper.ts'),
+    tpl
+  );
   // append ContractHelper to index.ts of the typechain-types package
 
   if (
@@ -82,7 +64,7 @@ export default class ContractHelper {
   ) {
     fs.appendFileSync(
       path.resolve('typechain-types', 'index.ts'),
-      `\nexport { default as ContractHelper } from "./ContractHelper";`
+      `\nexport { default as ContractHelper } from "./factories/ContractHelper";`
     );
   }
 }
