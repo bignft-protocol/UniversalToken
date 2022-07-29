@@ -508,7 +508,7 @@ For all other networks than hardhat, you have to send ether to the accounts asso
 If you want to verify contract, for example on bscTestnet network, first you need to get an ETHERSCAN_API_KEY, then run this
 
 ```bash
-yarn task --network bscTestnet tasks/deployments/deploy-ERC1400.ts
+yarn task --network bscTestnet tasks/deployments/deploy-ERC1400.ts --input '{"name":"ERC1400Token","symbol":"DAU"}'
 
 # contract-arguments.js generated from deploy task
 

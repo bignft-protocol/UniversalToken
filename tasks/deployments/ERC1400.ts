@@ -16,7 +16,7 @@ const partitions = [partition1, partition2, partition3];
 type Args = {
   name: string;
   symbol: string;
-  address: string;
+  address?: string;
 };
 
 export default async function (args: Args) {
@@ -28,7 +28,7 @@ export default async function (args: Args) {
     '${args.name}',
     '${args.symbol}',
     1,
-    ['${args.address || owner.address}'],
+    ['${args.address ?? owner.address}'],
     ${JSON.stringify(partitions)},
   ];
   `
@@ -38,7 +38,7 @@ export default async function (args: Args) {
     args.name,
     args.symbol,
     1,
-    [args.address || owner.address],
+    [args.address ?? owner.address],
     partitions,
     { from: owner.address }
   );
