@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { artifacts, contract, ethers, assert, web3 } from 'hardhat';
+import { artifacts, contract, ethers, assert } from 'hardhat';
 import { advanceTimeAndBlock } from './utils/time';
 import { newSecretHashPair, newHoldId } from './utils/crypto';
 import {
@@ -8,7 +8,6 @@ import {
   CERTIFICATE_VALIDATION_SALT,
   CERTIFICATE_VALIDATION_DEFAULT,
   assertTokenHasExtension,
-  setNewExtensionForToken,
   assertCertificateActivated,
   setCertificateActivated,
   assertAllowListActivated,
@@ -270,17 +269,20 @@ const craftNonceBasedCertificate = async (
     );
   }
 
-  const packedAndHashedParameters = web3.utils.soliditySha3(
-    { type: 'address', value: _txSender.toString() },
-    { type: 'address', value: _token.address.toString() },
-    { type: 'bytes', value: rawTxPayload },
-    { type: 'uint256', value: expirationTimeAsNumber.toString() },
-    { type: 'uint256', value: nonce.toString() }
+  const packedAndHashedParameters = ethers.utils.solidityKeccak256(
+    ['address', 'address', 'bytes', 'uint256', 'uint256'],
+    [
+      _txSender.toString(),
+      _token.address.toString(),
+      rawTxPayload,
+      expirationTimeAsNumber.toString(),
+      nonce.toString()
+    ]
   );
 
-  const packedAndHashedData = web3.utils.soliditySha3(
-    { type: 'bytes32', value: _domain },
-    { type: 'bytes32', value: packedAndHashedParameters }
+  const packedAndHashedData = ethers.utils.solidityKeccak256(
+    ['bytes32', 'bytes32'],
+    [_domain, packedAndHashedParameters]
   );
 
   const signature = Account.sign(
@@ -340,17 +342,20 @@ const craftSaltBasedCertificate = async (
     );
   }
 
-  const packedAndHashedParameters = web3.utils.soliditySha3(
-    { type: 'address', value: _txSender.toString() },
-    { type: 'address', value: _token.address.toString() },
-    { type: 'bytes', value: rawTxPayload },
-    { type: 'uint256', value: expirationTimeAsNumber.toString() },
-    { type: 'bytes32', value: salt.toString() }
+  const packedAndHashedParameters = ethers.utils.solidityKeccak256(
+    ['address', 'address', 'bytes', 'uint256', 'bytes32'],
+    [
+      _txSender.toString(),
+      _token.address.toString(),
+      rawTxPayload,
+      expirationTimeAsNumber.toString(),
+      salt.toString()
+    ]
   );
 
-  const packedAndHashedData = web3.utils.soliditySha3(
-    { type: 'bytes32', value: _domain },
-    { type: 'bytes32', value: packedAndHashedParameters }
+  const packedAndHashedData = ethers.utils.solidityKeccak256(
+    ['bytes32', 'bytes32'],
+    [_domain, packedAndHashedParameters]
   );
 
   const signature = Account.sign(

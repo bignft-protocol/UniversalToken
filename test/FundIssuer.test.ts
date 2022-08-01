@@ -233,19 +233,6 @@ const assertERC721Allowance = async (
   assert.equal(approvedOf, _tokenHolder);
 };
 
-const assertEtherBalance = async (
-  _etherHolder: any,
-  _balance: number,
-  _balanceIsExact: any
-) => {
-  const balance = await web3.eth.getBalance(_etherHolder);
-  if (_balanceIsExact) {
-    assert.equal(balance, _balance);
-  } else {
-    assert.equal(balance - _balance < 0.1);
-  }
-};
-
 const assertAssetRules = async (
   _contract: {
     getAssetRules: (arg0: any, arg1: any) => any;
@@ -472,7 +459,7 @@ const setAssetRules = async (
   _fundAddress: any,
   _subscriptionsOpened: boolean
 ) => {
-  const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+  const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
   const firstStartTime = _firstStartTime || chainTime + 20;
   const subscriptionPeriodLength =
     _subscriptionPeriodLength || DEFAULT_SUBSCRIPTION_PERIOD_LENGTH;
@@ -632,7 +619,7 @@ const launchCycleForAssetClass = async (
   _paymentPartition: any,
   _subscriptionsOpened: any
 ) => {
-  const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+  const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
   const firstStartTime = _firstStartTime || chainTime;
   const subscriptionPeriodLength =
     _subscriptionPeriodLength || SECONDS_IN_A_WEEK;
@@ -1388,7 +1375,8 @@ contract(
                   partitions,
                   { from: tokenController1 }
                 );
-                const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+                const chainTime = (await ethers.provider.getBlock('latest'))
+                  .timestamp;
                 await setAssetRules(
                   this.fic,
                   tokenController1,
@@ -1410,7 +1398,8 @@ contract(
           describe('when periods are not valid', function () {
             describe('when subscriptionPeriodLength is nil', function () {
               it('reverts', async function () {
-                const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+                const chainTime = (await ethers.provider.getBlock('latest'))
+                  .timestamp;
                 await expectRevert.unspecified(
                   this.fic.setAssetRules(
                     this.asset.address,
@@ -1431,7 +1420,8 @@ contract(
             });
             describe('when valuationPeriodLength is nil', function () {
               it('reverts', async function () {
-                const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+                const chainTime = (await ethers.provider.getBlock('latest'))
+                  .timestamp;
                 await expectRevert.unspecified(
                   this.fic.setAssetRules(
                     this.asset.address,
@@ -1452,7 +1442,8 @@ contract(
             });
             describe('when paymentPeriodLength is nil', function () {
               it('reverts', async function () {
-                const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+                const chainTime = (await ethers.provider.getBlock('latest'))
+                  .timestamp;
                 await expectRevert.unspecified(
                   this.fic.setAssetRules(
                     this.asset.address,
@@ -1475,7 +1466,8 @@ contract(
         });
         describe('when first start time is not valid', function () {
           it('reverts', async function () {
-            const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+            const chainTime = (await ethers.provider.getBlock('latest'))
+              .timestamp;
 
             await expectRevert.unspecified(
               setAssetRules(
@@ -1499,7 +1491,8 @@ contract(
       });
       describe('when caller is not the token controller', function () {
         it('reverts', async function () {
-          const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+          const chainTime = (await ethers.provider.getBlock('latest'))
+            .timestamp;
           await expectRevert.unspecified(
             setAssetRules(
               this.fic,
@@ -1639,7 +1632,8 @@ contract(
         });
         describe('when the current period is not a subscription period (before first start time)', function () {
           it('reverts', async function () {
-            const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+            const chainTime = (await ethers.provider.getBlock('latest'))
+              .timestamp;
 
             await setAssetRules(
               this.fic,

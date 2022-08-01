@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { artifacts, web3, assert, ethers, contract } from 'hardhat';
+import { artifacts, assert, ethers, contract } from 'hardhat';
 import type {
   Swaps,
   ERC1400,
@@ -180,7 +180,7 @@ const assertEtherBalance = async (
   _balance: number,
   _balanceIsExact: boolean
 ) => {
-  const balance = await web3.eth.getBalance(_etherHolder);
+  const balance = (await ethers.provider.getBalance(_etherHolder)).toNumber();
   if (_balanceIsExact) {
     assert.equal(balance, _balance);
   } else {
@@ -364,8 +364,8 @@ const NumToNumBytes32 = (_num: number, _fillTo = 32) => {
 };
 
 const extractTokenAddress = (tokenData: { tokenAddress: string }) => {
-  return web3.utils.toChecksumAddress(tokenData.tokenAddress);
-  //return web3.utils.toChecksumAddress(`0x${tokenData.substr(26, 40)}`);
+  return ethers.utils.getAddress(tokenData.tokenAddress);
+  //return ethers.utils.getAddress(`0x${tokenData.substr(26, 40)}`);
 };
 const extractTokenAmount = (tokenData: { tokenValue: string }) => {
   return parseInt(tokenData.tokenValue);
@@ -883,7 +883,7 @@ const fullCreateTradeRequest = async (
       ? tokenStandard2
       : OFFCHAIN;
 
-  const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+  const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
   const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
 
   const initialNumberOfTrades = (await dvp.getNbTrades()).toNumber();
@@ -992,18 +992,7 @@ const fullCreateTradeRequest = async (
 
 const createTradeRequestWithoutCallingDVP = async (
   dvp: Swaps,
-  token1: {
-    operatorTransferByPartition: (
-      arg0: string,
-      arg1: any,
-      arg2: any,
-      arg3: any,
-      arg4: string,
-      arg5: string,
-      arg6: { from: any }
-    ) => any;
-    address: any;
-  },
+  token1: ERC1400,
   token2: { address: any },
   tokenStandard2: string,
   tokenId2: string,
@@ -1017,7 +1006,7 @@ const createTradeRequestWithoutCallingDVP = async (
 ) => {
   const recipient = openMarketplace ? ZERO_ADDRESS : holder2;
 
-  const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+  const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
   const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
 
   const initialNumberOfTrades = (await dvp.getNbTrades()).toNumber();
@@ -1396,7 +1385,7 @@ contract(
           { from: owner }
         );
 
-        const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+        const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
         const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
         tradeProposalData = getTradeProposalData(
           recipient1,
@@ -1599,7 +1588,8 @@ contract(
                   token2Amount
                 );
 
-                const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+                const chainTime = (await ethers.provider.getBlock('latest'))
+                  .timestamp;
                 const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
                 const tradeProposalData = getTradeProposalData(
                   recipient1,
@@ -1996,7 +1986,8 @@ contract(
             );
           });
           it('reverts', async function () {
-            const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+            const chainTime = (await ethers.provider.getBlock('latest'))
+              .timestamp;
             const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
             const tradeProposalData = getTradeProposalData(
               recipient1,
@@ -2025,7 +2016,8 @@ contract(
       });
       describe('when hook is not called from ERC1400 contract', function () {
         it('reverts', async function () {
-          const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+          const chainTime = (await ethers.provider.getBlock('latest'))
+            .timestamp;
           const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
           const tradeProposalData = getTradeProposalData(
             recipient1,
@@ -2356,7 +2348,7 @@ contract(
                 });
                 describe('when the holder 1 is the zero address', function () {
                   it('reverts', async function () {
-                    const chainTime = (await web3.eth.getBlock('latest'))
+                    const chainTime = (await ethers.provider.getBlock('latest'))
                       .timestamp;
                     const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
                     /*
@@ -3833,10 +3825,14 @@ contract(
                         const token0Amount = '0x6F05B59D3B20000'; // 5 * 10**18
 
                         const initialEthBalance1 =
-                          parseInt(await web3.eth.getBalance(tokenHolder1)) /
+                          (
+                            await ethers.provider.getBalance(tokenHolder1)
+                          ).toNumber() /
                           10 ** 18;
                         const initialEthBalance2 =
-                          parseInt(await web3.eth.getBalance(recipient1)) /
+                          (
+                            await ethers.provider.getBalance(recipient1)
+                          ).toNumber() /
                           10 ** 18;
 
                         await createTradeRequest(
@@ -3874,12 +3870,16 @@ contract(
                           executer
                         );
 
-                        const finalEthBalance1 =
-                          parseInt(await web3.eth.getBalance(tokenHolder1)) /
-                          10 ** 18;
-                        const finalEthBalance2 =
-                          parseInt(await web3.eth.getBalance(recipient1)) /
-                          10 ** 18;
+                        const finalEthBalance1 = parseInt(
+                          ethers.utils.formatEther(
+                            await ethers.provider.getBalance(tokenHolder1)
+                          )
+                        );
+                        const finalEthBalance2 = parseInt(
+                          ethers.utils.formatEther(
+                            await ethers.provider.getBalance(recipient1)
+                          )
+                        );
 
                         await assertEtherBalance(dvp.address, 0, true);
                         assert.equal(
@@ -4118,7 +4118,8 @@ contract(
                   await dvp.setPriceOracles(token1.address, [oracle], {
                     from: owner
                   });
-                  let chainTime = (await web3.eth.getBlock('latest')).timestamp;
+                  let chainTime = (await ethers.provider.getBlock('latest'))
+                    .timestamp;
                   let variablePriceStartDate =
                     chainTime + SECONDS_IN_A_WEEK + 10;
                   await dvp.setVariablePriceStartDate(
@@ -5836,7 +5837,8 @@ contract(
       describe('when sender is price oracle of the token', function () {
         describe('when start date is further than a week', function () {
           it('sets the variable price start date for a given token', async function () {
-            let chainTime = (await web3.eth.getBlock('latest')).timestamp;
+            let chainTime = (await ethers.provider.getBlock('latest'))
+              .timestamp;
             let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
             assert.equal(await dvp.variablePriceStartDate(token1.address), 0);
 
@@ -5858,7 +5860,8 @@ contract(
         });
         describe('when start date is not further than a week', function () {
           it('reverts', async function () {
-            let chainTime = (await web3.eth.getBlock('latest')).timestamp;
+            let chainTime = (await ethers.provider.getBlock('latest'))
+              .timestamp;
             let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK - 1;
             await expectRevert.unspecified(
               dvp.setVariablePriceStartDate(
@@ -5872,7 +5875,7 @@ contract(
       });
       describe('when sender is not price oracle of the token', function () {
         it('reverts', async function () {
-          let chainTime = (await web3.eth.getBlock('latest')).timestamp;
+          let chainTime = (await ethers.provider.getBlock('latest')).timestamp;
           let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
           await expectRevert.unspecified(
             dvp.setVariablePriceStartDate(
@@ -5938,7 +5941,7 @@ contract(
         });
 
         // Create and accept a first trade
-        let chainTime = (await web3.eth.getBlock('latest')).timestamp;
+        let chainTime = (await ethers.provider.getBlock('latest')).timestamp;
         let expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
         let tradeProposalData = getTradeProposalData(
           recipient1,
@@ -5982,7 +5985,7 @@ contract(
       });
       describe('when the variable price start date has been set', function () {
         beforeEach(async function () {
-          let chainTime = (await web3.eth.getBlock('latest')).timestamp;
+          let chainTime = (await ethers.provider.getBlock('latest')).timestamp;
           let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
           await dvp.setVariablePriceStartDate(
             token1.address,
@@ -6233,7 +6236,8 @@ contract(
                 });
 
                 // Create and accept a second trade
-                const chainTime = (await web3.eth.getBlock('latest')).timestamp;
+                const chainTime = (await ethers.provider.getBlock('latest'))
+                  .timestamp;
                 const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
                 const tradeProposalData = getTradeProposalData(
                   recipient1,

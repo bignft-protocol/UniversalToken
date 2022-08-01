@@ -1,6 +1,6 @@
 // @ts-nocheck
 
-import { ethers, web3 } from 'hardhat';
+import { ethers } from 'hardhat';
 
 // ---------- Module to accelerate time -----------------------
 export const advanceTime = (time: any) => {
@@ -14,7 +14,7 @@ export const advanceBlock = () => {
 export const advanceTimeAndBlock = async (time: any) => {
   await advanceTime(time);
   await advanceBlock();
-  return Promise.resolve(web3.eth.getBlock('latest'));
+  return Promise.resolve(ethers.provider.getBlock('latest'));
 };
 
 export const takeSnapshot = () => {

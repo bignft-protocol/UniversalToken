@@ -59,7 +59,7 @@ contract(
       it('Failed hold from notary with zero address', async () => {
         try {
           await this.token.hold(
-            web3.utils.randomHex(32),
+            '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex'),
             recipient2,
             ZERO_ADDRESS,
             900,
@@ -79,7 +79,7 @@ contract(
       it('Failed hold from a zero amount', async () => {
         try {
           await this.token.hold(
-            web3.utils.randomHex(32),
+            '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex'),
             recipient2,
             notary,
             0,
@@ -99,7 +99,7 @@ contract(
       it('Recipient can not hold as they have no tokens', async () => {
         try {
           await this.token.hold(
-            web3.utils.randomHex(32),
+            '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex'),
             recipient2,
             notary,
             900,
@@ -119,7 +119,7 @@ contract(
       it('Holder can not hold more than what they own', async () => {
         try {
           await this.token.hold(
-            web3.utils.randomHex(32),
+            '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex'),
             recipient,
             notary,
             1001,
@@ -137,7 +137,8 @@ contract(
         }
       });
       it('Holder holds 900 tokens for the recipient with a lock hash', async () => {
-        holdId = web3.utils.randomHex(32);
+        holdId =
+          '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
         const result = await this.token.hold(
           holdId,
           recipient,
@@ -250,7 +251,7 @@ contract(
       it('Holder can not transfer 200 tokens with only 100 available and 900 on hold', async () => {
         try {
           await this.token.hold(
-            web3.utils.randomHex(32),
+            '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex'),
             recipient,
             notary,
             900,
@@ -480,7 +481,8 @@ contract(
         assert.equal(await this.token.totalSupply(), 200);
       });
       it('Holder holds 30 tokens for the recipient', async () => {
-        holdId = web3.utils.randomHex(32);
+        holdId =
+          '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
         const result = await this.token.hold(
           holdId,
           recipient,
@@ -615,7 +617,8 @@ contract(
         assert.equal(await this.token.totalSupply(), 3);
       });
       it('Holder holds 2 tokens for the recipient', async () => {
-        holdId = web3.utils.randomHex(32);
+        holdId =
+          '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
         const result = await this.token.hold(
           holdId,
           recipient,
@@ -714,7 +717,8 @@ contract(
         assert.equal(await this.token.totalSupply(), 3);
       });
       it('Holder holds 2 tokens for the recipient', async () => {
-        holdId = web3.utils.randomHex(32);
+        holdId =
+          '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
         const result = await this.token.hold(
           holdId,
           recipient,
@@ -810,7 +814,8 @@ contract(
         assert.equal(await this.token.totalSupply(), 3);
       });
       it('Holder holds 2 tokens for the recipient', async () => {
-        holdId = web3.utils.randomHex(32);
+        holdId =
+          '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
         const result = await this.token.hold(
           holdId,
           recipient,
@@ -876,7 +881,8 @@ contract(
         assert.equal(await this.token.totalSupply(), 9876543210);
       });
       it('Holder holds 9000000000 tokens with no recipient', async () => {
-        holdId = web3.utils.randomHex(32);
+        holdId =
+          '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
         const result = await this.token.hold(
           holdId,
           ZERO_ADDRESS,
@@ -1041,7 +1047,8 @@ contract(
         assert.equal(await this.token.totalSupply(), 123);
       });
       it('Holder holds 100 tokens with no hash lock', async () => {
-        holdId = web3.utils.randomHex(32);
+        holdId =
+          '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
         const result = await this.token.hold(
           holdId,
           recipient,
@@ -1105,7 +1112,8 @@ contract(
         assert.equal(await this.token.totalSupply(), 123);
       });
       it('Holder holds 100 tokens with no hash lock', async () => {
-        holdId = web3.utils.randomHex(32);
+        holdId =
+          '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
         const result = await this.token.hold(
           holdId,
           ZERO_ADDRESS,
@@ -1168,7 +1176,8 @@ contract(
         assert.equal(await this.token.totalSupply(), 123);
       });
       it('Holder holds 100 tokens with no hash lock', async () => {
-        holdId = web3.utils.randomHex(32);
+        holdId =
+          '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
         const result = await this.token.hold(
           holdId,
           ZERO_ADDRESS,
@@ -1226,7 +1235,8 @@ contract(
         assert.equal(await this.token.totalSupply(), 123);
       });
       it('Holder holds 100 tokens with no hash lock', async () => {
-        holdId = web3.utils.randomHex(32);
+        holdId =
+          '0x' + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
         const result = await this.token.hold(
           holdId,
           ZERO_ADDRESS,

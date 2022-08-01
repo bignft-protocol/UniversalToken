@@ -9,19 +9,20 @@ const rawTx =
 export default async function () {
   const [owner] = await ethers.getSigners();
 
-  await web3.eth.sendTransaction({
-    from: owner.address,
+  await owner.sendTransaction({
     to: deployerAddress,
-    value: web3.utils.toWei('0.1')
+    value: ethers.utils.parseEther('0.1')
   });
 
-  const res = await web3.eth.sendSignedTransaction(rawTx);
+  const res = await ethers.provider.sendTransaction(rawTx);
 
   const ERC1820Registry = artifacts.require('ERC1820Registry');
 
   // set as deployed for later use
   let registry = (await ERC1820Registry.at(
-    res.contractAddress
+    (
+      await res.wait()
+    ).contractAddress
   )) as ERC1820Registry;
   ERC1820Registry.setAsDeployed(registry);
 

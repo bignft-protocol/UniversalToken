@@ -1,4 +1,4 @@
-import { web3, ethers } from 'hardhat';
+import { ethers } from 'hardhat';
 
 // meta transaction
 const deployerAddress = '0xa990077c3205cbDf861e17Fa532eeB069cE9fF96';
@@ -8,18 +8,17 @@ const rawTx =
 export default async function () {
   const [owner] = await ethers.getSigners();
 
-  const receipt = await web3.eth.sendTransaction({
-    from: owner.address,
+  const receipt = await owner.sendTransaction({
     to: deployerAddress,
-    value: web3.utils.toWei('0.1')
+    value: ethers.utils.parseEther('0.1')
   });
 
-  const res = await web3.eth.sendSignedTransaction(rawTx);
+  const res = await ethers.provider.sendTransaction(rawTx);
 
   console.log(
     '\n   > ERC1820 deployment: Success -->',
-    res.contractAddress,
+    (await res.wait()).contractAddress,
     'txHash',
-    receipt.transactionHash
+    receipt.hash
   );
 }
