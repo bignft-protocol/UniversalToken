@@ -434,7 +434,7 @@ const getTradeAcceptanceData = (
 };
 
 const assertTokenEscrowed = async (
-  dvp: { address: any },
+  dvp: Swaps,
   token: any,
   holder: any,
   tokenStandard: string | number,
@@ -472,7 +472,7 @@ const assertTokenEscrowed = async (
 };
 
 const assertBothTokenEscrowed = async (
-  dvp: { address: any },
+  dvp: Swaps,
   token1: any,
   token2: any,
   holder1: any,
@@ -545,7 +545,7 @@ const assertBothTokenEscrowed = async (
 };
 
 const assertTokenAuthorized = async (
-  dvp: any,
+  dvp: Swaps,
   token1: any,
   token2: any,
   holder1: any,
@@ -594,7 +594,7 @@ const assertTokenAuthorized = async (
 };
 
 const assertTokenTransferred = async (
-  dvp: { address: any },
+  dvp: Swaps,
   token1: any,
   token2: any,
   holder1: any,
@@ -666,7 +666,7 @@ const assertTokenTransferred = async (
 };
 
 const assertGlobalBalancesAreCorrect = async (
-  dvp: { getTrade: (arg0: any) => any },
+  dvp: Swaps,
   token1: { address: any },
   token2: { address: any },
   tradeIndex: any,
@@ -818,7 +818,7 @@ const assertGlobalBalancesAreCorrect = async (
 };
 
 const createTradeRequest = async (
-  dvp: any,
+  dvp: Swaps,
   token1: undefined,
   token2: undefined,
   tokenStandard1: string,
@@ -853,30 +853,7 @@ const createTradeRequest = async (
 };
 
 const fullCreateTradeRequest = async (
-  dvp: {
-    getNbTrades: () => any;
-    requestTrade: (
-      arg0: {
-        holder1: any;
-        holder2: any;
-        executer: any;
-        expirationDate: any;
-        tokenAddress1: any;
-        tokenValue1: any;
-        tokenId1: string;
-        tokenStandard1: any;
-        tokenAddress2: any;
-        tokenValue2: any;
-        tokenId2: string;
-        tokenStandard2: any;
-        tradeType1: any;
-        tradeType2: any;
-        settlementDate: any;
-      },
-      arg1: any,
-      arg2: { from: any; value: any }
-    ) => any;
-  },
+  dvp: Swaps,
   token1: { address: any },
   token2: { address: any },
   tokenStandard1: string,
@@ -1014,7 +991,7 @@ const fullCreateTradeRequest = async (
 };
 
 const createTradeRequestWithoutCallingDVP = async (
-  dvp: { getNbTrades: () => any; address: any },
+  dvp: Swaps,
   token1: {
     operatorTransferByPartition: (
       arg0: string,
@@ -1117,7 +1094,7 @@ const createTradeRequestWithoutCallingDVP = async (
 };
 
 const acceptTradeRequest = async (
-  dvp: any,
+  dvp: Swaps,
   token1: undefined,
   token2: undefined,
   tradeIndex: number,
@@ -1138,15 +1115,7 @@ const acceptTradeRequest = async (
 };
 
 const acceptTradeRequestWithPreimage = async (
-  dvp: {
-    getTrade: (arg0: any) => any;
-    getTradeAcceptanceStatus: (arg0: any) => any;
-    acceptTrade: (
-      arg0: any,
-      arg1: any,
-      arg2: { from: any; value: number }
-    ) => any;
-  },
+  dvp: Swaps,
   token1: any,
   token2: any,
   tradeIndex: any,
@@ -1198,23 +1167,9 @@ const acceptTradeRequestWithPreimage = async (
 };
 
 const acceptTradeRequestWithoutCallingDVP = async (
-  dvp: {
-    getTrade: (arg0: any) => any;
-    getTradeAcceptanceStatus: (arg0: any) => any;
-    address: any;
-  },
-  token1: any,
-  token2: {
-    operatorTransferByPartition: (
-      arg0: string,
-      arg1: any,
-      arg2: any,
-      arg3: number,
-      arg4: string,
-      arg5: string,
-      arg6: { from: any }
-    ) => any;
-  },
+  dvp: Swaps,
+  token1: ERC1400,
+  token2: ERC1400,
   tradeIndex: number,
   requester: any,
   newTradeState: number,
@@ -1274,10 +1229,7 @@ const acceptTradeRequestWithoutCallingDVP = async (
 };
 
 const approveTradeRequest = async (
-  dvp: {
-    getTradeApprovalStatus: (arg0: any) => any;
-    approveTrade: (arg0: any, arg1: boolean, arg2: { from: any }) => any;
-  },
+  dvp: Swaps,
   token1: any,
   token2: any,
   tradeIndex: number,
@@ -1298,7 +1250,7 @@ const approveTradeRequest = async (
 };
 
 const executeTradeRequest = async (
-  dvp: { executeTrade: (arg0: any, arg1: { from: any }) => any },
+  dvp: Swaps,
   token1: undefined,
   token2: undefined,
   tradeIndex: number,
@@ -1313,7 +1265,7 @@ const executeTradeRequest = async (
 };
 
 const forceTradeRequest = async (
-  dvp: { forceTrade: (arg0: any, arg1: { from: any }) => any },
+  dvp: Swaps,
   token1: any,
   token2: any,
   tradeIndex: number,
@@ -1328,7 +1280,7 @@ const forceTradeRequest = async (
 };
 
 const cancelTradeRequest = async (
-  dvp: { cancelTrade: (arg0: any, arg1: { from: any }) => any },
+  dvp: Swaps,
   token1: any,
   token2: any,
   tradeIndex: number,

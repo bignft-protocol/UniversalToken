@@ -1,7 +1,5 @@
-import { ethers, artifacts } from 'hardhat';
+import { ethers } from 'hardhat';
 import { ContractHelper } from '../../typechain-types';
-
-const ERC1400 = artifacts.require('ERC1400');
 
 const partition1 =
   '0x7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex

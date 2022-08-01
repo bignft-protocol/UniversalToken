@@ -13,6 +13,9 @@ import { TASK_TYPECHAIN_GENERATE_TYPES } from '@typechain/hardhat/dist/constants
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const accounts = PRIVATE_KEY ? [PRIVATE_KEY] : [];
+if (process.env.PRIVATE_KEYS_EXTRAS) {
+  accounts.push(...process.env.PRIVATE_KEYS_EXTRAS.split(/\s*,\s*/));
+}
 
 const config: HardhatUserConfig = {
   defaultNetwork: 'hardhat',
