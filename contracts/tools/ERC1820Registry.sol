@@ -64,7 +64,7 @@ contract ERC1820Registry {
     /// @param _addr Address being queried for the implementer of an interface.
     /// (If '_addr' is the zero address then 'msg.sender' is assumed.)
     /// @param _interfaceHash Keccak256 hash of the name of the interface as a string.
-    /// E.g., 'web3.utils.keccak256("ERC777TokensRecipient")' for the 'ERC777TokensRecipient' interface.
+    /// E.g., 'ethers.utils.id("ERC777TokensRecipient")' for the 'ERC777TokensRecipient' interface.
     /// @return The address of the contract which implements the interface '_interfaceHash' for '_addr'
     /// or '0' if '_addr' did not register an implementer for this interface.
     function getInterfaceImplementer(address _addr, bytes32 _interfaceHash)
@@ -89,7 +89,7 @@ contract ERC1820Registry {
     /// @param _addr Address for which to set the interface.
     /// (If '_addr' is the zero address then 'msg.sender' is assumed.)
     /// @param _interfaceHash Keccak256 hash of the name of the interface as a string.
-    /// E.g., 'web3.utils.keccak256("ERC777TokensRecipient")' for the 'ERC777TokensRecipient' interface.
+    /// E.g., 'ethers.utils.id("ERC777TokensRecipient")' for the 'ERC777TokensRecipient' interface.
     /// @param _implementer Contract address implementing '_interfaceHash' for '_addr'.
     function setInterfaceImplementer(
         address _addr,

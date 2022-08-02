@@ -15,6 +15,24 @@ type Args = {
   amount?: number;
 };
 
+const numberToHexa = (num: number, pushTo: number) => {
+  const arr1 = [];
+  const str = num.toString(16);
+  if (str.length % 2 === 1) {
+    arr1.push('0');
+    pushTo -= 1;
+  }
+  for (let m = str.length / 2; m < pushTo; m++) {
+    arr1.push('0');
+    arr1.push('0');
+  }
+  for (let n = 0, l = str.length; n < l; n++) {
+    const hex = str.charAt(n);
+    arr1.push(hex);
+  }
+  return arr1.join('');
+};
+
 // const fullCreateTradeRequest = async (
 //     dvp: Swaps,
 //     token1: { address: any },
@@ -195,8 +213,9 @@ export default async function (args: Args) {
 
   const _txSender = '0xe39d4ffC89A780e5214ed6D2d8528Cb058c60472';
   const _token = '0x427189A2a402C5a11D0960EF169622Af6538Eb38';
-  const rawTxPayload =
-    '0x67c84919526573657276656400000000000000000000000000000000000000000000000000000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a6500000000000000000000000000000000000000000000000000000000000003e80000000000000000000000000000000000000000000000000000000000000080';
+  const rawTxPayload = ethers.utils.id(
+    '0x67c84919526573657276656400000000000000000000000000000000000000000000000000000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a6500000000000000000000000000000000000000000000000000000000000003e80000000000000000000000000000000000000000000000000000000000000080'
+  );
   const expirationTimeAsNumber = 123456;
   const nonce = 1;
 }

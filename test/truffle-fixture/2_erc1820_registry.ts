@@ -1,4 +1,4 @@
-import { web3, ethers, artifacts } from 'hardhat';
+import { ethers, artifacts } from 'hardhat';
 import type { ERC1820Registry } from 'typechain-types';
 
 // meta transaction

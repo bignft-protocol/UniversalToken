@@ -1,6 +1,6 @@
 // @ts-nocheck
 
-import { artifacts, assert, contract, web3 } from 'hardhat';
+import { artifacts, assert, contract } from 'hardhat';
 
 import {
   nowSeconds,

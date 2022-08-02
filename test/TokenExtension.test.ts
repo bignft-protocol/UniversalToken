@@ -22,7 +22,6 @@ import {
   addTokenController
 } from './common/extension';
 import { expectRevert } from '@openzeppelin/test-helpers';
-import Account from 'eth-lib/lib/account';
 
 const ERC1400HoldableCertificate = artifacts.require(
   'ERC1400HoldableCertificateToken'
@@ -131,7 +130,7 @@ const SECONDS_IN_AN_HOUR = 3600;
 const SECONDS_IN_A_DAY = 24 * SECONDS_IN_AN_HOUR;
 
 const numberToHexa = (num: number, pushTo: number) => {
-  const arr1 = [];
+  const arr1 = ['0x'];
   const str = num.toString(16);
   if (str.length % 2 === 1) {
     arr1.push('0');
@@ -285,19 +284,19 @@ const craftNonceBasedCertificate = async (
     [_domain, packedAndHashedParameters]
   );
 
-  const signature = Account.sign(
-    packedAndHashedData,
+  const signingKey = new ethers.utils.SigningKey(
     CERTIFICATE_SIGNER_PRIVATE_KEY
   );
-  const vrs = Account.decodeSignature(signature);
-  const v = vrs[0].substring(2).replace('1b', '00').replace('1c', '01');
-  const r = vrs[1].substring(2);
-  const s = vrs[2].substring(2);
 
-  const certificate = `0x${numberToHexa(
-    expirationTimeAsNumber,
-    32
-  )}${r}${s}${v}`;
+  const signature = signingKey.signDigest(packedAndHashedData);
+  const certificate = ethers.utils.hexlify(
+    ethers.utils.concat([
+      numberToHexa(expirationTimeAsNumber, 32),
+      signature.r,
+      signature.s,
+      ethers.utils.hexlify(signature.recoveryParam)
+    ])
+  );
 
   return certificate;
 };
@@ -358,19 +357,18 @@ const craftSaltBasedCertificate = async (
     [_domain, packedAndHashedParameters]
   );
 
-  const signature = Account.sign(
-    packedAndHashedData,
+  const signature = new ethers.utils.SigningKey(
     CERTIFICATE_SIGNER_PRIVATE_KEY
+  ).signDigest(packedAndHashedData);
+  const certificate = ethers.utils.hexlify(
+    ethers.utils.concat([
+      salt,
+      numberToHexa(expirationTimeAsNumber, 32),
+      signature.r,
+      signature.s,
+      ethers.utils.hexlify(signature.recoveryParam)
+    ])
   );
-  const vrs = Account.decodeSignature(signature);
-  const v = vrs[0].substring(2).replace('1b', '00').replace('1c', '01');
-  const r = vrs[1].substring(2);
-  const s = vrs[2].substring(2);
-
-  const certificate = `0x${salt.substring(2)}${numberToHexa(
-    expirationTimeAsNumber,
-    32
-  )}${r}${s}${v}`;
 
   return certificate;
 };

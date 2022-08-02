@@ -11,7 +11,7 @@
  ***************************************************************************************************************
  */
 
-import { artifacts, assert, ethers, web3 } from 'hardhat';
+import { artifacts, assert, ethers } from 'hardhat';
 
 import { advanceTimeAndBlock } from './utils/time';
 
