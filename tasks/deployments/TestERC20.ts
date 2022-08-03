@@ -1,5 +1,5 @@
 import { ethers } from 'hardhat';
-import { ContractHelper } from '../../typechain-types';
+import { ERC20HoldableToken__factory } from '../../typechain-types';
 
 type Args = {
   name?: string;
@@ -9,8 +9,8 @@ type Args = {
 
 export default async function (args: Args) {
   const [owner] = await ethers.getSigners();
-  ContractHelper.setSigner(owner);
-  const erc20 = await ContractHelper.ERC20HoldableToken.deploy(
+
+  const erc20 = await new ERC20HoldableToken__factory(owner).deploy(
     args.name ?? 'Test Holdable ERC20',
     args.symbol ?? 'TEST',
     args.decimal ?? 18

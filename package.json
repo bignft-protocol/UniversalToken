@@ -22,7 +22,8 @@
     "lint:all": "yarn run lint && yarn run lint:sol",
     "lint:all:fix": "yarn run lint:fix && yarn run lint:sol:fix",
     "remix": "python -mwebbrowser http://localhost:8080 && remix-ide",
-    "start:chain": "hardhat node"
+    "start:chain": "hardhat node",
+    "postinstall": "patch-package"
   },
   "repository": {
     "type": "git",
@@ -53,14 +54,15 @@
     "@nomiclabs/hardhat-web3": "^2.0.0",
     "@openzeppelin/contracts": "^4.7.2",
     "@openzeppelin/test-helpers": "^0.5.6",
-    "@typechain/ethers-v5": "^8.0.5",
+    "@typechain/ethers-v5": "^10.1.0",
     "@typechain/hardhat": "^6.1.2",
     "dotenv": "^8.2.0",
     "hardhat": "^2.10.1",
     "hardhat-contract-sizer": "^2.6.1",
+    "patch-package": "^6.4.7",
     "solidity-coverage": "^0.7.21",
     "ts-node": "^10.9.1",
-    "typechain": "^6.0.5"
+    "typechain": "^8.1.0"
   },
   "dependencies": {
     "@types/mocha": "^9.1.1",

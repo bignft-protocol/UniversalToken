@@ -1,23 +1,22 @@
-import { artifacts, ethers } from 'hardhat';
-import type { ERC1820Registry, BatchTokenIssuer } from 'typechain-types';
-
-const BatchTokenIssuer = artifacts.require('BatchTokenIssuer');
-
-const ERC1820Registry = artifacts.require('ERC1820Registry');
+import { ethers } from 'hardhat';
+import {
+  BatchTokenIssuer__factory,
+  ERC1820Registry__factory
+} from '../../typechain-types';
 
 const BATCH_ISSUER = 'BatchTokenIssuer';
 
 export default async function () {
   const [owner] = await ethers.getSigners();
 
-  const batchTokenIssuer: BatchTokenIssuer = await BatchTokenIssuer.new();
-  BatchTokenIssuer.setAsDeployed(batchTokenIssuer);
+  const batchTokenIssuer = await new BatchTokenIssuer__factory(owner).deploy();
+  BatchTokenIssuer__factory.setAsDeployed(batchTokenIssuer);
   console.log(
     '\n   > Batch issuer deployment: Success -->',
     batchTokenIssuer.address
   );
 
-  const registry: ERC1820Registry = await ERC1820Registry.deployed();
+  const registry = ERC1820Registry__factory.deployed;
 
   await registry.setInterfaceImplementer(
     owner.address,

@@ -1,6 +1,10 @@
 import { ethers } from 'hardhat';
-import { TradeRequestInputStruct } from 'typechain-types/Swaps';
-import { ContractHelper } from '../../typechain-types';
+
+import {
+  ERC20Token__factory,
+  Swaps,
+  Swaps__factory
+} from '../../typechain-types';
 
 const TYPE_SWAP = 0;
 const ZERO_BYTES32 =
@@ -25,18 +29,17 @@ export default async function (args: Args) {
   const [owner, tokenHolder1, executer] = await ethers.getSigners();
   const recipient1 = '0xe39d4ffC89A780e5214ed6D2d8528Cb058c60472';
   const token1Amount = args.amount;
-  ContractHelper.setSigner(owner);
 
-  const dvp = ContractHelper.Swaps.attach(args.address);
+  const dvp = Swaps__factory.connect(args.address, owner);
 
   console.log('Swaps address:', dvp.address);
 
   let security20, emoney20;
 
   if (args.security20) {
-    security20 = ContractHelper.ERC20Token.attach(args.security20);
+    security20 = ERC20Token__factory.connect(args.security20, owner);
   } else {
-    security20 = await ContractHelper.ERC20Token.deploy(
+    security20 = await new ERC20Token__factory(owner).deploy(
       'ERC20Token',
       'DAU',
       18
@@ -46,9 +49,13 @@ export default async function (args: Args) {
   }
 
   if (args.emoney20) {
-    emoney20 = ContractHelper.ERC20Token.attach(args.emoney20);
+    emoney20 = ERC20Token__factory.connect(args.emoney20, owner);
   } else {
-    emoney20 = await ContractHelper.ERC20Token.deploy('ERC20Token', 'DAU', 18);
+    emoney20 = await new ERC20Token__factory(owner).deploy(
+      'ERC20Token',
+      'DAU',
+      18
+    );
     await emoney20.mint(recipient1, issuanceAmount);
   }
 
@@ -63,7 +70,7 @@ export default async function (args: Args) {
   const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
   const SECONDS_IN_A_WEEK = 86400 * 7;
   const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
-  const tradeInputData: TradeRequestInputStruct = {
+  const tradeInputData: Swaps.TradeRequestInputStruct = {
     holder1: tokenHolder1.address,
     holder2: recipient1,
     executer: executer.address,

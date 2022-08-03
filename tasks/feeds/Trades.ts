@@ -1,5 +1,5 @@
 import { ethers } from 'hardhat';
-import { ContractHelper } from '../../typechain-types';
+import { Swaps__factory } from '../../typechain-types';
 
 type Args = {
   address: string;
@@ -7,9 +7,9 @@ type Args = {
 
 export default async function (args: Args) {
   const [owner] = await ethers.getSigners();
-  ContractHelper.setSigner(owner);
 
-  const dvp = ContractHelper.Swaps.attach(args.address);
+  const dvp = Swaps__factory.connect(args.address, owner);
   const tradeIndex = (await dvp.getNbTrades()).toNumber();
-  console.log('tradeNumber', tradeIndex);
+  const trade = await dvp.getTrade(tradeIndex);
+  console.log('trade', trade);
 }

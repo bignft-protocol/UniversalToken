@@ -8,6 +8,7 @@ import type {
   ERC721Token
 } from 'typechain-types';
 import { advanceTimeAndBlock } from './utils/time';
+import { addressToBytes32, NumToNumBytes32 } from './utils/bytes';
 
 import { expectRevert } from '@openzeppelin/test-helpers';
 
@@ -102,91 +103,6 @@ const token4Amount = 10;
 const issuanceTokenId = 123456789;
 
 const SECONDS_IN_A_WEEK = 86400 * 7;
-
-const assertBalanceOf = async (
-  _contract: { balanceOf: (arg0: any) => any },
-  _tokenHolder: any,
-  _amount: number,
-  _balanceIsExact: boolean
-) => {
-  const balance = (await _contract.balanceOf(_tokenHolder)).toNumber();
-
-  if (_balanceIsExact) {
-    assert.equal(balance, _amount);
-  } else {
-    assert.equal(balance >= _amount, true);
-  }
-};
-
-const assertBalanceOfByPartition = async (
-  _contract: { balanceOfByPartition: (arg0: any, arg1: any) => any },
-  _tokenHolder: any,
-  _partition: string,
-  _amount: number
-) => {
-  const balanceByPartition = (
-    await _contract.balanceOfByPartition(_partition, _tokenHolder)
-  ).toNumber();
-  assert.equal(balanceByPartition, _amount);
-};
-
-const assertTokenOf = async (
-  _contract: { ownerOf: (arg0: any) => any },
-  _tokenHolder: any,
-  _tokenId: number
-) => {
-  const ownerOf = await _contract.ownerOf(_tokenId);
-
-  assert.equal(ownerOf, _tokenHolder);
-};
-
-const assertERC20Allowance = async (
-  _contract: { allowance: (arg0: any, arg1: any) => any },
-  _tokenHolder: any,
-  _spender: any,
-  _amount: any
-) => {
-  const allowance = (
-    await _contract.allowance(_tokenHolder, _spender)
-  ).toNumber();
-  assert.equal(allowance, _amount);
-};
-
-const assertERC1400Allowance = async (
-  _contract: {
-    allowanceByPartition: (arg0: string, arg1: any, arg2: any) => any;
-  },
-  _tokenHolder: any,
-  _spender: any,
-  _amount: any
-) => {
-  const allowance = (
-    await _contract.allowanceByPartition(partition1, _tokenHolder, _spender)
-  ).toNumber();
-  assert.equal(allowance, _amount);
-};
-
-const assertERC721Allowance = async (
-  _contract: { getApproved: (arg0: any) => any },
-  _tokenHolder: any,
-  _tokenId: number
-) => {
-  const approvedOf = await _contract.getApproved(_tokenId);
-  assert.equal(approvedOf, _tokenHolder);
-};
-
-const assertEtherBalance = async (
-  _etherHolder: string,
-  _balance: number,
-  _balanceIsExact: boolean
-) => {
-  const balance = (await ethers.provider.getBalance(_etherHolder)).toNumber();
-  if (_balanceIsExact) {
-    assert.equal(balance, _balance);
-  } else {
-    assert.equal(balance - _balance < 0.1);
-  }
-};
 
 const assertTrade = (
   _contract: any,
@@ -327,18 +243,6 @@ const assertTradeAccepted = async (
   }
 };
 
-const addressToBytes32 = (_addr: string, _fillTo = 32) => {
-  const _addr2 = _addr.substring(2);
-  const arr1 = [];
-  for (let n = 0, l = _addr2.length; n < l; n++) {
-    arr1.push(_addr2[n]);
-  }
-  for (let m = _addr2.length; m < 2 * _fillTo; m++) {
-    arr1.unshift(0);
-  }
-  return arr1.join('');
-};
-
 const NumToHexBytes32 = (_num: number, _fillTo = 32) => {
   const arr1 = [];
   const _str = _num.toString(16);
@@ -349,18 +253,6 @@ const NumToHexBytes32 = (_num: number, _fillTo = 32) => {
     arr1.unshift(0);
   }
   return arr1.join('');
-};
-
-const NumToNumBytes32 = (_num: number, _fillTo = 32) => {
-  const arr1 = [];
-  const _str = _num.toString(16);
-  for (let n = 0, l = _str.length; n < l; n++) {
-    arr1.push(_str[n]);
-  }
-  for (let m = _str.length; m < 2 * _fillTo; m++) {
-    arr1.unshift(0);
-  }
-  return `0x${arr1.join('')}`;
 };
 
 const extractTokenAddress = (tokenData: { tokenAddress: string }) => {

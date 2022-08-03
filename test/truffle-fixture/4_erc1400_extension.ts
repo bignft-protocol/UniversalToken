@@ -1,10 +1,9 @@
-import { artifacts, ethers } from 'hardhat';
-import type { ERC1400TokensValidator } from 'typechain-types';
-
-const Extension = artifacts.require('ERC1400TokensValidator');
+import { ethers } from 'hardhat';
+import { ERC1400TokensValidator__factory } from '../../typechain-types';
 
 export default async function () {
-  const extension: ERC1400TokensValidator = await Extension.new();
-  Extension.setAsDeployed(extension);
+  const [owner] = await ethers.getSigners();
+  const extension = await new ERC1400TokensValidator__factory(owner).deploy();
+  ERC1400TokensValidator__factory.setAsDeployed(extension);
   console.log('\n   > Extension deployment: Success -->', extension.address);
 }

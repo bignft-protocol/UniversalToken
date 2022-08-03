@@ -1,5 +1,5 @@
-import { ethers, artifacts } from 'hardhat';
-import type { ERC1820Registry } from 'typechain-types';
+import { ethers } from 'hardhat';
+import { ERC1820Registry__factory } from '../../typechain-types';
 
 // meta transaction
 const deployerAddress = '0xa990077c3205cbDf861e17Fa532eeB069cE9fF96';
@@ -16,15 +16,14 @@ export default async function () {
 
   const res = await ethers.provider.sendTransaction(rawTx);
 
-  const ERC1820Registry = artifacts.require('ERC1820Registry');
-
-  // set as deployed for later use
-  let registry = (await ERC1820Registry.at(
+  const registry = await ethers.getContractAt(
+    'ERC1820Registry',
     (
       await res.wait()
     ).contractAddress
-  )) as ERC1820Registry;
-  ERC1820Registry.setAsDeployed(registry);
+  );
+
+  ERC1820Registry__factory.setAsDeployed(registry);
 
   console.log('\n   > ERC1820 deployment: Success -->', registry.address);
 }

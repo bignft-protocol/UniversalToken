@@ -1,20 +1,19 @@
-import { artifacts, ethers } from 'hardhat';
-import type { ERC1820Registry, Swaps } from 'typechain-types';
-
-const DVPContract = artifacts.require('Swaps');
-
-const ERC1820Registry = artifacts.require('ERC1820Registry');
+import { ethers } from 'hardhat';
+import {
+  ERC1820Registry__factory,
+  Swaps__factory
+} from '../../typechain-types';
 
 const DELIVERY_VS_PAYMENT = 'DeliveryVsPayment';
 
 export default async function () {
   const [owner] = await ethers.getSigners();
 
-  const dvpContract: Swaps = await DVPContract.new(false);
-  DVPContract.setAsDeployed(dvpContract);
+  const dvpContract = await new Swaps__factory(owner).deploy(false);
+  Swaps__factory.setAsDeployed(dvpContract);
   console.log('\n   > DVP deployment: Success -->', dvpContract.address);
 
-  const registry: ERC1820Registry = await ERC1820Registry.deployed();
+  const registry = ERC1820Registry__factory.deployed;
 
   await registry.setInterfaceImplementer(
     owner.address,

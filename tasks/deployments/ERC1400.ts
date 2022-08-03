@@ -1,5 +1,5 @@
 import { ethers } from 'hardhat';
-import { ContractHelper } from '../../typechain-types';
+import { ERC1400__factory } from '../../typechain-types';
 import fs from 'fs';
 import path from 'path';
 
@@ -20,7 +20,6 @@ type Args = {
 
 export default async function (args: Args) {
   const [owner] = await ethers.getSigners();
-  ContractHelper.setSigner(owner);
 
   fs.writeFileSync(
     path.join(__dirname, '..', '..', 'contract-arguments.js'),
@@ -34,7 +33,7 @@ export default async function (args: Args) {
   `
   );
 
-  const erc1400 = await ContractHelper.ERC1400.deploy(
+  const erc1400 = await new ERC1400__factory(owner).deploy(
     args.name,
     args.symbol,
     1,

@@ -1,5 +1,5 @@
 import { ethers } from 'hardhat';
-import { ContractHelper } from '../../typechain-types';
+import { ERC1400__factory } from '../../typechain-types';
 
 const partition1 =
   '0x7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
@@ -21,10 +21,8 @@ type Args = {
 
 export default async function (args: Args) {
   const [owner] = await ethers.getSigners();
-  //@ts-ignore
-  ContractHelper.setSigner(owner);
 
-  const erc1400 = ContractHelper.ERC1400.attach(args.address);
+  const erc1400 = ERC1400__factory.connect(args.address, owner);
 
   console.log('ERC1400 deployed at: ' + erc1400.address);
 

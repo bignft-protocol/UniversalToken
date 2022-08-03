@@ -1,13 +1,9 @@
-import { artifacts, ethers } from 'hardhat';
-import type {
-  ERC1820Registry,
-  BatchReader,
-  BatchBalanceReader
-} from 'typechain-types';
-
-const BatchBalanceReader = artifacts.require('BatchBalanceReader'); // deprecated
-const BatchReader = artifacts.require('BatchReader');
-const ERC1820Registry = artifacts.require('ERC1820Registry');
+import { ethers } from 'hardhat';
+import {
+  BatchReader__factory,
+  ERC1820Registry__factory,
+  BatchBalanceReader__factory
+} from '../../typechain-types';
 
 const BALANCE_READER = 'BatchBalanceReader';
 const READER = 'BatchReader';
@@ -15,14 +11,14 @@ const READER = 'BatchReader';
 export default async function () {
   const [owner] = await ethers.getSigners();
 
-  const batchReader: BatchReader = await BatchReader.new();
-  BatchReader.setAsDeployed(batchReader);
+  const batchReader = await new BatchReader__factory(owner).deploy();
+  BatchReader__factory.setAsDeployed(batchReader);
   console.log(
     '\n   > Batch Reader deployment: Success -->',
     batchReader.address
   );
 
-  const registry: ERC1820Registry = await ERC1820Registry.deployed();
+  const registry = ERC1820Registry__factory.deployed;
 
   await registry.setInterfaceImplementer(
     owner.address,
@@ -44,8 +40,10 @@ export default async function () {
   }
 
   // Deprecated
-  const batchBalanceReader: BatchBalanceReader = await BatchBalanceReader.new();
-  BatchBalanceReader.setAsDeployed(batchBalanceReader);
+  const batchBalanceReader = await new BatchBalanceReader__factory(
+    owner
+  ).deploy();
+  BatchBalanceReader__factory.setAsDeployed(batchBalanceReader);
   console.log(
     '\n   > Batch Balance Reader deployment: Success -->',
     batchBalanceReader.address

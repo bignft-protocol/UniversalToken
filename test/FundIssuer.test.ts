@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  ***************************************************************************************************************
  **************************************** CAUTION: work in progress ********************************************
@@ -11,71 +10,52 @@
  ***************************************************************************************************************
  */
 
-import { artifacts, assert, ethers } from 'hardhat';
+import { assert, contract, ethers } from 'hardhat';
 
 import { advanceTimeAndBlock } from './utils/time';
-
+// @ts-ignore
 import { expectRevert } from '@openzeppelin/test-helpers';
-
-const FundIssuerContract = artifacts.require('FundIssuer');
-const ERC1400 = artifacts.require('ERC1400');
-const ERC1820Registry = artifacts.require('ERC1820Registry');
+import {
+  FundIssuer,
+  ERC1400,
+  ERC1820Registry,
+  ERC1820Registry__factory,
+  ERC1400__factory,
+  FundIssuer__factory
+} from '../typechain-types';
+import { BytesLike, Signer } from 'ethers';
+import {
+  assertAssetRules,
+  assertCycle,
+  assertCycleAssetValue,
+  assertCycleState,
+  assertOrder,
+  ZERO_ADDRESS,
+  ZERO_BYTE,
+  ZERO_BYTES32
+} from './utils/assert';
+import { addressToBytes32, NumTostringBytes32 } from './utils/bytes';
 
 const ERC1400_TOKENS_RECIPIENT_INTERFACE = 'ERC1400TokensRecipient';
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-const ZERO_BYTE = '0x';
-const ZERO_BYTES32 =
-  '0x0000000000000000000000000000000000000000000000000000000000000000';
+const CYCLE_UNDEFINED = 0;
+const CYCLE_SUBSCRIPTION = 1;
+const CYCLE_VALUATION = 2;
+const CYCLE_PAYMENT = 3;
+const CYCLE_SETTLEMENT = 4;
+const CYCLE_FINALIZED = 5;
 
-const TRUE_BYTES32 =
-  '0x0000000000000000000000000000000000000000000000000000000000000001';
-const FALSE_BYTES32 =
-  '0x0000000000000000000000000000000000000000000000000000000000000000';
+const ORDER_UNDEFINED = 0;
+const ORDER_SUBSCRIBED = 1;
+const ORDER_PAID = 2;
+const ORDER_PAIDSETTLED = 3;
+const ORDER_UNPAIDSETTLED = 4;
+const ORDER_CANCELLED = 5;
+const ORDER_REJECTED = 6;
 
-const OFFCHAIN =
-  '0x0000000000000000000000000000000000000000000000000000000000000000';
-const ETHSTANDARD =
-  '0x0000000000000000000000000000000000000000000000000000000000000001';
-const ERC20STANDARD =
-  '0x0000000000000000000000000000000000000000000000000000000000000002';
-const ERC1400STANDARD =
-  '0x0000000000000000000000000000000000000000000000000000000000000003';
-
-const CYCLE_UNDEFINED =
-  '0x0000000000000000000000000000000000000000000000000000000000000000';
-const CYCLE_SUBSCRIPTION =
-  '0x0000000000000000000000000000000000000000000000000000000000000001';
-const CYCLE_VALUATION =
-  '0x0000000000000000000000000000000000000000000000000000000000000002';
-const CYCLE_PAYMENT =
-  '0x0000000000000000000000000000000000000000000000000000000000000003';
-const CYCLE_SETTLEMENT =
-  '0x0000000000000000000000000000000000000000000000000000000000000004';
-const CYCLE_FINALIZED =
-  '0x0000000000000000000000000000000000000000000000000000000000000005';
-
-const ORDER_UNDEFINED =
-  '0x0000000000000000000000000000000000000000000000000000000000000000';
-const ORDER_SUBSCRIBED =
-  '0x0000000000000000000000000000000000000000000000000000000000000001';
-const ORDER_PAID =
-  '0x0000000000000000000000000000000000000000000000000000000000000002';
-const ORDER_PAIDSETTLED =
-  '0x0000000000000000000000000000000000000000000000000000000000000003';
-const ORDER_UNPAIDSETTLED =
-  '0x0000000000000000000000000000000000000000000000000000000000000004';
-const ORDER_CANCELLED =
-  '0x0000000000000000000000000000000000000000000000000000000000000005';
-const ORDER_REJECTED =
-  '0x0000000000000000000000000000000000000000000000000000000000000006';
-
-const TYPE_UNDEFINED =
-  '0x0000000000000000000000000000000000000000000000000000000000000000';
-const TYPE_VALUE =
-  '0x0000000000000000000000000000000000000000000000000000000000000001';
-const TYPE_AMOUNT =
-  '0x0000000000000000000000000000000000000000000000000000000000000002';
+const TYPE_UNDEFINED = 0;
+const TYPE_VALUE = 1;
+const TYPE_AMOUNT = 2;
 
 const NEW_CYCLE_CREATED_TRUE = true;
 const NEW_CYCLE_CREATED_FALSE = false;
@@ -161,293 +141,38 @@ const DEFAULT_SUBSCRIPTION_PERIOD_LENGTH = SECONDS_IN_A_WEEK;
 const DEFAULT_VALUATION_PERIOD_LENGTH = SECONDS_IN_A_WEEK;
 const DEFAULT_PAYMENT_PERIOD_LENGTH = SECONDS_IN_A_WEEK;
 
-const assertBalanceOf = async (
-  _contract: { balanceOf: (arg0: any) => any },
-  _tokenHolder: any,
-  _amount: number,
-  _balanceIsExact: any
-) => {
-  const balance = (await _contract.balanceOf(_tokenHolder)).toNumber();
-
-  if (_balanceIsExact) {
-    assert.equal(balance, _amount);
-  } else {
-    assert.equal(balance >= _amount, true);
-  }
-};
-
-const assertBalanceOfByPartition = async (
-  _contract: { balanceOfByPartition: (arg0: any, arg1: any) => any },
-  _tokenHolder: any,
-  _partition: any,
-  _amount: any
-) => {
-  const balanceByPartition = (
-    await _contract.balanceOfByPartition(_partition, _tokenHolder)
-  ).toNumber();
-  assert.equal(balanceByPartition, _amount);
-};
-
-const assertTokenOf = async (
-  _contract: { ownerOf: (arg0: any) => any },
-  _tokenHolder: any,
-  _tokenId: any
-) => {
-  const ownerOf = await _contract.ownerOf(_tokenId);
-
-  assert.equal(ownerOf, _tokenHolder);
-};
-
-const assertERC20Allowance = async (
-  _contract: { allowance: (arg0: any, arg1: any) => any },
-  _tokenHolder: any,
-  _spender: any,
-  _amount: any
-) => {
-  const allowance = (
-    await _contract.allowance(_tokenHolder, _spender)
-  ).toNumber();
-  assert.equal(allowance, _amount);
-};
-
-const assertERC1400Allowance = async (
-  _contract: {
-    allowanceByPartition: (arg0: string, arg1: any, arg2: any) => any;
-  },
-  _tokenHolder: any,
-  _spender: any,
-  _amount: any
-) => {
-  const allowance = (
-    await _contract.allowanceByPartition(partition1, _tokenHolder, _spender)
-  ).toNumber();
-  assert.equal(allowance, _amount);
-};
-
-const assertERC721Allowance = async (
-  _contract: { getApproved: (arg0: any) => any },
-  _tokenHolder: any,
-  _tokenId: any
-) => {
-  const approvedOf = await _contract.getApproved(_tokenId);
-  assert.equal(approvedOf, _tokenHolder);
-};
-
-const assertAssetRules = async (
-  _contract: {
-    getAssetRules: (arg0: any, arg1: any) => any;
-    getAssetValueRules: (arg0: any, arg1: any) => any;
-  },
-  _assetAddress: any,
-  _assetClass: any,
-  _firstStartTime: any,
-  _subscriptionPeriodLength: any,
-  _valuationPeriodLength: any,
-  _paymentPeriodLength: any,
-  _assetValueType: number,
-  _assetValue: number,
-  _reverseAssetValue: number,
-  _paymentType: any,
-  _paymentAddress: any,
-  _paymentPartition: any,
-  _fundAddress: any,
-  _subscriptionsOpened: any
-) => {
-  const rules = await _contract.getAssetRules(_assetAddress, _assetClass);
-
-  assert.equal(rules[0], _firstStartTime);
-  assert.equal(rules[1], _subscriptionPeriodLength);
-  assert.equal(rules[2], _valuationPeriodLength);
-  assert.equal(rules[3], _paymentPeriodLength);
-  assert.equal(rules[4].toNumber(), _paymentType);
-  assert.equal(rules[5], _paymentAddress);
-  assert.equal(rules[6], _paymentPartition);
-  assert.equal(rules[7], _fundAddress);
-  if (_subscriptionsOpened) {
-    assert.equal(rules[8], TRUE_BYTES32);
-  } else {
-    assert.equal(rules[8], FALSE_BYTES32);
-  }
-
-  const assetValueRules = await _contract.getAssetValueRules(
-    _assetAddress,
-    _assetClass
-  );
-  assert.equal(assetValueRules[0].toNumber(), _assetValueType);
-  assert.equal(assetValueRules[1], _assetValue);
-  assert.equal(assetValueRules[2], _reverseAssetValue);
-};
-
-const assertCycle = async (
-  _contract: { getCycle: (arg0: any) => any },
-  _cycleIndex: any,
-  _assetAddress: any,
-  _assetClass: any,
-  _startTime: any,
-  _subscriptionPeriodLength: any,
-  _valuationPeriodLength: any,
-  _paymentPeriodLength: any,
-  _paymentType: any,
-  _paymentAddress: any,
-  _paymentPartition: any,
-  _finalized: boolean
-) => {
-  const cycle = await _contract.getCycle(_cycleIndex);
-
-  assert.equal(cycle[0], _assetAddress);
-  assert.equal(cycle[1], _assetClass);
-  assert.equal(cycle[2], _startTime);
-  assert.equal(cycle[3], _subscriptionPeriodLength);
-  assert.equal(cycle[4], _valuationPeriodLength);
-  assert.equal(cycle[5], _paymentPeriodLength);
-  assert.equal(cycle[6].toNumber(), _paymentType);
-  assert.equal(cycle[7], _paymentAddress);
-  assert.equal(cycle[8], _paymentPartition);
-  if (_finalized) {
-    assert.equal(cycle[9], TRUE_BYTES32);
-  } else {
-    assert.equal(cycle[9], FALSE_BYTES32);
-  }
-};
-
-const assertCycleState = async (
-  _contract: {
-    getLastCycleIndex: (arg0: any, arg1: any) => any;
-    getCycleState: (arg0: any) => any;
-  },
-  _assetAddress: any,
-  _assetClass: string,
-  _state: string
-) => {
-  const cycleIndex = (
-    await _contract.getLastCycleIndex(_assetAddress, _assetClass)
-  ).toNumber();
-  const cycleState = (await _contract.getCycleState(cycleIndex)).toNumber();
-
-  assert.equal(cycleState, _state);
-};
-
-const assertCycleAssetValue = async (
-  _contract: { getCycleAssetValue: (arg0: any) => any },
-  _cycleIndex: any,
-  _assetValueType: number,
-  _assetValue: number,
-  _reverseAssetValue: number
-) => {
-  const valueData = await _contract.getCycleAssetValue(_cycleIndex);
-
-  assert.equal(valueData[0], _assetValueType);
-  assert.equal(valueData[1], _assetValue);
-  assert.equal(valueData[2], _reverseAssetValue);
-};
-
-const assertOrder = async (
-  _contract: { getOrder: (arg0: any) => any },
-  _orderIndex: any,
-  _cycleIndex: number,
-  _investor: any,
-  _value: number,
-  _amount: number,
-  _orderType: string,
-  _state: string
-) => {
-  const order = await _contract.getOrder(_orderIndex);
-
-  assert.equal(order[0].toNumber(), _cycleIndex);
-  assert.equal(order[1], _investor);
-  assert.equal(order[2], _value);
-  assert.equal(order[3], _amount);
-  assert.equal(order[4].toNumber(), _orderType);
-
-  assert.equal(order[5].toNumber(), _state);
-};
-
-const addressToBytes32 = (_addr: string, _fillTo = 32) => {
-  const _addr2 = _addr.substring(2);
-  const arr1 = [];
-  for (let n = 0, l = _addr2.length; n < l; n++) {
-    arr1.push(_addr2[n]);
-  }
-  for (let m = _addr2.length; m < 2 * _fillTo; m++) {
-    arr1.unshift(0);
-  }
-  return arr1.join('');
-};
-
-const NumToHexBytes32 = (
-  _num: { toString: (arg0: number) => any },
-  _fillTo = 32
-) => {
-  const arr1 = [];
-  const _str = _num.toString(16);
-  for (let n = 0, l = _str.length; n < l; n++) {
-    arr1.push(_str[n]);
-  }
-  for (let m = _str.length; m < 2 * _fillTo; m++) {
-    arr1.unshift(0);
-  }
-  return arr1.join('');
-};
-
-const NumToNumBytes32 = (_num: { toString: () => any }, _fillTo = 32) => {
-  const arr1 = [];
-  const _str = _num.toString();
-  for (let n = 0, l = _str.length; n < l; n++) {
-    arr1.push(_str[n]);
-  }
-  for (let m = _str.length; m < 2 * _fillTo; m++) {
-    arr1.unshift(0);
-  }
-  return `0x${arr1.join('')}`;
-};
-
 const getOrderCreationData = (
   _assetAddress: any,
   _assetClass: string,
   _orderValue: number,
   _orderAmount: number,
-  _orderType: string,
-  isFake: undefined
+  _orderType: number,
+  isFake: boolean = false
 ) => {
   const flag = isFake ? partitionFlag : orderCreationFlag;
   const hexAssetAddress = addressToBytes32(_assetAddress);
 
   const hexAssetClass = _assetClass.substring(2);
 
-  const hexOrderValue = NumToHexBytes32(_orderValue);
-  const hexOrderAmount = NumToHexBytes32(_orderAmount);
-  const hexOrderType = _orderType.substring(2);
+  const hexOrderValue = NumTostringBytes32(_orderValue);
+  const hexOrderAmount = NumTostringBytes32(_orderAmount);
+  const hexOrderType = ethers.utils.hexlify(_orderType).substring(2);
   const orderData = `${hexOrderValue}${hexOrderAmount}${hexOrderType}`;
 
   return `${flag}${hexAssetAddress}${hexAssetClass}${orderData}`;
 };
 
-const getOrderPaymentData = (orderIndex: number, isFake: undefined) => {
+const getOrderPaymentData = (orderIndex: number, isFake: boolean = false) => {
   const flag = isFake ? partitionFlag : orderPaymentFlag;
-  const hexOrderIndex = NumToHexBytes32(orderIndex);
+  const hexOrderIndex = NumTostringBytes32(orderIndex);
 
   return `${flag}${hexOrderIndex}`;
 };
 
 const setAssetRules = async (
-  _contract: {
-    setAssetRules: (
-      arg0: any,
-      arg1: any,
-      arg2: any,
-      arg3: any,
-      arg4: any,
-      arg5: any,
-      arg6: any,
-      arg7: any,
-      arg8: any,
-      arg9: any,
-      arg10: any,
-      arg11: { from: any }
-    ) => any;
-  },
-  _issuerAddress: any,
-  _assetAddress: any,
+  _contract: FundIssuer,
+  _issuerAddress: string,
+  _assetAddress: string,
   _assetClass: string,
   _firstStartTime: number | undefined,
   _subscriptionPeriodLength: number | undefined,
@@ -455,8 +180,8 @@ const setAssetRules = async (
   _paymentPeriodLength: number | undefined,
   _paymentType: number,
   _paymentAddress: string,
-  _paymentPartition: string,
-  _fundAddress: any,
+  _paymentPartition: BytesLike,
+  _fundAddress: string,
   _subscriptionsOpened: boolean
 ) => {
   const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
@@ -468,20 +193,21 @@ const setAssetRules = async (
   const paymentPeriodLength =
     _paymentPeriodLength || DEFAULT_PAYMENT_PERIOD_LENGTH;
 
-  await _contract.setAssetRules(
-    _assetAddress,
-    _assetClass,
-    firstStartTime,
-    subscriptionPeriodLength,
-    valuationPeriodLength,
-    paymentPeriodLength,
-    _paymentType,
-    _paymentAddress,
-    _paymentPartition,
-    _fundAddress,
-    _subscriptionsOpened,
-    { from: _issuerAddress }
-  );
+  await _contract
+    .connect(await ethers.getSigner(_issuerAddress))
+    .setAssetRules(
+      _assetAddress,
+      _assetClass,
+      firstStartTime,
+      subscriptionPeriodLength,
+      valuationPeriodLength,
+      paymentPeriodLength,
+      _paymentType,
+      _paymentAddress,
+      _paymentPartition,
+      _fundAddress,
+      _subscriptionsOpened
+    );
 
   await assertAssetRules(
     _contract,
@@ -506,26 +232,12 @@ const setAssetRules = async (
 };
 
 const subscribe = async (
-  _contract: {
-    getNbCycles: () => any;
-    getLastCycleIndex: (arg0: any, arg1: any) => any;
-    getNbOrders: () => any;
-    getInvestorOrders: (arg0: any) => any;
-    subscribe: (
-      arg0: any,
-      arg1: any,
-      arg2: any,
-      arg3: any,
-      arg4: any,
-      arg5: boolean,
-      arg6: { from: any }
-    ) => any;
-  },
+  _contract: FundIssuer,
   _assetAddress: any,
   _assetClass: string,
   _value: number,
   _amount: number,
-  _orderType: string,
+  _orderType: number,
   _investorAddress: any,
   _setAssetRules: boolean,
   _issuerAddress: any,
@@ -560,14 +272,13 @@ const subscribe = async (
     _investorAddress
   );
 
-  await _contract.subscribe(
+  await _contract.connect(await ethers.getSigner(_investorAddress)).subscribe(
     _assetAddress,
     _assetClass,
     _value,
     _amount,
     _orderType,
-    false, // executePaymentAtSubscription
-    { from: _investorAddress }
+    false // executePaymentAtSubscription
   );
 
   const currentNumberOfCycles = (await _contract.getNbCycles()).toNumber();
@@ -626,26 +337,30 @@ const launchCycleForAssetClass = async (
   const valuationPeriodLength = _valuationPeriodLength || SECONDS_IN_A_WEEK;
   const paymentPeriodLength = _paymentPeriodLength || SECONDS_IN_A_WEEK;
 
-  // const initialNumberOfCycles = (await _contract.getNbCycles()).toNumber();
-  // const initialNumberOfAssetCycles = (await _contract.getLastCycleIndex(_assetAddress, _assetClass)).toNumber();
+  const initialNumberOfCycles = (await _contract.getNbCycles()).toNumber();
+  const initialNumberOfAssetCycles = (
+    await _contract.getLastCycleIndex(_assetAddress, _assetClass)
+  ).toNumber();
 
-  // await _contract.setAssetRules(
-  //   _assetAddress,
-  //   _assetClass,
-  //   firstStartTime,
-  //   subscriptionPeriodLength,
-  //   valuationPeriodLength,
-  //   paymentPeriodLength,
-  //   _paymentType,
-  //   _paymentAddress,
-  //   _paymentPartition,
-  //   _subscriptionsOpened
-  // );
+  await _contract.setAssetRules(
+    _assetAddress,
+    _assetClass,
+    firstStartTime,
+    subscriptionPeriodLength,
+    valuationPeriodLength,
+    paymentPeriodLength,
+    _paymentType,
+    _paymentAddress,
+    _paymentPartition,
+    _subscriptionsOpened
+  );
 
-  // const currentNumberOfCycles = (await _contract.getNbCycles()).toNumber();
-  // const currentNumberOfAssetCycles = (await _contract.getLastCycleIndex(_assetAddress, _assetClass)).toNumber();
-  // assert.equal(currentNumberOfCycles, initialNumberOfCycles + 1);
-  // assert.equal(initialNumberOfAssetCycles, currentNumberOfAssetCycles + 1);
+  const currentNumberOfCycles = (await _contract.getNbCycles()).toNumber();
+  const currentNumberOfAssetCycles = (
+    await _contract.getLastCycleIndex(_assetAddress, _assetClass)
+  ).toNumber();
+  assert.equal(currentNumberOfCycles, initialNumberOfCycles + 1);
+  assert.equal(initialNumberOfAssetCycles, currentNumberOfAssetCycles + 1);
 
   await assertCycle(
     _contract,
@@ -677,30 +392,31 @@ contract(
     recipient2,
     unknown
   ]) {
+    let registry: ERC1820Registry;
+    let signer: Signer;
     before(async function () {
-      this.registry = await ERC1820Registry.deployed();
+      signer = await ethers.getSigner(owner);
+      registry = ERC1820Registry__factory.deployed;
     });
 
     // EXECUTEPAYMENTASINVESTOR
 
     describe('executePaymentAsInvestor', function () {
+      let fic: FundIssuer;
+      let asset: ERC1400;
+      let assetValue: number;
       beforeEach(async function () {
-        this.asset = await ERC1400.new(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [owner],
-          partitions,
-          { from: tokenController1 }
-        );
-        this.fic = await FundIssuerContract.new();
+        asset = await new ERC1400__factory(
+          await ethers.getSigner(tokenController1)
+        ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
+        fic = await new FundIssuer__factory(signer).deploy();
 
-        this.assetValue = 1000;
+        assetValue = 1000;
 
         // await setAssetRules(
-        //   this.fic,
-        //   this.tokenController1,
-        //   this.asset.address,
+        //   fic,
+        //   tokenController1,
+        //   asset.address,
         //   partition1,
         //   undefined,
         //   undefined,
@@ -717,9 +433,9 @@ contract(
         describe('when payment is made with ether', function () {
           beforeEach(async function () {
             await setAssetRules(
-              this.fic,
+              fic,
               tokenController1,
-              this.asset.address,
+              asset.address,
               partition1,
               undefined,
               undefined,
@@ -733,8 +449,8 @@ contract(
             );
 
             await subscribe(
-              this.fic,
-              this.asset.address,
+              fic,
+              asset.address,
               partition1,
               0,
               1000,
@@ -750,8 +466,8 @@ contract(
             describe('when cycle is at least in payment period', function () {
               beforeEach(async function () {
                 await assertCycleState(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   CYCLE_SUBSCRIPTION
                 );
@@ -761,34 +477,31 @@ contract(
                   DEFAULT_SUBSCRIPTION_PERIOD_LENGTH + 1
                 );
                 await assertCycleState(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   CYCLE_VALUATION
                 );
 
                 const cycleIndex = (
-                  await this.fic.getLastCycleIndex(
-                    this.asset.address,
-                    partition1
-                  )
+                  await fic.getLastCycleIndex(asset.address, partition1)
                 ).toNumber();
-                await this.fic.valuate(cycleIndex, this.assetValue, 0, {
-                  from: tokenController1
-                });
+                await fic
+                  .connect(await ethers.getSigner(tokenController1))
+                  .valuate(cycleIndex, assetValue, 0);
                 await assertCycleAssetValue(
-                  this.fic,
+                  fic,
                   cycleIndex,
                   ASSET_VALUE_UNKNOWN,
-                  this.assetValue,
+                  assetValue,
                   0
                 );
 
                 // Wait until after the end of the first valuation period
                 await advanceTimeAndBlock(DEFAULT_VALUATION_PERIOD_LENGTH + 1);
                 await assertCycleState(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   CYCLE_PAYMENT
                 );
@@ -800,19 +513,19 @@ contract(
                       describe('when order state is Subscribed', function () {
                         it('updates the order state to Paid', async function () {
                           const currentInvestorOrders =
-                            await this.fic.getInvestorOrders(tokenHolder1);
+                            await fic.getInvestorOrders(tokenHolder1);
                           const orderIndex =
                             currentInvestorOrders[
                               currentInvestorOrders.length - 1
                             ].toNumber();
                           const amountAndValue =
-                            await this.fic.getOrderAmountAndValue(orderIndex);
+                            await fic.getOrderAmountAndValue(orderIndex);
 
                           const amount = amountAndValue[0].toNumber();
                           const value = amountAndValue[1].toNumber();
 
                           await assertOrder(
-                            this.fic,
+                            fic,
                             orderIndex,
                             1,
                             tokenHolder1,
@@ -822,13 +535,14 @@ contract(
                             ORDER_SUBSCRIBED
                           );
 
-                          await this.fic.executePaymentAsInvestor(orderIndex, {
-                            from: tokenHolder1,
-                            value: value
-                          });
+                          await fic
+                            .connect(await ethers.getSigner(tokenHolder1))
+                            .executePaymentAsInvestor(orderIndex, {
+                              value: value
+                            });
 
                           await assertOrder(
-                            this.fic,
+                            fic,
                             orderIndex,
                             1,
                             tokenHolder1,
@@ -932,19 +646,16 @@ contract(
     // REJECTORDER
 
     describe('rejectOrder', function () {
+      let asset: ERC1400;
+      let fic: FundIssuer;
       beforeEach(async function () {
-        this.asset = await ERC1400.new(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [owner],
-          partitions,
-          { from: tokenController1 }
-        );
-        this.fic = await FundIssuerContract.new();
+        asset = await new ERC1400__factory(
+          await ethers.getSigner(tokenController1)
+        ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
+        fic = await new FundIssuer__factory(signer).deploy();
         await subscribe(
-          this.fic,
-          this.asset.address,
+          fic,
+          asset.address,
           partition1,
           0,
           1000,
@@ -965,16 +676,13 @@ contract(
                   describe('when we are in the subscription period', function () {
                     it('rejects the order', async function () {
                       const orderIndex = (
-                        await this.fic.getInvestorOrders(tokenHolder1)
+                        await fic.getInvestorOrders(tokenHolder1)
                       )[0].toNumber();
                       const cycleIndex = (
-                        await this.fic.getLastCycleIndex(
-                          this.asset.address,
-                          partition1
-                        )
+                        await fic.getLastCycleIndex(asset.address, partition1)
                       ).toNumber();
                       await assertOrder(
-                        this.fic,
+                        fic,
                         orderIndex,
                         cycleIndex,
                         tokenHolder1,
@@ -983,11 +691,11 @@ contract(
                         TYPE_AMOUNT,
                         ORDER_SUBSCRIBED
                       );
-                      await this.fic.rejectOrder(orderIndex, true, {
-                        from: tokenController1
-                      });
+                      await fic
+                        .connect(await ethers.getSigner(tokenController1))
+                        .rejectOrder(orderIndex, true);
                       await assertOrder(
-                        this.fic,
+                        fic,
                         orderIndex,
                         cycleIndex,
                         tokenHolder1,
@@ -1001,16 +709,13 @@ contract(
                   describe('when we are in the valuation period', function () {
                     it('rejects the order', async function () {
                       const orderIndex = (
-                        await this.fic.getInvestorOrders(tokenHolder1)
+                        await fic.getInvestorOrders(tokenHolder1)
                       )[0].toNumber();
                       const cycleIndex = (
-                        await this.fic.getLastCycleIndex(
-                          this.asset.address,
-                          partition1
-                        )
+                        await fic.getLastCycleIndex(asset.address, partition1)
                       ).toNumber();
                       await assertOrder(
-                        this.fic,
+                        fic,
                         orderIndex,
                         cycleIndex,
                         tokenHolder1,
@@ -1021,8 +726,8 @@ contract(
                       );
 
                       await assertCycleState(
-                        this.fic,
-                        this.asset.address,
+                        fic,
+                        asset.address,
                         partition1,
                         CYCLE_SUBSCRIPTION
                       );
@@ -1033,17 +738,17 @@ contract(
                       );
 
                       await assertCycleState(
-                        this.fic,
-                        this.asset.address,
+                        fic,
+                        asset.address,
                         partition1,
                         CYCLE_VALUATION
                       );
 
-                      await this.fic.rejectOrder(orderIndex, true, {
-                        from: tokenController1
-                      });
+                      await fic
+                        .connect(await ethers.getSigner(tokenController1))
+                        .rejectOrder(orderIndex, true);
                       await assertOrder(
-                        this.fic,
+                        fic,
                         orderIndex,
                         cycleIndex,
                         tokenHolder1,
@@ -1062,16 +767,13 @@ contract(
               describe('when the order rejection needs to be cancelled', function () {
                 it('cancels the rejection', async function () {
                   const orderIndex = (
-                    await this.fic.getInvestorOrders(tokenHolder1)
+                    await fic.getInvestorOrders(tokenHolder1)
                   )[0].toNumber();
                   const cycleIndex = (
-                    await this.fic.getLastCycleIndex(
-                      this.asset.address,
-                      partition1
-                    )
+                    await fic.getLastCycleIndex(asset.address, partition1)
                   ).toNumber();
                   await assertOrder(
-                    this.fic,
+                    fic,
                     orderIndex,
                     cycleIndex,
                     tokenHolder1,
@@ -1080,11 +782,11 @@ contract(
                     TYPE_AMOUNT,
                     ORDER_SUBSCRIBED
                   );
-                  await this.fic.rejectOrder(orderIndex, true, {
-                    from: tokenController1
-                  });
+                  await fic
+                    .connect(await ethers.getSigner(tokenController1))
+                    .rejectOrder(orderIndex, true);
                   await assertOrder(
-                    this.fic,
+                    fic,
                     orderIndex,
                     cycleIndex,
                     tokenHolder1,
@@ -1093,11 +795,11 @@ contract(
                     TYPE_AMOUNT,
                     ORDER_REJECTED
                   );
-                  await this.fic.rejectOrder(orderIndex, false, {
-                    from: tokenController1
-                  });
+                  await fic
+                    .connect(await ethers.getSigner(tokenController1))
+                    .rejectOrder(orderIndex, false);
                   await assertOrder(
-                    this.fic,
+                    fic,
                     orderIndex,
                     cycleIndex,
                     tokenHolder1,
@@ -1150,17 +852,17 @@ contract(
     // PARAMETERS
 
     describe('parameters', function () {
+      let fic: FundIssuer;
       beforeEach(async function () {
-        this.fic = await FundIssuerContract.new();
+        fic = await new FundIssuer__factory(signer).deploy();
       });
       describe('implementerFund', function () {
         it('returns the contract address', async function () {
-          let interfaceFundImplementer =
-            await this.registry.getInterfaceImplementer(
-              this.fic.address,
-              ethers.utils.id(ERC1400_TOKENS_RECIPIENT_INTERFACE)
-            );
-          assert.equal(interfaceFundImplementer, this.fic.address);
+          let interfaceFundImplementer = await registry.getInterfaceImplementer(
+            fic.address,
+            ethers.utils.id(ERC1400_TOKENS_RECIPIENT_INTERFACE)
+          );
+          assert.equal(interfaceFundImplementer, fic.address);
         });
       });
     });
@@ -1168,12 +870,13 @@ contract(
     // CANIMPLEMENTINTERFACE
 
     describe('canImplementInterfaceForAddress', function () {
+      let fic: FundIssuer;
       beforeEach(async function () {
-        this.fic = await FundIssuerContract.new();
+        fic = await new FundIssuer__factory(signer).deploy();
       });
       describe('when interface hash is correct', function () {
         it('returns ERC1820_ACCEPT_MAGIC', async function () {
-          const canImplement = await this.fic.canImplementInterfaceForAddress(
+          const canImplement = await fic.canImplementInterfaceForAddress(
             ethers.utils.id(ERC1400_TOKENS_RECIPIENT_INTERFACE),
             ZERO_ADDRESS
           );
@@ -1182,7 +885,7 @@ contract(
       });
       describe('when interface hash is not correct', function () {
         it('returns empty bytes32', async function () {
-          const canImplement = await this.fic.canImplementInterfaceForAddress(
+          const canImplement = await fic.canImplementInterfaceForAddress(
             ethers.utils.id('FakeInterfaceName'),
             ZERO_ADDRESS
           );
@@ -1194,61 +897,61 @@ contract(
     // CANRECEIVE
 
     describe('canReceive', function () {
+      let fic: FundIssuer;
+      let asset: ERC1400;
+      let orderCreationFlag: string;
+      let orderPaymentFlag: string;
       beforeEach(async function () {
-        this.fic = await FundIssuerContract.new();
-        this.asset = await ERC1400.new(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [owner],
-          partitions,
-          { from: tokenController1 }
-        );
-        this.orderCreationFlag = getOrderCreationData(
-          this.asset.address,
+        fic = await new FundIssuer__factory(signer).deploy();
+        asset = await new ERC1400__factory(
+          await ethers.getSigner(tokenController1)
+        ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
+        orderCreationFlag = getOrderCreationData(
+          asset.address,
           partition1,
           500,
           0,
           TYPE_VALUE
         );
-        this.orderPaymentFlag = getOrderPaymentData(1);
+        orderPaymentFlag = getOrderPaymentData(1);
       });
       describe('when operatorData is not empty', function () {
         describe('when data has the correct length', function () {
           describe('when data has the right format', function () {
             describe('when data is formatted for an order creation', function () {
-              it('returns true', async function () {
-                const answer = await this.fic.canReceive(
+              it('returns false', async function () {
+                const answer = await fic.canReceive(
                   '0x00000000',
                   partition1,
                   unknown,
                   unknown,
                   unknown,
                   1,
-                  this.orderCreationFlag,
+                  orderCreationFlag,
                   MOCK_CERTIFICATE
                 );
-                assert.equal(answer, true);
+                assert.isFalse(answer);
               });
             });
             describe('when data is formatted for an order payment', function () {
               it('returns true', async function () {
-                const answer = await this.fic.canReceive(
+                const answer = await fic.canReceive(
                   '0x00000000',
                   partition1,
                   unknown,
                   unknown,
                   unknown,
                   1,
-                  this.orderPaymentFlag,
+                  orderPaymentFlag,
                   MOCK_CERTIFICATE
                 );
-                assert.equal(answer, true);
+
+                assert.isTrue(answer);
               });
             });
             describe('when data is formatted for a hook bypass', function () {
               it('returns true', async function () {
-                const answer = await this.fic.canReceive(
+                const answer = await fic.canReceive(
                   '0x00000000',
                   partition1,
                   unknown,
@@ -1258,13 +961,13 @@ contract(
                   bypassFlag,
                   MOCK_CERTIFICATE
                 );
-                assert.equal(answer, true);
+                assert.isTrue(answer);
               });
             });
           });
           describe('when data does not have the right format', function () {
             it('returns false', async function () {
-              const answer = await this.fic.canReceive(
+              const answer = await fic.canReceive(
                 '0x00000000',
                 partition1,
                 unknown,
@@ -1274,42 +977,40 @@ contract(
                 partitionFlag,
                 MOCK_CERTIFICATE
               );
-              assert.equal(answer, false);
+              assert.isFalse(answer);
             });
           });
         });
         describe('when data does not have the correct length', function () {
           it('returns false', async function () {
-            const answer = await this.fic.canReceive(
+            const answer = await fic.canReceive(
               '0x00000000',
               partition1,
               unknown,
               unknown,
               unknown,
               1,
-              this.orderPaymentFlag.substring(
-                0,
-                this.orderPaymentFlag.length - 1
-              ),
+              orderPaymentFlag.substring(0, orderPaymentFlag.length - 2),
               MOCK_CERTIFICATE
             );
-            assert.equal(answer, false);
+
+            assert.isFalse(answer);
           });
         });
       });
       describe('when operatorData is empty', function () {
         it('returns false', async function () {
-          const answer = await this.fic.canReceive(
+          const answer = await fic.canReceive(
             '0x00000000',
             partition1,
             unknown,
             unknown,
             unknown,
             1,
-            this.orderPaymentFlag,
+            orderPaymentFlag,
             ZERO_BYTE
           );
-          assert.equal(answer, false);
+          assert.isFalse(answer);
         });
       });
     });
@@ -1317,16 +1018,13 @@ contract(
     // SETASSETRULES
 
     describe('setAssetRules', function () {
+      let asset: ERC1400;
+      let fic: FundIssuer;
       beforeEach(async function () {
-        this.asset = await ERC1400.new(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [owner],
-          partitions,
-          { from: tokenController1 }
-        );
-        this.fic = await FundIssuerContract.new();
+        asset = await new ERC1400__factory(
+          await ethers.getSigner(tokenController1)
+        ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
+        fic = await new FundIssuer__factory(signer).deploy();
       });
       describe('when caller is the token controller', function () {
         describe('when first start time is valid', function () {
@@ -1334,9 +1032,9 @@ contract(
             describe('when rules are not already defined', function () {
               it('sets asset rules', async function () {
                 await setAssetRules(
-                  this.fic,
+                  fic,
                   tokenController1,
-                  this.asset.address,
+                  asset.address,
                   partition1,
                   undefined,
                   undefined,
@@ -1353,9 +1051,9 @@ contract(
             describe('when rules are already defined', function () {
               it('updates asset rules', async function () {
                 await setAssetRules(
-                  this.fic,
+                  fic,
                   tokenController1,
-                  this.asset.address,
+                  asset.address,
                   partition1,
                   undefined,
                   undefined,
@@ -1367,27 +1065,22 @@ contract(
                   fund,
                   true
                 );
-                this.paymentToken = await ERC1400.new(
-                  'ERC1400Token',
-                  'DAU',
-                  1,
-                  [owner],
-                  partitions,
-                  { from: tokenController1 }
-                );
+                const paymentToken = await new ERC1400__factory(
+                  await ethers.getSigner(tokenController1)
+                ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
                 const chainTime = (await ethers.provider.getBlock('latest'))
                   .timestamp;
                 await setAssetRules(
-                  this.fic,
+                  fic,
                   tokenController1,
-                  this.asset.address,
+                  asset.address,
                   partition2,
                   chainTime + 2 * SECONDS_IN_A_WEEK,
                   2 * SECONDS_IN_A_WEEK,
                   2 * SECONDS_IN_A_WEEK,
                   2 * SECONDS_IN_A_WEEK,
                   ERC1400_PAYMENT,
-                  this.paymentToken.address,
+                  paymentToken.address,
                   partition3,
                   tokenHolder2,
                   false
@@ -1401,20 +1094,21 @@ contract(
                 const chainTime = (await ethers.provider.getBlock('latest'))
                   .timestamp;
                 await expectRevert.unspecified(
-                  this.fic.setAssetRules(
-                    this.asset.address,
-                    partition1,
-                    chainTime + 1,
-                    0,
-                    1,
-                    1,
-                    OFF_CHAIN_PAYMENT,
-                    ZERO_ADDRESS,
-                    ZERO_BYTES32,
-                    fund,
-                    true,
-                    { from: tokenController1 }
-                  )
+                  fic
+                    .connect(await ethers.getSigner(tokenController1))
+                    .setAssetRules(
+                      asset.address,
+                      partition1,
+                      chainTime + 1,
+                      0,
+                      1,
+                      1,
+                      OFF_CHAIN_PAYMENT,
+                      ZERO_ADDRESS,
+                      ZERO_BYTES32,
+                      fund,
+                      true
+                    )
                 );
               });
             });
@@ -1423,20 +1117,21 @@ contract(
                 const chainTime = (await ethers.provider.getBlock('latest'))
                   .timestamp;
                 await expectRevert.unspecified(
-                  this.fic.setAssetRules(
-                    this.asset.address,
-                    partition1,
-                    chainTime + 1,
-                    1,
-                    0,
-                    1,
-                    OFF_CHAIN_PAYMENT,
-                    ZERO_ADDRESS,
-                    ZERO_BYTES32,
-                    fund,
-                    true,
-                    { from: tokenController1 }
-                  )
+                  fic
+                    .connect(await ethers.getSigner(tokenController1))
+                    .setAssetRules(
+                      asset.address,
+                      partition1,
+                      chainTime + 1,
+                      1,
+                      0,
+                      1,
+                      OFF_CHAIN_PAYMENT,
+                      ZERO_ADDRESS,
+                      ZERO_BYTES32,
+                      fund,
+                      true
+                    )
                 );
               });
             });
@@ -1445,20 +1140,21 @@ contract(
                 const chainTime = (await ethers.provider.getBlock('latest'))
                   .timestamp;
                 await expectRevert.unspecified(
-                  this.fic.setAssetRules(
-                    this.asset.address,
-                    partition1,
-                    chainTime + 1,
-                    1,
-                    1,
-                    0,
-                    OFF_CHAIN_PAYMENT,
-                    ZERO_ADDRESS,
-                    ZERO_BYTES32,
-                    fund,
-                    true,
-                    { from: tokenController1 }
-                  )
+                  fic
+                    .connect(await ethers.getSigner(tokenController1))
+                    .setAssetRules(
+                      asset.address,
+                      partition1,
+                      chainTime + 1,
+                      1,
+                      1,
+                      0,
+                      OFF_CHAIN_PAYMENT,
+                      ZERO_ADDRESS,
+                      ZERO_BYTES32,
+                      fund,
+                      true
+                    )
                 );
               });
             });
@@ -1471,9 +1167,9 @@ contract(
 
             await expectRevert.unspecified(
               setAssetRules(
-                this.fic,
+                fic,
                 tokenController1,
-                this.asset.address,
+                asset.address,
                 partition1,
                 chainTime - 1,
                 undefined,
@@ -1495,9 +1191,9 @@ contract(
             .timestamp;
           await expectRevert.unspecified(
             setAssetRules(
-              this.fic,
+              fic,
               tokenController2,
-              this.asset.address,
+              asset.address,
               partition1,
               undefined,
               undefined,
@@ -1517,16 +1213,13 @@ contract(
     // SUBSCRIBE
 
     describe('subscribe', function () {
+      let asset: ERC1400;
+      let fic: FundIssuer;
       beforeEach(async function () {
-        this.asset = await ERC1400.new(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [owner],
-          partitions,
-          { from: tokenController1 }
-        );
-        this.fic = await FundIssuerContract.new();
+        asset = await new ERC1400__factory(
+          await ethers.getSigner(tokenController1)
+        ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
+        fic = await new FundIssuer__factory(signer).deploy();
       });
       describe('when the current cycle is in subscription period', function () {
         describe('when the current period is correct', function () {
@@ -1535,8 +1228,8 @@ contract(
               describe('when asset value is unknown', function () {
                 it('creates 2 new orders', async function () {
                   await subscribe(
-                    this.fic,
-                    this.asset.address,
+                    fic,
+                    asset.address,
                     partition1,
                     1000,
                     0,
@@ -1548,8 +1241,8 @@ contract(
                     NEW_CYCLE_CREATED_TRUE
                   );
                   await subscribe(
-                    this.fic,
-                    this.asset.address,
+                    fic,
+                    asset.address,
                     partition1,
                     1000,
                     0,
@@ -1575,8 +1268,8 @@ contract(
               it('reverts', async function () {
                 await expectRevert.unspecified(
                   subscribe(
-                    this.fic,
-                    this.asset.address,
+                    fic,
+                    asset.address,
                     partition1,
                     0, // value
                     1000, // amount
@@ -1595,8 +1288,8 @@ contract(
             describe('when amount is not nil', function () {
               it('creates a new order', async function () {
                 await subscribe(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   0,
                   1000,
@@ -1613,8 +1306,8 @@ contract(
               it('reverts', async function () {
                 await expectRevert.unspecified(
                   subscribe(
-                    this.fic,
-                    this.asset.address,
+                    fic,
+                    asset.address,
                     partition1,
                     1000, // value
                     0, // amount
@@ -1636,9 +1329,9 @@ contract(
               .timestamp;
 
             await setAssetRules(
-              this.fic,
+              fic,
               tokenController1,
-              this.asset.address,
+              asset.address,
               partition1,
               chainTime + 10000,
               undefined,
@@ -1653,8 +1346,8 @@ contract(
 
             await expectRevert.unspecified(
               subscribe(
-                this.fic,
-                this.asset.address,
+                fic,
+                asset.address,
                 partition1,
                 1000,
                 0,
@@ -1675,8 +1368,8 @@ contract(
             describe('when cycle is the first cycle for this asset', function () {
               it('creates a new order', async function () {
                 await subscribe(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   1000,
                   0,
@@ -1690,8 +1383,8 @@ contract(
               });
               it('creates 3 orders', async function () {
                 await subscribe(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   1000,
                   0,
@@ -1703,8 +1396,8 @@ contract(
                   NEW_CYCLE_CREATED_TRUE
                 );
                 await subscribe(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   1000,
                   0,
@@ -1715,17 +1408,12 @@ contract(
                   fund,
                   NEW_CYCLE_CREATED_FALSE
                 );
-                this.asset2 = await ERC1400.new(
-                  'ERC1400Token',
-                  'DAU',
-                  1,
-                  [owner],
-                  partitions,
-                  { from: tokenController2 }
-                );
+                const asset2 = await new ERC1400__factory(
+                  await ethers.getSigner(tokenController2)
+                ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
                 await subscribe(
-                  this.fic,
-                  this.asset2.address,
+                  fic,
+                  asset2.address,
                   partition2,
                   0,
                   5000,
@@ -1741,8 +1429,8 @@ contract(
             describe('when cycle is not the first cycle for this asset', function () {
               it('creates 3 orders', async function () {
                 await subscribe(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   1000,
                   0,
@@ -1755,8 +1443,8 @@ contract(
                 );
 
                 await assertCycleState(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   CYCLE_SUBSCRIPTION
                 );
@@ -1767,15 +1455,15 @@ contract(
                 );
 
                 await assertCycleState(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   CYCLE_VALUATION
                 );
 
                 await subscribe(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   1000,
                   0,
@@ -1792,9 +1480,9 @@ contract(
           describe('when subscriptions are not open', function () {
             it('reverts', async function () {
               await setAssetRules(
-                this.fic,
+                fic,
                 tokenController1,
-                this.asset.address,
+                asset.address,
                 partition1,
                 undefined,
                 undefined,
@@ -1809,8 +1497,8 @@ contract(
 
               await expectRevert.unspecified(
                 subscribe(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   1000,
                   0,
@@ -1829,8 +1517,8 @@ contract(
           it('reverts', async function () {
             await expectRevert.unspecified(
               subscribe(
-                this.fic,
-                this.asset.address,
+                fic,
+                asset.address,
                 partition1,
                 1000,
                 0,
@@ -1850,19 +1538,16 @@ contract(
     // CANCELORDER
 
     describe('cancelOrder', function () {
+      let asset: ERC1400;
+      let fic: FundIssuer;
       beforeEach(async function () {
-        this.asset = await ERC1400.new(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [owner],
-          partitions,
-          { from: tokenController1 }
-        );
-        this.fic = await FundIssuerContract.new();
+        asset = await new ERC1400__factory(
+          await ethers.getSigner(tokenController1)
+        ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
+        fic = await new FundIssuer__factory(signer).deploy();
         await subscribe(
-          this.fic,
-          this.asset.address,
+          fic,
+          asset.address,
           partition1,
           0,
           1000,
@@ -1880,16 +1565,13 @@ contract(
             describe('when order has not been paid yet', function () {
               it('cancels the order', async function () {
                 const orderIndex = (
-                  await this.fic.getInvestorOrders(tokenHolder1)
+                  await fic.getInvestorOrders(tokenHolder1)
                 )[0].toNumber();
                 const cycleIndex = (
-                  await this.fic.getLastCycleIndex(
-                    this.asset.address,
-                    partition1
-                  )
+                  await fic.getLastCycleIndex(asset.address, partition1)
                 ).toNumber();
                 await assertOrder(
-                  this.fic,
+                  fic,
                   orderIndex,
                   cycleIndex,
                   tokenHolder1,
@@ -1899,14 +1581,16 @@ contract(
                   ORDER_SUBSCRIBED
                 );
                 await assertCycleState(
-                  this.fic,
-                  this.asset.address,
+                  fic,
+                  asset.address,
                   partition1,
                   CYCLE_SUBSCRIPTION
                 );
-                await this.fic.cancelOrder(orderIndex, { from: tokenHolder1 });
+                await fic
+                  .connect(await ethers.getSigner(tokenHolder1))
+                  .cancelOrder(orderIndex);
                 await assertOrder(
-                  this.fic,
+                  fic,
                   orderIndex,
                   cycleIndex,
                   tokenHolder1,
@@ -1924,10 +1608,12 @@ contract(
           describe('when message sender is not the investor', function () {
             it('reverts', async function () {
               const orderIndex = (
-                await this.fic.getInvestorOrders(tokenHolder1)
+                await fic.getInvestorOrders(tokenHolder1)
               )[0].toNumber();
               await expectRevert.unspecified(
-                this.fic.cancelOrder(orderIndex, { from: tokenHolder2 })
+                fic
+                  .connect(await ethers.getSigner(tokenHolder2))
+                  .cancelOrder(orderIndex)
               );
             });
           });
@@ -1935,8 +1621,8 @@ contract(
         describe('when subscription period is over', function () {
           it('reverts', async function () {
             await assertCycleState(
-              this.fic,
-              this.asset.address,
+              fic,
+              asset.address,
               partition1,
               CYCLE_SUBSCRIPTION
             );
@@ -1945,17 +1631,19 @@ contract(
             await advanceTimeAndBlock(DEFAULT_SUBSCRIPTION_PERIOD_LENGTH + 1);
 
             await assertCycleState(
-              this.fic,
-              this.asset.address,
+              fic,
+              asset.address,
               partition1,
               CYCLE_VALUATION
             );
 
             const orderIndex = (
-              await this.fic.getInvestorOrders(tokenHolder1)
+              await fic.getInvestorOrders(tokenHolder1)
             )[0].toNumber();
             await expectRevert.unspecified(
-              this.fic.cancelOrder(orderIndex, { from: tokenHolder1 })
+              fic
+                .connect(await ethers.getSigner(tokenHolder1))
+                .cancelOrder(orderIndex)
             );
           });
         });
@@ -1964,7 +1652,9 @@ contract(
         describe('when order doesnt exist', function () {
           it('reverts', async function () {
             await expectRevert.unspecified(
-              this.fic.cancelOrder(999999, { from: tokenHolder1 })
+              fic
+                .connect(await ethers.getSigner(tokenHolder1))
+                .cancelOrder(999999)
             );
           });
         });
@@ -1996,19 +1686,16 @@ contract(
     // VALUATE
 
     describe('valuate', function () {
+      let asset: ERC1400;
+      let fic: FundIssuer;
       beforeEach(async function () {
-        this.asset = await ERC1400.new(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [owner],
-          partitions,
-          { from: tokenController1 }
-        );
-        this.fic = await FundIssuerContract.new();
+        asset = await new ERC1400__factory(
+          await ethers.getSigner(tokenController1)
+        ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
+        fic = await new FundIssuer__factory(signer).deploy();
         await subscribe(
-          this.fic,
-          this.asset.address,
+          fic,
+          asset.address,
           partition1,
           0,
           1000,
@@ -2023,16 +1710,16 @@ contract(
       describe('when we are in the valuation period', function () {
         beforeEach(async function () {
           await assertCycleState(
-            this.fic,
-            this.asset.address,
+            fic,
+            asset.address,
             partition1,
             CYCLE_SUBSCRIPTION
           );
           // Wait until after the end of the first subscription period
           await advanceTimeAndBlock(DEFAULT_SUBSCRIPTION_PERIOD_LENGTH + 1);
           await assertCycleState(
-            this.fic,
-            this.asset.address,
+            fic,
+            asset.address,
             partition1,
             CYCLE_VALUATION
           );
@@ -2042,26 +1729,23 @@ contract(
             describe('when the sender is a price oracle', function () {
               it('sets the valuation', async function () {
                 const cycleIndex = (
-                  await this.fic.getLastCycleIndex(
-                    this.asset.address,
-                    partition1
-                  )
+                  await fic.getLastCycleIndex(asset.address, partition1)
                 ).toNumber();
 
                 await assertCycleAssetValue(
-                  this.fic,
+                  fic,
                   cycleIndex,
                   ASSET_VALUE_UNKNOWN,
                   0,
                   0
                 );
 
-                await this.fic.valuate(cycleIndex, 1000, 0, {
-                  from: tokenController1
-                });
+                await fic
+                  .connect(await ethers.getSigner(tokenController1))
+                  .valuate(cycleIndex, 1000, 0);
 
                 await assertCycleAssetValue(
-                  this.fic,
+                  fic,
                   cycleIndex,
                   ASSET_VALUE_UNKNOWN,
                   1000,
@@ -2070,26 +1754,23 @@ contract(
               });
               it('sets the reverse valuation', async function () {
                 const cycleIndex = (
-                  await this.fic.getLastCycleIndex(
-                    this.asset.address,
-                    partition1
-                  )
+                  await fic.getLastCycleIndex(asset.address, partition1)
                 ).toNumber();
 
                 await assertCycleAssetValue(
-                  this.fic,
+                  fic,
                   cycleIndex,
                   ASSET_VALUE_UNKNOWN,
                   0,
                   0
                 );
 
-                await this.fic.valuate(cycleIndex, 0, 1000, {
-                  from: tokenController1
-                });
+                await fic
+                  .connect(await ethers.getSigner(tokenController1))
+                  .valuate(cycleIndex, 0, 1000);
 
                 await assertCycleAssetValue(
-                  this.fic,
+                  fic,
                   cycleIndex,
                   ASSET_VALUE_UNKNOWN,
                   0,
@@ -2098,38 +1779,35 @@ contract(
               });
               it('sets the valuation twice', async function () {
                 const cycleIndex = (
-                  await this.fic.getLastCycleIndex(
-                    this.asset.address,
-                    partition1
-                  )
+                  await fic.getLastCycleIndex(asset.address, partition1)
                 ).toNumber();
 
                 await assertCycleAssetValue(
-                  this.fic,
+                  fic,
                   cycleIndex,
                   ASSET_VALUE_UNKNOWN,
                   0,
                   0
                 );
 
-                await this.fic.valuate(cycleIndex, 1000, 0, {
-                  from: tokenController1
-                });
+                await fic
+                  .connect(await ethers.getSigner(tokenController1))
+                  .valuate(cycleIndex, 1000, 0);
 
                 await assertCycleAssetValue(
-                  this.fic,
+                  fic,
                   cycleIndex,
                   ASSET_VALUE_UNKNOWN,
                   1000,
                   0
                 );
 
-                await this.fic.valuate(cycleIndex, 0, 500, {
-                  from: tokenController1
-                });
+                await fic
+                  .connect(await ethers.getSigner(tokenController1))
+                  .valuate(cycleIndex, 0, 500);
 
                 await assertCycleAssetValue(
-                  this.fic,
+                  fic,
                   cycleIndex,
                   ASSET_VALUE_UNKNOWN,
                   0,
@@ -2140,14 +1818,11 @@ contract(
             describe('when the sender is not a price oracle', function () {
               it('reverts', async function () {
                 const cycleIndex = (
-                  await this.fic.getLastCycleIndex(
-                    this.asset.address,
-                    partition1
-                  )
+                  await fic.getLastCycleIndex(asset.address, partition1)
                 ).toNumber();
 
                 await assertCycleAssetValue(
-                  this.fic,
+                  fic,
                   cycleIndex,
                   ASSET_VALUE_UNKNOWN,
                   0,
@@ -2155,9 +1830,9 @@ contract(
                 );
 
                 await expectRevert.unspecified(
-                  this.fic.valuate(cycleIndex, 1000, 0, {
-                    from: tokenController2
-                  })
+                  fic
+                    .connect(await ethers.getSigner(tokenController2))
+                    .valuate(cycleIndex, 1000, 0)
                 );
               });
             });
@@ -2165,11 +1840,11 @@ contract(
           describe('when the provided values are not valid', function () {
             it('reverts', async function () {
               const cycleIndex = (
-                await this.fic.getLastCycleIndex(this.asset.address, partition1)
+                await fic.getLastCycleIndex(asset.address, partition1)
               ).toNumber();
 
               await assertCycleAssetValue(
-                this.fic,
+                fic,
                 cycleIndex,
                 ASSET_VALUE_UNKNOWN,
                 0,
@@ -2177,28 +1852,23 @@ contract(
               );
 
               await expectRevert.unspecified(
-                this.fic.valuate(cycleIndex, 1000, 1000, {
-                  from: tokenController1
-                })
+                fic
+                  .connect(await ethers.getSigner(tokenController1))
+                  .valuate(cycleIndex, 1000, 1000)
               );
             });
           });
         });
         describe('when cycle is of type known', function () {
           it('set the valuation', async function () {
-            this.asset2 = await ERC1400.new(
-              'ERC1400Token',
-              'DAU',
-              1,
-              [owner],
-              partitions,
-              { from: tokenController1 }
-            );
-            this.fic = await FundIssuerContract.new();
+            const asset2 = await new ERC1400__factory(
+              await ethers.getSigner(tokenController1)
+            ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
+            const fic2 = await new FundIssuer__factory(signer).deploy();
             await setAssetRules(
-              this.fic,
+              fic2,
               tokenController1,
-              this.asset2.address,
+              asset2.address,
               partition1,
               undefined,
               undefined,
@@ -2210,44 +1880,44 @@ contract(
               fund,
               true
             );
-            await this.fic.setAssetValueRules(
-              this.asset2.address,
-              partition1,
-              ASSET_VALUE_KNOWN,
-              1000,
-              0,
-              { from: tokenController1 }
-            );
-            await this.fic.subscribe(
-              this.asset2.address,
+            await fic2
+              .connect(await ethers.getSigner(tokenController1))
+              .setAssetValueRules(
+                asset2.address,
+                partition1,
+                ASSET_VALUE_KNOWN,
+                1000,
+                0
+              );
+            await fic2.connect(await ethers.getSigner(tokenHolder1)).subscribe(
+              asset2.address,
               partition1,
               0,
               1000,
               TYPE_AMOUNT,
-              false, // executePaymentAtSubscription
-              { from: tokenHolder1 }
+              false // executePaymentAtSubscription
             );
             await assertCycleState(
-              this.fic,
-              this.asset2.address,
+              fic2,
+              asset2.address,
               partition1,
               CYCLE_SUBSCRIPTION
             );
             // Wait until after the end of the first subscription period
             await advanceTimeAndBlock(DEFAULT_SUBSCRIPTION_PERIOD_LENGTH + 1);
             await assertCycleState(
-              this.fic,
-              this.asset2.address,
+              fic2,
+              asset2.address,
               partition1,
               CYCLE_VALUATION
             );
 
             const cycleIndex = (
-              await this.fic.getLastCycleIndex(this.asset2.address, partition1)
+              await fic2.getLastCycleIndex(asset2.address, partition1)
             ).toNumber();
 
             await assertCycleAssetValue(
-              this.fic,
+              fic2,
               cycleIndex,
               ASSET_VALUE_KNOWN,
               1000,
@@ -2255,7 +1925,9 @@ contract(
             );
 
             await expectRevert.unspecified(
-              this.fic.valuate(cycleIndex, 0, 1000, { from: tokenController1 })
+              fic2
+                .connect(await ethers.getSigner(tokenController1))
+                .valuate(cycleIndex, 0, 1000)
             );
           });
         });
@@ -2263,19 +1935,19 @@ contract(
       describe('when we are in the subscription period', function () {
         beforeEach(async function () {
           await assertCycleState(
-            this.fic,
-            this.asset.address,
+            fic,
+            asset.address,
             partition1,
             CYCLE_SUBSCRIPTION
           );
         });
         it('reverts', async function () {
           const cycleIndex = (
-            await this.fic.getLastCycleIndex(this.asset.address, partition1)
+            await fic.getLastCycleIndex(asset.address, partition1)
           ).toNumber();
 
           await assertCycleAssetValue(
-            this.fic,
+            fic,
             cycleIndex,
             ASSET_VALUE_UNKNOWN,
             0,
@@ -2283,15 +1955,17 @@ contract(
           );
 
           await expectRevert.unspecified(
-            this.fic.valuate(cycleIndex, 1000, 0, { from: tokenController1 })
+            fic
+              .connect(await ethers.getSigner(tokenController1))
+              .valuate(cycleIndex, 1000, 0)
           );
         });
       });
       describe('when we are in the payment period', function () {
         beforeEach(async function () {
           await assertCycleState(
-            this.fic,
-            this.asset.address,
+            fic,
+            asset.address,
             partition1,
             CYCLE_SUBSCRIPTION
           );
@@ -2301,20 +1975,15 @@ contract(
               DEFAULT_VALUATION_PERIOD_LENGTH +
               1
           );
-          await assertCycleState(
-            this.fic,
-            this.asset.address,
-            partition1,
-            CYCLE_PAYMENT
-          );
+          await assertCycleState(fic, asset.address, partition1, CYCLE_PAYMENT);
         });
         it('reverts', async function () {
           const cycleIndex = (
-            await this.fic.getLastCycleIndex(this.asset.address, partition1)
+            await fic.getLastCycleIndex(asset.address, partition1)
           ).toNumber();
 
           await assertCycleAssetValue(
-            this.fic,
+            fic,
             cycleIndex,
             ASSET_VALUE_UNKNOWN,
             0,
@@ -2322,7 +1991,9 @@ contract(
           );
 
           await expectRevert.unspecified(
-            this.fic.valuate(cycleIndex, 1000, 0, { from: tokenController1 })
+            fic
+              .connect(await ethers.getSigner(tokenController1))
+              .valuate(cycleIndex, 1000, 0)
           );
         });
       });

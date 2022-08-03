@@ -8,8 +8,6 @@ import '@typechain/hardhat';
 import 'solidity-coverage';
 import 'hardhat-contract-sizer';
 import path from 'path';
-import genHelper from './gen-helper';
-import { TASK_TYPECHAIN_GENERATE_TYPES } from '@typechain/hardhat/dist/constants';
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const accounts = PRIVATE_KEY ? [PRIVATE_KEY] : [];
@@ -64,13 +62,5 @@ task('task', 'Run a script task with custom input')
     const { default: fn } = await import(path.resolve(__dirname, script));
     await fn(input);
   });
-
-subtask(
-  TASK_TYPECHAIN_GENERATE_TYPES,
-  'Generate Typechain typings for compiled contracts'
-).setAction(async (_arg1, _arg2, runSuper) => {
-  await runSuper();
-  await genHelper();
-});
 
 export default config;

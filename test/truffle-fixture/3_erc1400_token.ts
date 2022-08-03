@@ -1,7 +1,5 @@
-import { artifacts, ethers } from 'hardhat';
-import type { ERC1400 } from 'typechain-types';
-
-const ERC1400 = artifacts.require('ERC1400');
+import { ethers } from 'hardhat';
+import { ERC1400__factory } from '../../typechain-types';
 
 const controller = '0xb5747835141b46f7C472393B31F8F5A57F74A44f';
 
@@ -14,14 +12,15 @@ const partition3 =
 const partitions = [partition1, partition2, partition3];
 
 export default async function () {
-  const erc1400Token: ERC1400 = await ERC1400.new(
+  const [owner] = await ethers.getSigners();
+  const erc1400Token = await new ERC1400__factory(owner).deploy(
     'ERC1400Token',
     'DAU',
     1,
     [controller],
     partitions
   );
-  ERC1400.setAsDeployed(erc1400Token);
+  ERC1400__factory.setAsDeployed(erc1400Token);
   console.log(
     '\n   > ERC1400 token deployment: Success -->',
     erc1400Token.address

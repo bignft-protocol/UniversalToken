@@ -1,11 +1,8 @@
-import { artifacts, ethers } from 'hardhat';
-import type {
-  ERC1400HoldableToken,
-  ERC1400TokensValidator
-} from 'typechain-types';
-
-const ERC1400HoldableToken = artifacts.require('ERC1400HoldableToken');
-const Extension = artifacts.require('ERC1400TokensValidator');
+import { ethers } from 'hardhat';
+import {
+  ERC1400HoldableToken__factory,
+  ERC1400TokensValidator__factory
+} from '../../typechain-types';
 
 const controller = '0xb5747835141b46f7C472393B31F8F5A57F74A44f';
 
@@ -26,25 +23,27 @@ const CERTIFICATE_VALIDATION_NONCE = 1;
 const CERTIFICATE_VALIDATION_SALT = 2;
 
 export default async function () {
-  const erc1400HoldableToken: ERC1400HoldableToken =
-    await ERC1400HoldableToken.new(
-      'ERC1400HoldableToken',
-      'DAU',
-      1,
-      [controller],
-      partitions,
-      ZERO_ADDRESS,
-      ZERO_ADDRESS
-    );
-  ERC1400HoldableToken.setAsDeployed(erc1400HoldableToken);
+  const [owner] = await ethers.getSigners();
+  const erc1400HoldableToken = await new ERC1400HoldableToken__factory(
+    owner
+  ).deploy(
+    'ERC1400HoldableToken',
+    'DAU',
+    1,
+    [controller],
+    partitions,
+    ZERO_ADDRESS,
+    ZERO_ADDRESS
+  );
+  ERC1400HoldableToken__factory.setAsDeployed(erc1400HoldableToken);
   console.log(
     '\n   > ERC1400HoldableToken token deployment without extension: Success -->',
     erc1400HoldableToken.address
   );
 
-  const extension: ERC1400TokensValidator = await Extension.deployed();
+  const extension = ERC1400TokensValidator__factory.deployed;
 
-  const tokenInstance: ERC1400HoldableToken = await ERC1400HoldableToken.new(
+  const tokenInstance = await new ERC1400HoldableToken__factory(owner).deploy(
     'ERC1400HoldableToken',
     'DAU',
     1,
@@ -59,7 +58,7 @@ export default async function () {
     tokenInstance.address
   );
 
-  const tokenInstance2: ERC1400HoldableToken = await ERC1400HoldableToken.new(
+  const tokenInstance2 = await new ERC1400HoldableToken__factory(owner).deploy(
     'ERC1400HoldableToken',
     'DAU',
     1,
