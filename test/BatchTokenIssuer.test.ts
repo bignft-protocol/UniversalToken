@@ -2,7 +2,7 @@ import { artifacts, assert, contract, ethers } from 'hardhat';
 
 // @ts-ignore
 import { expectRevert } from '@openzeppelin/test-helpers';
-import { assertBalanceOfByPartition } from './utils/assert';
+import { assertBalanceOfByPartition, ZERO_BYTE } from './utils/assert';
 
 const BatchTokenIssuer = artifacts.require('BatchTokenIssuer');
 
@@ -23,10 +23,10 @@ const partition3_short =
   '6c6f636b65640000000000000000000000000000000000000000000000000000'; // locked in hex
 const partition4_short =
   '636f6c6c61746572616c00000000000000000000000000000000000000000000'; // collateral in hex
-const partition1 = '0x'.concat(partition1_short);
-const partition2 = '0x'.concat(partition2_short);
-const partition3 = '0x'.concat(partition3_short);
-const partition4 = '0x'.concat(partition4_short);
+const partition1 = ZERO_BYTE.concat(partition1_short);
+const partition2 = ZERO_BYTE.concat(partition2_short);
+const partition3 = ZERO_BYTE.concat(partition3_short);
+const partition4 = ZERO_BYTE.concat(partition4_short);
 
 const partitions = [partition1, partition2, partition3, partition4];
 

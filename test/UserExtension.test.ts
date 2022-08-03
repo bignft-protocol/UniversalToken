@@ -2,6 +2,7 @@ import { artifacts, contract, assert, ethers } from 'hardhat';
 
 // @ts-ignore
 import { expectRevert } from '@openzeppelin/test-helpers';
+import { ZERO_ADDRESS, ZERO_BYTE } from './utils/assert';
 
 const ERC1400 = artifacts.require('ERC1400');
 const ERC1820Registry = artifacts.require('ERC1820Registry');
@@ -11,8 +12,6 @@ const ERC1400TokensRecipient = artifacts.require('ERC1400TokensRecipientMock');
 
 const ERC1400_TOKENS_SENDER = 'ERC1400TokensSender';
 const ERC1400_TOKENS_RECIPIENT = 'ERC1400TokensRecipient';
-
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const CERTIFICATE_SIGNER = '0xe31C41f0f70C5ff39f73B4B94bcCD767b3071630';
 const VALID_CERTIFICATE =
@@ -30,9 +29,9 @@ const partition2_short =
 const partition3_short =
   '4c6f636b65640000000000000000000000000000000000000000000000000000'; // Locked in hex
 
-const partition1 = '0x'.concat(partition1_short);
-const partition2 = '0x'.concat(partition2_short);
-const partition3 = '0x'.concat(partition3_short);
+const partition1 = ZERO_BYTE.concat(partition1_short);
+const partition2 = ZERO_BYTE.concat(partition2_short);
+const partition3 = ZERO_BYTE.concat(partition3_short);
 
 const partitions = [partition1, partition2, partition3];
 

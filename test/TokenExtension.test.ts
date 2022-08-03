@@ -6,23 +6,26 @@ import {
   CERTIFICATE_VALIDATION_NONCE,
   CERTIFICATE_VALIDATION_SALT,
   CERTIFICATE_VALIDATION_DEFAULT,
-  assertTokenHasExtension,
-  assertCertificateActivated,
   setCertificateActivated,
-  assertAllowListActivated,
   setAllowListActivated,
-  assertBlockListActivated,
   setBlockListActivated,
-  assertGranularityByPartitionActivated,
   setGranularityByPartitionActivated,
-  assertHoldsActivated,
   setHoldsActivated,
-  assertIsTokenController,
   addTokenController
 } from './common/extension';
+import {
+  assertTokenHasExtension,
+  assertCertificateActivated,
+  assertIsTokenController,
+  assertHoldsActivated,
+  assertGranularityByPartitionActivated,
+  assertBlockListActivated,
+  assertAllowListActivated,
+  assertBalanceOfByPartition,
+  ZERO_BYTE
+} from './utils/assert';
 // @ts-ignore
 import { expectRevert } from '@openzeppelin/test-helpers';
-import { assertBalanceOfByPartition } from './utils/assert';
 
 const ERC1400HoldableCertificate = artifacts.require(
   'ERC1400HoldableCertificateToken'
@@ -52,17 +55,12 @@ const ERC1400_TOKENS_RECIPIENT = 'ERC1400TokensRecipient';
 const ERC1400TokensSender = artifacts.require('ERC1400TokensSenderMock');
 const ERC1400TokensRecipient = artifacts.require('ERC1400TokensRecipientMock');
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-const ZERO_BYTE = '0x';
-
 const EMPTY_BYTE32 =
   '0x0000000000000000000000000000000000000000000000000000000000000000';
 
 const CERTIFICATE_SIGNER_PRIVATE_KEY =
   '0x1699611cc662aad2db30d5cf44bd531a8b16710e43624fc0e801c6592f72f9ab';
 const CERTIFICATE_SIGNER = '0x2A3cE238F1903B1cA935D734e6160aBA029ff80a';
-
-const EMPTY_CERTIFICATE = '0x';
 
 const SALT_CERTIFICATE_WITH_V_EQUAL_TO_27 =
   '0xc146ced8f3786c604be1e79736551da9b9fbf013baa1db094ce9940a4ef5af4d000000000000000000000000000000000000000000000000000000012a56ef7a8a94cd85101a9285611e7bea0a6349497ffb9d25be95dee9e43af78437514a6c11d3525bb439dab160e3b7b1bf6fd3b35423d61533658759ceef0b5b019c29691b';
@@ -222,7 +220,7 @@ const craftCertificate = async (
     );
   }
 
-  return EMPTY_CERTIFICATE;
+  return ZERO_BYTE;
 };
 
 const craftNonceBasedCertificate = async (
@@ -2280,7 +2278,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token2,
@@ -2328,7 +2326,7 @@ contract(
                                 partition1,
                                 recipient,
                                 transferAmount,
-                                EMPTY_CERTIFICATE
+                                ZERO_BYTE
                               )
                               .encodeABI(),
                             this.token2,
@@ -2360,7 +2358,7 @@ contract(
                                 recipient,
                                 transferAmount,
                                 ZERO_BYTE,
-                                EMPTY_CERTIFICATE
+                                ZERO_BYTE
                               )
                               .encodeABI(),
                             this.token2,
@@ -2394,7 +2392,7 @@ contract(
                                 partition1,
                                 recipient,
                                 1, // transferAmount
-                                EMPTY_CERTIFICATE
+                                ZERO_BYTE
                               )
                               .encodeABI(),
                             this.token2,
@@ -2482,7 +2480,7 @@ contract(
                             issuanceAmount,
                             SECONDS_IN_AN_HOUR,
                             secretHashPair.hash,
-                            EMPTY_CERTIFICATE
+                            ZERO_BYTE
                           )
                           .encodeABI(),
                         this.token2,
@@ -2510,7 +2508,7 @@ contract(
                             partition1,
                             recipient,
                             transferAmount,
-                            EMPTY_CERTIFICATE
+                            ZERO_BYTE
                           )
                           .encodeABI(),
                         this.token2,
@@ -2560,7 +2558,7 @@ contract(
                         partition1,
                         ZERO_ADDRESS,
                         transferAmount,
-                        EMPTY_CERTIFICATE
+                        ZERO_BYTE
                       )
                       .encodeABI(),
                     this.token2,
@@ -2592,7 +2590,7 @@ contract(
                       partition1,
                       recipient,
                       issuanceAmount + localGranularity,
-                      EMPTY_CERTIFICATE
+                      ZERO_BYTE
                     )
                     .encodeABI(),
                   this.token2,
@@ -2621,7 +2619,7 @@ contract(
                       partition2,
                       tokenHolder,
                       localGranularity,
-                      EMPTY_CERTIFICATE
+                      ZERO_BYTE
                     )
                     .encodeABI(),
                   this.token2,
@@ -2642,7 +2640,7 @@ contract(
                       partition2,
                       recipient,
                       transferAmount,
-                      EMPTY_CERTIFICATE
+                      ZERO_BYTE
                     )
                     .encodeABI(),
                   this.token2,
@@ -2676,7 +2674,7 @@ contract(
                     recipient,
                     transferAmount,
                     ZERO_BYTE,
-                    EMPTY_CERTIFICATE
+                    ZERO_BYTE
                   )
                   .encodeABI(),
                 this.token2,
@@ -2708,7 +2706,7 @@ contract(
               partition1,
               recipient,
               transferAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
             await assertEscResponse(response, ESC_54, EMPTY_BYTE32, partition1);
@@ -2720,7 +2718,7 @@ contract(
               recipient,
               transferAmount,
               ZERO_BYTE,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
             await assertEscResponse(response, ESC_54, EMPTY_BYTE32, partition1);
@@ -2735,7 +2733,7 @@ contract(
                 partition1,
                 recipient,
                 transferAmount,
-                EMPTY_CERTIFICATE
+                ZERO_BYTE
               )
               .encodeABI(),
             this.token2,
@@ -2780,7 +2778,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -2803,7 +2801,7 @@ contract(
             it('issues new tokens when certificate is provided', async function () {
               const certificate = await craftCertificate(
                 this.token.contract.methods
-                  .issue(tokenHolder, issuanceAmount, EMPTY_CERTIFICATE)
+                  .issue(tokenHolder, issuanceAmount, ZERO_BYTE)
                   .encodeABI(),
                 this.token,
                 this.extension,
@@ -2823,12 +2821,9 @@ contract(
             });
             it('fails issuing when when certificate is not provided', async function () {
               await expectRevert.unspecified(
-                this.token.issue(
-                  tokenHolder,
-                  issuanceAmount,
-                  EMPTY_CERTIFICATE,
-                  { from: controller }
-                )
+                this.token.issue(tokenHolder, issuanceAmount, ZERO_BYTE, {
+                  from: controller
+                })
               );
             });
           });
@@ -2840,7 +2835,7 @@ contract(
                     partition1,
                     tokenHolder,
                     issuanceAmount,
-                    EMPTY_CERTIFICATE
+                    ZERO_BYTE
                   )
                   .encodeABI(),
                 this.token,
@@ -2873,7 +2868,7 @@ contract(
                 partition1,
                 tokenHolder,
                 issuanceAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: controller }
               );
               await assertTotalSupply(this.token, 2 * issuanceAmount);
@@ -2890,7 +2885,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: controller }
                 )
               );
@@ -2908,7 +2903,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: controller }
                 )
               );
@@ -2921,7 +2916,7 @@ contract(
 
               const certificate = await craftCertificate(
                 this.token.contract.methods
-                  .redeem(issuanceAmount, EMPTY_CERTIFICATE)
+                  .redeem(issuanceAmount, ZERO_BYTE)
                   .encodeABI(),
                 this.token,
                 this.extension,
@@ -2940,7 +2935,7 @@ contract(
               await assertBalance(this.token, tokenHolder, issuanceAmount);
 
               await expectRevert.unspecified(
-                this.token.redeem(issuanceAmount, EMPTY_CERTIFICATE, {
+                this.token.redeem(issuanceAmount, ZERO_BYTE, {
                   from: tokenHolder
                 })
               );
@@ -2960,7 +2955,7 @@ contract(
 
               const certificate = await craftCertificate(
                 this.token.contract.methods
-                  .redeemFrom(tokenHolder, issuanceAmount, EMPTY_CERTIFICATE)
+                  .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE)
                   .encodeABI(),
                 this.token,
                 this.extension,
@@ -2985,12 +2980,9 @@ contract(
                 from: tokenHolder
               });
               await expectRevert.unspecified(
-                this.token.redeemFrom(
-                  tokenHolder,
-                  issuanceAmount,
-                  EMPTY_CERTIFICATE,
-                  { from: operator }
-                )
+                this.token.redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE, {
+                  from: operator
+                })
               );
 
               await assertTotalSupply(this.token, issuanceAmount);
@@ -3001,11 +2993,7 @@ contract(
             it('redeems the requested amount when certificate is provided', async function () {
               const certificate = await craftCertificate(
                 this.token.contract.methods
-                  .redeemByPartition(
-                    partition1,
-                    redeemAmount,
-                    EMPTY_CERTIFICATE
-                  )
+                  .redeemByPartition(partition1, redeemAmount, ZERO_BYTE)
                   .encodeABI(),
                 this.token,
                 this.extension,
@@ -3034,7 +3022,7 @@ contract(
                 this.token.redeemByPartition(
                   partition1,
                   redeemAmount,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: tokenHolder }
                 )
               );
@@ -3058,7 +3046,7 @@ contract(
                 this.token.redeemByPartition(
                   partition1,
                   redeemAmount,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: tokenHolder }
                 )
               );
@@ -3087,7 +3075,7 @@ contract(
                     partition1,
                     tokenHolder,
                     redeemAmount,
-                    EMPTY_CERTIFICATE
+                    ZERO_BYTE
                   )
                   .encodeABI(),
                 this.token,
@@ -3133,7 +3121,7 @@ contract(
                 partition1,
                 tokenHolder,
                 redeemAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: operator }
               );
 
@@ -3161,7 +3149,7 @@ contract(
                   partition1,
                   tokenHolder,
                   redeemAmount,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: operator }
                 )
               );
@@ -3182,11 +3170,7 @@ contract(
 
               const certificate = await craftCertificate(
                 this.token.contract.methods
-                  .transferWithData(
-                    recipient,
-                    transferAmount,
-                    EMPTY_CERTIFICATE
-                  )
+                  .transferWithData(recipient, transferAmount, ZERO_BYTE)
                   .encodeABI(),
                 this.token,
                 this.extension,
@@ -3215,7 +3199,7 @@ contract(
                 this.token.transferWithData(
                   recipient,
                   transferAmount,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: tokenHolder }
                 )
               );
@@ -3239,7 +3223,7 @@ contract(
                     tokenHolder,
                     recipient,
                     transferAmount,
-                    EMPTY_CERTIFICATE
+                    ZERO_BYTE
                   )
                   .encodeABI(),
                 this.token,
@@ -3275,7 +3259,7 @@ contract(
                   tokenHolder,
                   recipient,
                   transferAmount,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: operator }
                 )
               );
@@ -3300,7 +3284,7 @@ contract(
                     partition1,
                     recipient,
                     transferAmount,
-                    EMPTY_CERTIFICATE
+                    ZERO_BYTE
                   )
                   .encodeABI(),
                 this.token,
@@ -3343,7 +3327,7 @@ contract(
                   partition1,
                   recipient,
                   transferAmount,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: tokenHolder }
                 )
               );
@@ -3384,7 +3368,7 @@ contract(
                   partition1,
                   recipient,
                   transferAmount,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: tokenHolder }
                 )
               );
@@ -3439,7 +3423,7 @@ contract(
                     recipient,
                     transferAmount,
                     ZERO_BYTE,
-                    EMPTY_CERTIFICATE
+                    ZERO_BYTE
                   )
                   .encodeABI(),
                 this.token,
@@ -3522,7 +3506,7 @@ contract(
                 recipient,
                 transferAmount,
                 ZERO_BYTE,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: operator }
               );
 
@@ -3565,7 +3549,7 @@ contract(
                     tokenHolder,
                     updateAmount,
                     changeToPartition2,
-                    EMPTY_CERTIFICATE
+                    ZERO_BYTE
                   )
                   .encodeABI(),
                 this.token,
@@ -3635,7 +3619,7 @@ contract(
                   recipient,
                   transferAmount,
                   ZERO_BYTE,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: operator }
                 )
               );
@@ -3836,7 +3820,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -3866,7 +3850,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -3891,7 +3875,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount - 1,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -3916,7 +3900,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -3947,7 +3931,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -3992,7 +3976,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -4017,7 +4001,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -4042,7 +4026,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -4116,7 +4100,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -4146,7 +4130,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -4171,7 +4155,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount - 1,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -4196,7 +4180,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -4227,7 +4211,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -4272,7 +4256,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -4297,7 +4281,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -4322,7 +4306,7 @@ contract(
                   partition1,
                   tokenHolder,
                   issuanceAmount,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -4411,19 +4395,16 @@ contract(
           partition1,
           tokenHolder,
           issuanceAmount,
-          EMPTY_CERTIFICATE,
+          ZERO_BYTE,
           { from: controller }
         );
       });
       describe('ERC1400 functions', function () {
         describe('issue', function () {
           it('issues new tokens when recipient is allowlisted', async function () {
-            await this.token.issue(
-              tokenHolder,
-              issuanceAmount,
-              EMPTY_CERTIFICATE,
-              { from: controller }
-            );
+            await this.token.issue(tokenHolder, issuanceAmount, ZERO_BYTE, {
+              from: controller
+            });
             await assertTotalSupply(this.token, 2 * issuanceAmount);
             await assertBalanceOf(
               this.token,
@@ -4441,7 +4422,7 @@ contract(
               }
             );
             await expectRevert.unspecified(
-              this.token.issue(tokenHolder, issuanceAmount, EMPTY_CERTIFICATE, {
+              this.token.issue(tokenHolder, issuanceAmount, ZERO_BYTE, {
                 from: controller
               })
             );
@@ -4453,7 +4434,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: controller }
             );
             await assertTotalSupply(this.token, 2 * issuanceAmount);
@@ -4477,7 +4458,7 @@ contract(
                 partition1,
                 tokenHolder,
                 issuanceAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: controller }
               )
             );
@@ -4488,7 +4469,7 @@ contract(
             await assertTotalSupply(this.token, issuanceAmount);
             await assertBalance(this.token, tokenHolder, issuanceAmount);
 
-            await this.token.redeem(issuanceAmount, EMPTY_CERTIFICATE, {
+            await this.token.redeem(issuanceAmount, ZERO_BYTE, {
               from: tokenHolder
             });
 
@@ -4507,7 +4488,7 @@ contract(
             await assertBalance(this.token, tokenHolder, issuanceAmount);
 
             await expectRevert.unspecified(
-              this.token.redeem(issuanceAmount, EMPTY_CERTIFICATE, {
+              this.token.redeem(issuanceAmount, ZERO_BYTE, {
                 from: tokenHolder
               })
             );
@@ -4525,7 +4506,7 @@ contract(
             await this.token.redeemFrom(
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: operator }
             );
 
@@ -4545,12 +4526,9 @@ contract(
 
             await this.token.authorizeOperator(operator, { from: tokenHolder });
             await expectRevert.unspecified(
-              this.token.redeemFrom(
-                tokenHolder,
-                issuanceAmount,
-                EMPTY_CERTIFICATE,
-                { from: operator }
-              )
+              this.token.redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE, {
+                from: operator
+              })
             );
 
             await assertTotalSupply(this.token, issuanceAmount);
@@ -4562,7 +4540,7 @@ contract(
             await this.token.redeemByPartition(
               partition1,
               redeemAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
             await assertTotalSupply(this.token, issuanceAmount - redeemAmount);
@@ -4585,7 +4563,7 @@ contract(
               this.token.redeemByPartition(
                 partition1,
                 redeemAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -4611,7 +4589,7 @@ contract(
               partition1,
               tokenHolder,
               redeemAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: operator }
             );
 
@@ -4643,7 +4621,7 @@ contract(
                 partition1,
                 tokenHolder,
                 redeemAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: operator }
               )
             );
@@ -4668,7 +4646,7 @@ contract(
             await this.token.transferWithData(
               recipient,
               transferAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
 
@@ -4697,7 +4675,7 @@ contract(
               this.token.transferWithData(
                 recipient,
                 transferAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -4713,7 +4691,7 @@ contract(
               this.token.transferWithData(
                 recipient,
                 transferAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -4736,7 +4714,7 @@ contract(
               tokenHolder,
               recipient,
               transferAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: operator }
             );
 
@@ -4765,7 +4743,7 @@ contract(
               partition1,
               recipient,
               transferAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
 
@@ -4806,7 +4784,7 @@ contract(
                 partition1,
                 recipient,
                 transferAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -4833,7 +4811,7 @@ contract(
                 partition1,
                 recipient,
                 transferAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -4889,7 +4867,7 @@ contract(
               recipient,
               transferAmount,
               ZERO_BYTE,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: operator }
             );
 
@@ -5068,19 +5046,16 @@ contract(
           partition1,
           tokenHolder,
           issuanceAmount,
-          EMPTY_CERTIFICATE,
+          ZERO_BYTE,
           { from: controller }
         );
       });
       describe('ERC1400 functions', function () {
         describe('issue', function () {
           it('issues new tokens when recipient is not  blocklisted', async function () {
-            await this.token.issue(
-              tokenHolder,
-              issuanceAmount,
-              EMPTY_CERTIFICATE,
-              { from: controller }
-            );
+            await this.token.issue(tokenHolder, issuanceAmount, ZERO_BYTE, {
+              from: controller
+            });
             await assertTotalSupply(this.token, 2 * issuanceAmount);
             await assertBalanceOf(
               this.token,
@@ -5105,12 +5080,9 @@ contract(
             );
 
             await assertBlockListActivated(this.extension, this.token, false);
-            await this.token.issue(
-              tokenHolder,
-              issuanceAmount,
-              EMPTY_CERTIFICATE,
-              { from: controller }
-            );
+            await this.token.issue(tokenHolder, issuanceAmount, ZERO_BYTE, {
+              from: controller
+            });
             await assertTotalSupply(this.token, 2 * issuanceAmount);
             await assertBalanceOf(
               this.token,
@@ -5142,7 +5114,7 @@ contract(
               }
             );
             await expectRevert.unspecified(
-              this.token.issue(tokenHolder, issuanceAmount, EMPTY_CERTIFICATE, {
+              this.token.issue(tokenHolder, issuanceAmount, ZERO_BYTE, {
                 from: controller
               })
             );
@@ -5154,7 +5126,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: controller }
             );
             await assertTotalSupply(this.token, 2 * issuanceAmount);
@@ -5178,7 +5150,7 @@ contract(
                 partition1,
                 tokenHolder,
                 issuanceAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: controller }
               )
             );
@@ -5189,7 +5161,7 @@ contract(
             await assertTotalSupply(this.token, issuanceAmount);
             await assertBalance(this.token, tokenHolder, issuanceAmount);
 
-            await this.token.redeem(issuanceAmount, EMPTY_CERTIFICATE, {
+            await this.token.redeem(issuanceAmount, ZERO_BYTE, {
               from: tokenHolder
             });
 
@@ -5208,7 +5180,7 @@ contract(
             await assertBalance(this.token, tokenHolder, issuanceAmount);
 
             await expectRevert.unspecified(
-              this.token.redeem(issuanceAmount, EMPTY_CERTIFICATE, {
+              this.token.redeem(issuanceAmount, ZERO_BYTE, {
                 from: tokenHolder
               })
             );
@@ -5226,7 +5198,7 @@ contract(
             await this.token.redeemFrom(
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: operator }
             );
 
@@ -5246,12 +5218,9 @@ contract(
 
             await this.token.authorizeOperator(operator, { from: tokenHolder });
             await expectRevert.unspecified(
-              this.token.redeemFrom(
-                tokenHolder,
-                issuanceAmount,
-                EMPTY_CERTIFICATE,
-                { from: operator }
-              )
+              this.token.redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE, {
+                from: operator
+              })
             );
 
             await assertTotalSupply(this.token, issuanceAmount);
@@ -5263,7 +5232,7 @@ contract(
             await this.token.redeemByPartition(
               partition1,
               redeemAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
             await assertTotalSupply(this.token, issuanceAmount - redeemAmount);
@@ -5286,7 +5255,7 @@ contract(
               this.token.redeemByPartition(
                 partition1,
                 redeemAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -5312,7 +5281,7 @@ contract(
               partition1,
               tokenHolder,
               redeemAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: operator }
             );
 
@@ -5344,7 +5313,7 @@ contract(
                 partition1,
                 tokenHolder,
                 redeemAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: operator }
               )
             );
@@ -5366,7 +5335,7 @@ contract(
             await this.token.transferWithData(
               recipient,
               transferAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
 
@@ -5392,7 +5361,7 @@ contract(
               this.token.transferWithData(
                 recipient,
                 transferAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -5411,7 +5380,7 @@ contract(
               this.token.transferWithData(
                 recipient,
                 transferAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -5430,7 +5399,7 @@ contract(
               tokenHolder,
               recipient,
               transferAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: operator }
             );
 
@@ -5456,7 +5425,7 @@ contract(
               partition1,
               recipient,
               transferAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
 
@@ -5494,7 +5463,7 @@ contract(
                 partition1,
                 recipient,
                 transferAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -5524,7 +5493,7 @@ contract(
                 partition1,
                 recipient,
                 transferAmount,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -5577,7 +5546,7 @@ contract(
               recipient,
               transferAmount,
               ZERO_BYTE,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: operator }
             );
 
@@ -5752,14 +5721,14 @@ contract(
           partition1,
           tokenHolder,
           issuanceAmount,
-          EMPTY_CERTIFICATE,
+          ZERO_BYTE,
           { from: controller }
         );
         await this.token.issueByPartition(
           partition2,
           tokenHolder,
           issuanceAmount,
-          EMPTY_CERTIFICATE,
+          ZERO_BYTE,
           { from: controller }
         );
       });
@@ -5889,14 +5858,14 @@ contract(
               partition1,
               recipient,
               amount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
             await this.token.transferByPartition(
               partition2,
               recipient,
               amount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
 
@@ -5955,7 +5924,7 @@ contract(
               partition1,
               recipient,
               1,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
             await expectRevert.unspecified(
@@ -5963,7 +5932,7 @@ contract(
                 partition2,
                 recipient,
                 1,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -6041,14 +6010,14 @@ contract(
               partition1,
               recipient,
               1,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
             await this.token.transferByPartition(
               partition2,
               recipient,
               1,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             );
 
@@ -6124,14 +6093,14 @@ contract(
             partition1,
             recipient,
             1,
-            EMPTY_CERTIFICATE,
+            ZERO_BYTE,
             { from: tokenHolder }
           );
           await this.token.transferByPartition(
             partition2,
             recipient,
             1,
-            EMPTY_CERTIFICATE,
+            ZERO_BYTE,
             { from: tokenHolder }
           );
 
@@ -6175,7 +6144,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -6318,7 +6287,7 @@ contract(
                       partition1,
                       tokenHolder,
                       issuanceAmount,
-                      EMPTY_CERTIFICATE
+                      ZERO_BYTE
                     )
                     .encodeABI(),
                   this.token2,
@@ -6493,7 +6462,7 @@ contract(
                 smallHoldAmount,
                 SECONDS_IN_AN_HOUR,
                 this.secretHashPair.hash,
-                EMPTY_CERTIFICATE
+                ZERO_BYTE
               )
               .encodeABI(),
             this.token,
@@ -6681,7 +6650,7 @@ contract(
               smallHoldAmount,
               SECONDS_IN_AN_HOUR,
               this.secretHashPair2.hash,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
             ).encodeABI(),
             this.token,
             this.extension,
@@ -6821,7 +6790,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -6918,14 +6887,14 @@ contract(
             partition1,
             recipient,
             transferAmount,
-            EMPTY_CERTIFICATE,
+            ZERO_BYTE,
             { from: tokenHolder }
           );
           await this.token.transferByPartition(
             partition1,
             recipient,
             0,
-            EMPTY_CERTIFICATE,
+            ZERO_BYTE,
             { from: tokenHolder }
           );
 
@@ -6976,7 +6945,7 @@ contract(
               partition1,
               recipient,
               transferAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             )
           );
@@ -7013,7 +6982,7 @@ contract(
           partition1,
           tokenHolder,
           issuanceAmount,
-          EMPTY_CERTIFICATE,
+          ZERO_BYTE,
           { from: controller }
         );
       });
@@ -7042,7 +7011,7 @@ contract(
             holdAmount,
             SECONDS_IN_AN_HOUR,
             secretHashPair.hash,
-            EMPTY_CERTIFICATE,
+            ZERO_BYTE,
             { from: controller }
           );
           const spendableBalance = parseInt(
@@ -7058,7 +7027,7 @@ contract(
               partition1,
               recipient,
               transferAmount,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: tokenHolder }
             )
           );
@@ -7081,7 +7050,7 @@ contract(
             partition1,
             recipient,
             transferAmount,
-            EMPTY_CERTIFICATE,
+            ZERO_BYTE,
             { from: tokenHolder }
           );
           assert.equal(
@@ -7120,7 +7089,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -7209,7 +7178,7 @@ contract(
                             holdAmount,
                             SECONDS_IN_AN_HOUR,
                             secretHashPair.hash,
-                            EMPTY_CERTIFICATE
+                            ZERO_BYTE
                           )
                           .encodeABI(),
                         this.token,
@@ -7343,7 +7312,7 @@ contract(
                             holdAmount,
                             SECONDS_IN_AN_HOUR,
                             secretHashPair.hash,
-                            EMPTY_CERTIFICATE
+                            ZERO_BYTE
                           )
                           .encodeABI(),
                         this.token,
@@ -7389,7 +7358,7 @@ contract(
                             partition1,
                             recipient,
                             transferAmount,
-                            EMPTY_CERTIFICATE
+                            ZERO_BYTE
                           )
                           .encodeABI(),
                         this.token,
@@ -7453,7 +7422,7 @@ contract(
                             holdAmount,
                             SECONDS_IN_AN_HOUR,
                             secretHashPair.hash,
-                            EMPTY_CERTIFICATE
+                            ZERO_BYTE
                           )
                           .encodeABI(),
                         this.token,
@@ -7486,7 +7455,7 @@ contract(
                             partition1,
                             recipient,
                             transferAmount,
-                            EMPTY_CERTIFICATE
+                            ZERO_BYTE
                           )
                           .encodeABI(),
                         this.token,
@@ -7519,7 +7488,7 @@ contract(
                             holdAmount,
                             SECONDS_IN_AN_HOUR,
                             secretHashPair.hash,
-                            EMPTY_CERTIFICATE
+                            ZERO_BYTE
                           )
                           .encodeABI(),
                         this.token,
@@ -7584,7 +7553,7 @@ contract(
                             initialSpendableBalance + 1,
                             SECONDS_IN_AN_HOUR,
                             secretHashPair.hash,
-                            EMPTY_CERTIFICATE
+                            ZERO_BYTE
                           )
                           .encodeABI(),
                         this.token,
@@ -7668,7 +7637,7 @@ contract(
                           holdAmount,
                           SECONDS_IN_AN_HOUR,
                           secretHashPair.hash,
-                          EMPTY_CERTIFICATE
+                          ZERO_BYTE
                         )
                         .encodeABI(),
                       this.token,
@@ -7802,7 +7771,7 @@ contract(
                         1,
                         SECONDS_IN_AN_HOUR,
                         secretHashPair.hash,
-                        EMPTY_CERTIFICATE
+                        ZERO_BYTE
                       )
                       .encodeABI(),
                     this.token,
@@ -7834,7 +7803,7 @@ contract(
                         1,
                         SECONDS_IN_AN_HOUR,
                         secretHashPair.hash,
-                        EMPTY_CERTIFICATE
+                        ZERO_BYTE
                       )
                       .encodeABI(),
                     this.token,
@@ -7874,7 +7843,7 @@ contract(
                       0,
                       SECONDS_IN_AN_HOUR,
                       secretHashPair.hash,
-                      EMPTY_CERTIFICATE
+                      ZERO_BYTE
                     )
                     .encodeABI(),
                   this.token,
@@ -7914,7 +7883,7 @@ contract(
                     holdAmount,
                     SECONDS_IN_AN_HOUR,
                     secretHashPair.hash,
-                    EMPTY_CERTIFICATE
+                    ZERO_BYTE
                   )
                   .encodeABI(),
                 this.token,
@@ -7953,7 +7922,7 @@ contract(
                 holdAmount,
                 SECONDS_IN_AN_HOUR,
                 secretHashPair.hash,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -8025,7 +7994,7 @@ contract(
             holdAmount,
             SECONDS_IN_AN_HOUR,
             secretHashPair.hash,
-            EMPTY_CERTIFICATE,
+            ZERO_BYTE,
             { from: tokenHolder }
           );
 
@@ -8124,7 +8093,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -8170,7 +8139,7 @@ contract(
                 holdAmount,
                 time + SECONDS_IN_AN_HOUR,
                 secretHashPair.hash,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               );
               assert.equal(
@@ -8200,7 +8169,7 @@ contract(
                 holdAmount,
                 0,
                 secretHashPair.hash,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               );
               assert.equal(parseInt(logs[0].args.expiration), 0);
@@ -8227,7 +8196,7 @@ contract(
                 holdAmount,
                 time - 1,
                 secretHashPair.hash,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -8258,7 +8227,7 @@ contract(
                   holdAmount,
                   time + SECONDS_IN_AN_HOUR,
                   secretHashPair.hash,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -8304,7 +8273,7 @@ contract(
                 holdAmount,
                 time + SECONDS_IN_AN_HOUR,
                 secretHashPair.hash,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -8324,7 +8293,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -8380,7 +8349,7 @@ contract(
                 holdAmount,
                 SECONDS_IN_AN_HOUR,
                 secretHashPair.hash,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: controller }
               );
               assert.equal(
@@ -8410,7 +8379,7 @@ contract(
                   holdAmount,
                   SECONDS_IN_AN_HOUR,
                   secretHashPair.hash,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: recipient }
                 )
               );
@@ -8432,7 +8401,7 @@ contract(
                 holdAmount,
                 SECONDS_IN_AN_HOUR,
                 secretHashPair.hash,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: controller }
               )
             );
@@ -8473,7 +8442,7 @@ contract(
                   holdAmount,
                   SECONDS_IN_AN_HOUR,
                   secretHashPair.hash,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -8531,7 +8500,7 @@ contract(
                 holdAmount,
                 SECONDS_IN_AN_HOUR,
                 secretHashPair.hash,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: controller }
               )
             );
@@ -8551,7 +8520,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -8611,7 +8580,7 @@ contract(
                       holdAmount,
                       time + SECONDS_IN_AN_HOUR,
                       secretHashPair.hash,
-                      EMPTY_CERTIFICATE,
+                      ZERO_BYTE,
                       { from: controller }
                     );
                   assert.equal(
@@ -8655,7 +8624,7 @@ contract(
                       holdAmount,
                       time + SECONDS_IN_AN_HOUR,
                       secretHashPair.hash,
-                      EMPTY_CERTIFICATE,
+                      ZERO_BYTE,
                       { from: recipient }
                     )
                   );
@@ -8678,7 +8647,7 @@ contract(
                     holdAmount,
                     time + SECONDS_IN_AN_HOUR,
                     secretHashPair.hash,
-                    EMPTY_CERTIFICATE,
+                    ZERO_BYTE,
                     { from: controller }
                   )
                 );
@@ -8710,7 +8679,7 @@ contract(
                 holdAmount,
                 0,
                 secretHashPair.hash,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: controller }
               );
               assert.equal(
@@ -8749,7 +8718,7 @@ contract(
                 holdAmount,
                 time - 1,
                 secretHashPair.hash,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: controller }
               )
             );
@@ -8791,7 +8760,7 @@ contract(
                   holdAmount,
                   time + SECONDS_IN_AN_HOUR,
                   secretHashPair.hash,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -8860,7 +8829,7 @@ contract(
                 holdAmount,
                 time + SECONDS_IN_AN_HOUR,
                 secretHashPair.hash,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: controller }
               )
             );
@@ -8880,7 +8849,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -8911,7 +8880,7 @@ contract(
               holdAmount,
               SECONDS_IN_AN_HOUR,
               this.secretHashPair.hash,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -9267,7 +9236,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -9298,7 +9267,7 @@ contract(
               holdAmount,
               SECONDS_IN_AN_HOUR,
               this.secretHashPair.hash,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -9357,7 +9326,7 @@ contract(
                     this.token.address,
                     this.holdId,
                     SECONDS_IN_A_DAY,
-                    EMPTY_CERTIFICATE,
+                    ZERO_BYTE,
                     { from: tokenHolder }
                   );
 
@@ -9393,7 +9362,7 @@ contract(
                     this.token.address,
                     this.holdId,
                     0,
-                    EMPTY_CERTIFICATE,
+                    ZERO_BYTE,
                     { from: tokenHolder }
                   );
 
@@ -9408,7 +9377,7 @@ contract(
                     this.token.address,
                     this.holdId,
                     SECONDS_IN_A_DAY,
-                    EMPTY_CERTIFICATE,
+                    ZERO_BYTE,
                     { from: tokenHolder }
                   );
 
@@ -9454,7 +9423,7 @@ contract(
                     this.token.address,
                     this.holdId,
                     SECONDS_IN_A_DAY,
-                    EMPTY_CERTIFICATE,
+                    ZERO_BYTE,
                     { from: controller }
                   );
 
@@ -9479,7 +9448,7 @@ contract(
                       this.token.address,
                       this.holdId,
                       SECONDS_IN_A_DAY,
-                      EMPTY_CERTIFICATE,
+                      ZERO_BYTE,
                       { from: recipient }
                     )
                   );
@@ -9509,7 +9478,7 @@ contract(
                     this.token.address,
                     this.holdId,
                     SECONDS_IN_A_DAY,
-                    EMPTY_CERTIFICATE,
+                    ZERO_BYTE,
                     { from: tokenHolder }
                   )
                 );
@@ -9571,7 +9540,7 @@ contract(
                 this.token.address,
                 this.holdId,
                 SECONDS_IN_A_DAY,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               );
 
@@ -9613,7 +9582,7 @@ contract(
                   this.token.address,
                   this.holdId,
                   SECONDS_IN_A_DAY,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: tokenHolder }
                 )
               );
@@ -9651,7 +9620,7 @@ contract(
                   this.token.address,
                   this.holdId,
                   SECONDS_IN_A_DAY,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -9702,7 +9671,7 @@ contract(
                 this.token.address,
                 this.holdId,
                 SECONDS_IN_A_DAY,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -9722,7 +9691,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -9753,7 +9722,7 @@ contract(
               holdAmount,
               SECONDS_IN_AN_HOUR,
               this.secretHashPair.hash,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -9810,7 +9779,7 @@ contract(
                 this.token.address,
                 this.holdId,
                 this.time + SECONDS_IN_A_DAY,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               );
 
@@ -9868,7 +9837,7 @@ contract(
                 this.token.address,
                 this.holdId,
                 0,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               );
 
@@ -9900,7 +9869,7 @@ contract(
                 this.token.address,
                 this.holdId,
                 this.time - 1,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -9937,7 +9906,7 @@ contract(
                   this.token.address,
                   this.holdId,
                   this.time + SECONDS_IN_A_DAY,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -10009,7 +9978,7 @@ contract(
                 this.token.address,
                 this.holdId,
                 this.time + SECONDS_IN_A_DAY,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             );
@@ -10029,7 +9998,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -10060,7 +10029,7 @@ contract(
               holdAmount,
               SECONDS_IN_AN_HOUR,
               this.secretHashPair.hash,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -10979,7 +10948,7 @@ contract(
               partition1,
               tokenHolder,
               issuanceAmount,
-              EMPTY_CERTIFICATE
+              ZERO_BYTE
             )
             .encodeABI(),
           this.token,
@@ -11059,7 +11028,7 @@ contract(
               holdAmount,
               SECONDS_IN_AN_HOUR,
               secretHashPair.hash,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: controller }
             );
 
@@ -11154,7 +11123,7 @@ contract(
               holdAmount,
               SECONDS_IN_AN_HOUR,
               secretHashPair.hash,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: controller }
             );
 
@@ -11189,7 +11158,7 @@ contract(
               holdAmount,
               time + SECONDS_IN_AN_HOUR,
               secretHashPair.hash,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: controller }
             );
 
@@ -11220,7 +11189,7 @@ contract(
               holdAmount,
               time + SECONDS_IN_AN_HOUR,
               secretHashPair.hash,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: controller }
             );
             await this.extension.releaseHold(this.token.address, holdId, {
@@ -11257,14 +11226,14 @@ contract(
               holdAmount,
               time + SECONDS_IN_AN_HOUR,
               secretHashPair.hash,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: controller }
             );
             await this.extension.renewHold(
               this.token.address,
               holdId,
               SECONDS_IN_A_DAY,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: controller }
             );
 
@@ -11302,7 +11271,7 @@ contract(
               holdAmount,
               time + SECONDS_IN_AN_HOUR,
               secretHashPair.hash,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: controller }
             );
             await expectRevert.unspecified(
@@ -11310,7 +11279,7 @@ contract(
                 this.token.address,
                 holdId,
                 SECONDS_IN_A_DAY,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: recipient }
               )
             );
@@ -11363,7 +11332,7 @@ contract(
               holdAmount,
               SECONDS_IN_AN_HOUR,
               secretHashPair.hash,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: controller }
             );
             await this.extension.addAllowlisted(this.token.address, recipient, {
@@ -11470,7 +11439,7 @@ contract(
               holdAmount,
               SECONDS_IN_AN_HOUR,
               secretHashPair.hash,
-              EMPTY_CERTIFICATE,
+              ZERO_BYTE,
               { from: controller }
             );
             await this.extension.addAllowlisted(this.token.address, recipient, {
@@ -11562,7 +11531,7 @@ contract(
                   holdAmount,
                   time - 1,
                   secretHashPair.hash,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: controller }
                 )
               );
@@ -11582,7 +11551,7 @@ contract(
                   holdAmount,
                   SECONDS_IN_AN_HOUR,
                   secretHashPair.hash,
-                  EMPTY_CERTIFICATE,
+                  ZERO_BYTE,
                   { from: notary }
                 )
               );
@@ -11649,7 +11618,7 @@ contract(
                   holdAmount,
                   SECONDS_IN_AN_HOUR,
                   secretHashPair.hash,
-                  EMPTY_CERTIFICATE
+                  ZERO_BYTE
                 )
                 .encodeABI(),
               this.token,
@@ -11763,7 +11732,7 @@ contract(
                 holdAmount,
                 SECONDS_IN_AN_HOUR,
                 secretHashPair.hash,
-                EMPTY_CERTIFICATE,
+                ZERO_BYTE,
                 { from: controller }
               )
             );

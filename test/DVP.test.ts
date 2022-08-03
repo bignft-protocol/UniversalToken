@@ -39,7 +39,8 @@ import {
   STATE_FORCED,
   STATE_PENDING,
   TYPE_ESCROW,
-  TYPE_SWAP
+  TYPE_SWAP,
+  ZERO_BYTE
 } from './utils/assert';
 import {
   extractTokenAccepted,
@@ -51,7 +52,7 @@ import {
 } from './utils/extract';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-const ZERO_BYTE = '0x';
+
 const ZERO_BYTES32 =
   '0x0000000000000000000000000000000000000000000000000000000000000000';
 
@@ -994,7 +995,7 @@ contract(
               unknown,
               unknown,
               1,
-              tradeProposalData.substring(0, tradeProposalData.length - 1),
+              tradeProposalData.substring(0, tradeProposalData.length - 2),
               MOCK_CERTIFICATE
             );
             assert.equal(answer, false);
@@ -1060,7 +1061,7 @@ contract(
           describe('when data field is valid', function () {
             describe('when received tokens correspond to a new trade proposal', function () {
               it('creates and accepts the trade request', async function () {
-                assert.equal(await dvp.getNbTrades(), BigNumber.from(0));
+                assert.equal((await dvp.getNbTrades()).eq(0), true);
                 await createTradeRequestWithoutCallingDVP(
                   dvp,
                   security1400,
@@ -1074,10 +1075,10 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                assert.equal(await dvp.getNbTrades(), BigNumber.from(1));
+                assert.equal((await dvp.getNbTrades()).eq(1), true);
               });
               it('creates and accepts a second trade request', async function () {
-                assert.equal(await dvp.getNbTrades(), BigNumber.from(0));
+                assert.equal((await dvp.getNbTrades()).eq(0), true);
                 await createTradeRequestWithoutCallingDVP(
                   dvp,
                   security1400,
@@ -1116,7 +1117,7 @@ contract(
                     tradeProposalData,
                     MOCK_CERTIFICATE
                   );
-                assert.equal(await dvp.getNbTrades(), BigNumber.from(2));
+                assert.equal((await dvp.getNbTrades()).eq(2), true);
               });
             });
             describe('when received tokens correspond to an existing trade acceptance', function () {
@@ -1199,15 +1200,16 @@ contract(
                                 const tradeAcceptanceData =
                                   getTradeAcceptanceData(1);
                                 await expectRevert.unspecified(
-                                  emoney1400.operatorTransferByPartition(
-                                    partition1,
-                                    recipient1,
-                                    dvp.address,
-                                    token2Amount + 1,
-                                    tradeAcceptanceData,
-                                    MOCK_CERTIFICATE,
-                                    { from: recipient1 }
-                                  )
+                                  emoney1400
+                                    .connect(await ethers.getSigner(recipient1))
+                                    .operatorTransferByPartition(
+                                      partition1,
+                                      recipient1,
+                                      dvp.address,
+                                      token2Amount + 1,
+                                      tradeAcceptanceData,
+                                      MOCK_CERTIFICATE
+                                    )
                                 );
                               });
                             });
@@ -1230,10 +1232,10 @@ contract(
                             );
                             const tradeAcceptanceData =
                               getTradeAcceptanceData(1);
-                            await expectRevert
-                              .connect(await ethers.getSigner(recipient1))
-                              .unspecified(
-                                emoney1400.operatorTransferByPartition(
+                            await expectRevert.unspecified(
+                              emoney1400
+                                .connect(await ethers.getSigner(recipient1))
+                                .operatorTransferByPartition(
                                   partition1,
                                   recipient1,
                                   dvp.address,
@@ -1241,7 +1243,7 @@ contract(
                                   tradeAcceptanceData,
                                   MOCK_CERTIFICATE
                                 )
-                              );
+                            );
                           });
                         });
                       });
@@ -1269,10 +1271,10 @@ contract(
                             token2Amount
                           );
                           const tradeAcceptanceData = getTradeAcceptanceData(1);
-                          await expectRevert
-                            .connect(await ethers.getSigner(recipient1))
-                            .unspecified(
-                              emoney1400.operatorTransferByPartition(
+                          await expectRevert.unspecified(
+                            emoney1400
+                              .connect(await ethers.getSigner(recipient1))
+                              .operatorTransferByPartition(
                                 partition2,
                                 recipient1,
                                 dvp.address,
@@ -1280,7 +1282,7 @@ contract(
                                 tradeAcceptanceData,
                                 MOCK_CERTIFICATE
                               )
-                            );
+                          );
                         });
                       });
                     });
@@ -1312,10 +1314,10 @@ contract(
                           token2Amount
                         );
                         const tradeAcceptanceData = getTradeAcceptanceData(1);
-                        await expectRevert
-                          .connect(await ethers.getSigner(recipient1))
-                          .unspecified(
-                            wrongEmoney1400.operatorTransferByPartition(
+                        await expectRevert.unspecified(
+                          wrongEmoney1400
+                            .connect(await ethers.getSigner(recipient1))
+                            .operatorTransferByPartition(
                               partition1,
                               recipient1,
                               dvp.address,
@@ -1323,7 +1325,7 @@ contract(
                               tradeAcceptanceData,
                               MOCK_CERTIFICATE
                             )
-                          );
+                        );
                       });
                     });
                   });
@@ -1351,10 +1353,10 @@ contract(
                         token2Amount
                       );
                       const tradeAcceptanceData = getTradeAcceptanceData(1);
-                      await expectRevert
-                        .connect(await ethers.getSigner(recipient2))
-                        .unspecified(
-                          emoney1400.operatorTransferByPartition(
+                      await expectRevert.unspecified(
+                        emoney1400
+                          .connect(await ethers.getSigner(recipient2))
+                          .operatorTransferByPartition(
                             partition1,
                             recipient2,
                             dvp.address,
@@ -1362,7 +1364,7 @@ contract(
                             tradeAcceptanceData,
                             MOCK_CERTIFICATE
                           )
-                        );
+                      );
                     });
                   });
                 });
@@ -1421,10 +1423,10 @@ contract(
                     ACCEPTED_TRUE
                   );
                   const tradeAcceptanceData = getTradeAcceptanceData(1);
-                  await expectRevert
-                    .connect(await ethers.getSigner(recipient1))
-                    .unspecified(
-                      emoney1400.operatorTransferByPartition(
+                  await expectRevert.unspecified(
+                    emoney1400
+                      .connect(await ethers.getSigner(recipient1))
+                      .operatorTransferByPartition(
                         partition1,
                         recipient1,
                         dvp.address,
@@ -1432,7 +1434,7 @@ contract(
                         tradeAcceptanceData,
                         MOCK_CERTIFICATE
                       )
-                    );
+                  );
                 });
               });
             });
@@ -1453,10 +1455,10 @@ contract(
                 token2Amount
               );
               const fakeTradeAcceptanceData = getTradeAcceptanceData(1, true);
-              await expectRevert
-                .connect(await ethers.getSigner(recipient1))
-                .unspecified(
-                  emoney1400.operatorTransferByPartition(
+              await expectRevert.unspecified(
+                emoney1400
+                  .connect(await ethers.getSigner(recipient1))
+                  .operatorTransferByPartition(
                     partition1,
                     recipient1,
                     dvp.address,
@@ -1464,7 +1466,7 @@ contract(
                     fakeTradeAcceptanceData,
                     MOCK_CERTIFICATE
                   )
-                );
+              );
             });
           });
         });
@@ -1539,7 +1541,7 @@ contract(
             dvp
               .connect(await ethers.getSigner(tokenHolder1))
               .tokensReceived(
-                '0x',
+                ZERO_BYTE,
                 partition1,
                 tokenHolder1,
                 tokenHolder1,
@@ -1640,9 +1642,7 @@ contract(
                     it('creates and accepts the trade request', async function () {
                       const security1400 = await new ERC1400__factory(
                         signer
-                      ).deploy('ERC1400Token', 'DAU', 1, [], partitions, {
-                        from: owner
-                      });
+                      ).deploy('ERC1400Token', 'DAU', 1, [], partitions);
 
                       await security1400.issueByPartition(
                         partition1,
@@ -1751,9 +1751,7 @@ contract(
                     it('creates and accepts the trade request', async function () {
                       const security1400 = await new ERC1400__factory(
                         signer
-                      ).deploy('ERC1400Token', 'DAU', 1, [], partitions, {
-                        from: owner
-                      });
+                      ).deploy('ERC1400Token', 'DAU', 1, [], partitions);
                       await security1400.issueByPartition(
                         partition1,
                         tokenHolder1,
@@ -1887,11 +1885,11 @@ contract(
                       tradeType1: HEX_TYPE_SWAP,
                       tradeType2: HEX_TYPE_SWAP
                     };
-                    await expectRevert
-                      .connect(await ethers.getSigner(unknown))
-                      .unspecified(
-                        dvp.requestTrade(tradeInputData, ZERO_BYTES32)
-                      );
+                    await expectRevert.unspecified(
+                      dvp
+                        .connect(await ethers.getSigner(unknown))
+                        .requestTrade(tradeInputData, ZERO_BYTES32)
+                    );
                   });
                 });
               });
@@ -2263,10 +2261,11 @@ contract(
                   token2Amount
                 );
                 await expectRevert.unspecified(
-                  dvp.acceptTrade(1, ZERO_BYTES32, {
-                    from: recipient1,
-                    value: token2Amount - 1
-                  })
+                  dvp
+                    .connect(await ethers.getSigner(recipient1))
+                    .acceptTrade(1, ZERO_BYTES32, {
+                      value: token2Amount - 1
+                    })
                 );
               });
             });
@@ -2290,9 +2289,9 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await token2.approve(dvp.address, token2Amount - 1, {
-                  from: recipient1
-                });
+                await token2
+                  .connect(await ethers.getSigner(recipient1))
+                  .approve(dvp.address, token2Amount - 1);
                 await expectRevert.unspecified(
                   acceptTradeRequest(
                     dvp,
@@ -2342,15 +2341,18 @@ contract(
                   token1Amount,
                   token2Amount
                 );
-                await security1400.approveByPartition(
-                  partition1,
-                  dvp.address,
-                  token2Amount - 1,
-                  { from: recipient1 }
-                );
-                await expectRevert
+                await security1400
                   .connect(await ethers.getSigner(recipient1))
-                  .unspecified(dvp.acceptTrade(1, ZERO_BYTES32));
+                  .approveByPartition(
+                    partition1,
+                    dvp.address,
+                    token2Amount - 1
+                  );
+                await expectRevert.unspecified(
+                  dvp
+                    .connect(await ethers.getSigner(recipient1))
+                    .acceptTrade(1, ZERO_BYTES32)
+                );
               });
             });
           });
@@ -2653,9 +2655,11 @@ contract(
             await token2
               .connect(await ethers.getSigner(recipient1))
               .approve(dvp.address, token2Amount);
-            await expectRevert
-              .connect(await ethers.getSigner(recipient1))
-              .unspecified(dvp.acceptTrade(999, ZERO_BYTES32));
+            await expectRevert.unspecified(
+              dvp
+                .connect(await ethers.getSigner(recipient1))
+                .acceptTrade(999, ZERO_BYTES32)
+            );
           });
         });
         describe('when trade with indicated index is not in state pending', function () {
@@ -2684,9 +2688,11 @@ contract(
             await dvp
               .connect(await ethers.getSigner(recipient1))
               .acceptTrade(1, ZERO_BYTES32);
-            await expectRevert
-              .connect(await ethers.getSigner(recipient1))
-              .unspecified(dvp.acceptTrade(1, ZERO_BYTES32));
+            await expectRevert.unspecified(
+              dvp
+                .connect(await ethers.getSigner(recipient1))
+                .acceptTrade(1, ZERO_BYTES32)
+            );
           });
         });
       });
@@ -3019,9 +3025,9 @@ contract(
 
             assert.equal(await dvp.getTradeApprovalStatus(1), false);
 
-            await expectRevert
-              .connect(await ethers.getSigner(unknown))
-              .unspecified(dvp.approveTrade(1, true));
+            await expectRevert.unspecified(
+              dvp.connect(await ethers.getSigner(unknown)).approveTrade(1, true)
+            );
           });
         });
       });
@@ -3061,9 +3067,11 @@ contract(
 
             assert.equal(await dvp.getTradeApprovalStatus(1), false);
 
-            await expectRevert
-              .connect(await ethers.getSigner(tokenController1))
-              .unspecified(dvp.approveTrade(999, true));
+            await expectRevert.unspecified(
+              dvp
+                .connect(await ethers.getSigner(tokenController1))
+                .approveTrade(999, true)
+            );
           });
         });
         describe('when trade with indicated index is not in state pending', function () {
@@ -3106,9 +3114,11 @@ contract(
               .approveTrade(1, true);
             await assertTradeState(dvp, 1, STATE_EXECUTED);
 
-            await expectRevert
-              .connect(await ethers.getSigner(tokenController1))
-              .unspecified(dvp.approveTrade(1, true));
+            await expectRevert.unspecified(
+              dvp
+                .connect(await ethers.getSigner(tokenController1))
+                .approveTrade(1, true)
+            );
           });
         });
       });
@@ -3821,9 +3831,9 @@ contract(
       });
       describe('when trade index is not valid', function () {
         it('reverts', async function () {
-          await expectRevert
-            .connect(await ethers.getSigner(executer))
-            .unspecified(dvp.executeTrade(999));
+          await expectRevert.unspecified(
+            dvp.connect(await ethers.getSigner(executer)).executeTrade(999)
+          );
         });
       });
     });
@@ -4112,9 +4122,9 @@ contract(
       });
       describe('when trade index is not valid', function () {
         it('reverts', async function () {
-          await expectRevert
-            .connect(await ethers.getSigner(executer))
-            .unspecified(dvp.forceTrade(999));
+          await expectRevert.unspecified(
+            dvp.connect(await ethers.getSigner(executer)).forceTrade(999)
+          );
         });
       });
     });
@@ -4866,18 +4876,18 @@ contract(
                 token2Amount
               );
 
-              await expectRevert
-                .connect(await ethers.getSigner(unknown))
-                .unspecified(dvp.cancelTrade(1));
+              await expectRevert.unspecified(
+                dvp.connect(await ethers.getSigner(unknown)).cancelTrade(1)
+              );
             });
           });
         });
       });
       describe('when trade index is not valid', function () {
         it('reverts', async function () {
-          await expectRevert
-            .connect(await ethers.getSigner(executer))
-            .unspecified(dvp.cancelTrade(999));
+          await expectRevert.unspecified(
+            dvp.connect(await ethers.getSigner(executer)).cancelTrade(999)
+          );
         });
       });
     });
@@ -4907,9 +4917,9 @@ contract(
       });
       describe('when the caller is not the contract owner', function () {
         it('reverts', async function () {
-          await expectRevert
-            .connect(await ethers.getSigner(unknown))
-            .unspecified(dvp.renounceOwnership());
+          await expectRevert.unspecified(
+            dvp.connect(await ethers.getSigner(unknown)).renounceOwnership()
+          );
         });
       });
     });
@@ -4950,9 +4960,11 @@ contract(
       });
       describe('when the caller is not the contract owner', function () {
         it('reverts', async function () {
-          await expectRevert
-            .connect(await ethers.getSigner(executer))
-            .unspecified(dvp.setTradeExecuters([owner, executer]));
+          await expectRevert.unspecified(
+            dvp
+              .connect(await ethers.getSigner(executer))
+              .setTradeExecuters([owner, executer])
+          );
         });
       });
     });
@@ -4965,14 +4977,9 @@ contract(
       beforeEach(async function () {
         dvp = await new Swaps__factory(signer).deploy(false);
 
-        token1 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18,
-          {
-            from: tokenHolder1
-          }
-        );
+        token1 = await new ERC20Token__factory(
+          await ethers.getSigner(tokenHolder1)
+        ).deploy('ERC20Token', 'DAU', 18);
       });
       describe('when the caller is the token contract owner', function () {
         it('sets the operators as token controllers', async function () {
@@ -5142,11 +5149,11 @@ contract(
       });
       describe('when sender is not price oracle of the token', function () {
         it('reverts', async function () {
-          await expectRevert
-            .connect(await ethers.getSigner(unknown))
-            .unspecified(
-              dvp.setPriceOwnership(token1.address, token2.address, true)
-            );
+          await expectRevert.unspecified(
+            dvp
+              .connect(await ethers.getSigner(unknown))
+              .setPriceOwnership(token1.address, token2.address, true)
+          );
         });
       });
     });
@@ -5195,13 +5202,15 @@ contract(
               );
 
               assert.equal(
-                await dvp.getTokenPrice(
-                  token1.address,
-                  token2.address,
-                  partition1,
-                  partition2
-                ),
-                BigNumber.from(0)
+                (
+                  await dvp.getTokenPrice(
+                    token1.address,
+                    token2.address,
+                    partition1,
+                    partition2
+                  )
+                ).eq(0),
+                true
               );
               await dvp
                 .connect(await ethers.getSigner(oracle))
@@ -5213,13 +5222,15 @@ contract(
                   newTokenPrice
                 );
               assert.equal(
-                await dvp.getTokenPrice(
-                  token1.address,
-                  token2.address,
-                  partition1,
-                  partition2
-                ),
-                BigNumber.from(newTokenPrice)
+                (
+                  await dvp.getTokenPrice(
+                    token1.address,
+                    token2.address,
+                    partition1,
+                    partition2
+                  )
+                ).eq(newTokenPrice),
+                true
               );
             });
             it('sets the price for token2', async function () {
@@ -5236,13 +5247,15 @@ contract(
               );
 
               assert.equal(
-                await dvp.getTokenPrice(
-                  token1.address,
-                  token2.address,
-                  partition1,
-                  partition2
-                ),
-                0
+                (
+                  await dvp.getTokenPrice(
+                    token1.address,
+                    token2.address,
+                    partition1,
+                    partition2
+                  )
+                ).eq(0),
+                true
               );
               await dvp
                 .connect(await ethers.getSigner(unknown))
@@ -5254,13 +5267,15 @@ contract(
                   newTokenPrice
                 );
               assert.equal(
-                await dvp.getTokenPrice(
-                  token1.address,
-                  token2.address,
-                  partition1,
-                  partition2
-                ),
-                BigNumber.from(newTokenPrice)
+                (
+                  await dvp.getTokenPrice(
+                    token1.address,
+                    token2.address,
+                    partition1,
+                    partition2
+                  )
+                ).eq(newTokenPrice),
+                true
               );
             });
           });
@@ -5278,17 +5293,17 @@ contract(
                 false
               );
 
-              await expectRevert
-                .connect(await ethers.getSigner(unknown))
-                .unspecified(
-                  dvp.setTokenPrice(
+              await expectRevert.unspecified(
+                dvp
+                  .connect(await ethers.getSigner(unknown))
+                  .setTokenPrice(
                     token1.address,
                     token2.address,
                     partition1,
                     partition2,
                     newTokenPrice
                   )
-                );
+              );
             });
             it('reverts', async function () {
               await dvp
@@ -5303,33 +5318,33 @@ contract(
                 true
               );
 
-              await expectRevert
-                .connect(await ethers.getSigner(oracle))
-                .unspecified(
-                  dvp.setTokenPrice(
+              await expectRevert.unspecified(
+                dvp
+                  .connect(await ethers.getSigner(oracle))
+                  .setTokenPrice(
                     token1.address,
                     token2.address,
                     partition1,
                     partition2,
                     newTokenPrice
                   )
-                );
+              );
             });
           });
         });
         describe('when the price ownership is not taken', function () {
           it('sets the price for token1', async function () {
-            await expectRevert
-              .connect(await ethers.getSigner(oracle))
-              .unspecified(
-                dvp.setTokenPrice(
+            await expectRevert.unspecified(
+              dvp
+                .connect(await ethers.getSigner(oracle))
+                .setTokenPrice(
                   token1.address,
                   token2.address,
                   partition1,
                   partition2,
                   newTokenPrice
                 )
-              );
+            );
           });
         });
       });
@@ -5343,17 +5358,17 @@ contract(
             .setPriceOwnership(token2.address, token1.address, true);
         });
         it('reverts', async function () {
-          await expectRevert
-            .connect(await ethers.getSigner(oracle))
-            .unspecified(
-              dvp.setTokenPrice(
+          await expectRevert.unspecified(
+            dvp
+              .connect(await ethers.getSigner(oracle))
+              .setTokenPrice(
                 token1.address,
                 token2.address,
                 partition1,
                 partition2,
                 newTokenPrice
               )
-            );
+          );
         });
       });
     });
@@ -5381,8 +5396,8 @@ contract(
               .timestamp;
             let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
             assert.equal(
-              await dvp.variablePriceStartDate(token1.address),
-              BigNumber.from(0)
+              (await dvp.variablePriceStartDate(token1.address)).eq(0),
+              true
             );
 
             await dvp
@@ -5392,16 +5407,18 @@ contract(
                 variablePriceStartDate
               );
             assert.equal(
-              await dvp.variablePriceStartDate(token1.address),
-              BigNumber.from(variablePriceStartDate)
+              (await dvp.variablePriceStartDate(token1.address)).eq(
+                variablePriceStartDate
+              ),
+              true
             );
 
             await dvp
               .connect(await ethers.getSigner(oracle))
               .setVariablePriceStartDate(token1.address, 0);
             assert.equal(
-              await dvp.variablePriceStartDate(token1.address),
-              BigNumber.from(0)
+              (await dvp.variablePriceStartDate(token1.address)).eq(0),
+              true
             );
           });
         });
@@ -5410,14 +5427,14 @@ contract(
             let chainTime = (await ethers.provider.getBlock('latest'))
               .timestamp;
             let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK - 1;
-            await expectRevert
-              .connect(await ethers.getSigner(oracle))
-              .unspecified(
-                dvp.setVariablePriceStartDate(
+            await expectRevert.unspecified(
+              dvp
+                .connect(await ethers.getSigner(oracle))
+                .setVariablePriceStartDate(
                   token1.address,
                   variablePriceStartDate
                 )
-              );
+            );
           });
         });
       });
@@ -5521,8 +5538,8 @@ contract(
 
         let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
         assert.equal(
-          await dvp.variablePriceStartDate(token1.address),
-          BigNumber.from(0)
+          (await dvp.variablePriceStartDate(token1.address)).eq(0),
+          true
         );
 
         await dvp
@@ -5563,8 +5580,8 @@ contract(
                   });
                   it('returns the updatedprice', async function () {
                     assert.equal(
-                      await dvp.getPrice(1),
-                      BigNumber.from(multiple2 * token1Amount)
+                      (await dvp.getPrice(1)).eq(multiple2 * token1Amount),
+                      true
                     );
                   });
                   describe('when the price is set (case 2)', function () {
@@ -5582,8 +5599,8 @@ contract(
                     });
                     it('returns the updatedprice', async function () {
                       assert.equal(
-                        await dvp.getPrice(1),
-                        BigNumber.from(multiple3 * token1Amount)
+                        (await dvp.getPrice(1)).eq(multiple3 * token1Amount),
+                        true
                       );
                     });
                     describe('when the price is set (case 3)', function () {
@@ -5601,8 +5618,8 @@ contract(
                       });
                       it('returns the updatedprice', async function () {
                         assert.equal(
-                          await dvp.getPrice(1),
-                          BigNumber.from(multiple4 * token1Amount)
+                          (await dvp.getPrice(1)).eq(multiple4 * token1Amount),
+                          true
                         );
                       });
                       describe('when the price is set (case 4)', function () {
@@ -5620,8 +5637,10 @@ contract(
                         });
                         it('returns the updatedprice', async function () {
                           assert.equal(
-                            await dvp.getPrice(1),
-                            BigNumber.from(multiple5 * token1Amount)
+                            (await dvp.getPrice(1)).eq(
+                              multiple5 * token1Amount
+                            ),
+                            true
                           );
                         });
                         it('executes the trade at correct price', async function () {
@@ -5708,8 +5727,8 @@ contract(
                 describe('when the price is not set', function () {
                   it('returns the price defined in the trade', async function () {
                     assert.equal(
-                      await dvp.getPrice(1),
-                      BigNumber.from(token2Amount)
+                      (await dvp.getPrice(1)).eq(token2Amount),
+                      true
                     );
                   });
                 });
@@ -5735,8 +5754,8 @@ contract(
                   });
                   it('returns the updatedprice', async function () {
                     assert.equal(
-                      await dvp.getPrice(1),
-                      BigNumber.from(multiple2 * token1Amount)
+                      (await dvp.getPrice(1)).eq(multiple2 * token1Amount),
+                      true
                     );
                   });
                 });
@@ -5844,8 +5863,10 @@ contract(
                   });
                   it('returns the updatedprice', async function () {
                     assert.equal(
-                      await dvp.getPrice(2),
-                      BigNumber.from(Math.round(token3Amount / multiple2))
+                      (await dvp.getPrice(2)).eq(
+                        Math.round(token3Amount / multiple2)
+                      ),
+                      true
                     );
                   });
                   describe('when the price is set (case 2)', function () {
@@ -5863,8 +5884,10 @@ contract(
                     });
                     it('returns the updatedprice', async function () {
                       assert.equal(
-                        await dvp.getPrice(2),
-                        BigNumber.from(Math.round(token3Amount / multiple3))
+                        (await dvp.getPrice(2)).eq(
+                          Math.round(token3Amount / multiple3)
+                        ),
+                        true
                       );
                     });
                     describe('when the price is set (case 3)', function () {
@@ -5882,8 +5905,10 @@ contract(
                       });
                       it('returns the updatedprice', async function () {
                         assert.equal(
-                          await dvp.getPrice(2),
-                          BigNumber.from(Math.round(token3Amount / multiple4))
+                          (await dvp.getPrice(2)).eq(
+                            Math.round(token3Amount / multiple4)
+                          ),
+                          true
                         );
                       });
                       describe('when the price is set (case 4)', function () {
@@ -5901,8 +5926,10 @@ contract(
                         });
                         it('returns the updatedprice', async function () {
                           assert.equal(
-                            await dvp.getPrice(2),
-                            BigNumber.from(Math.round(token3Amount / multiple5))
+                            (await dvp.getPrice(2)).eq(
+                              Math.round(token3Amount / multiple5)
+                            ),
+                            true
                           );
                         });
                         it('reverts when price is higher than amount escrowed/authorized', async function () {
@@ -5961,8 +5988,8 @@ contract(
                 describe('when the price is not set', function () {
                   it('returns the price defined in the trade', async function () {
                     assert.equal(
-                      await dvp.getPrice(2),
-                      BigNumber.from(token4Amount)
+                      (await dvp.getPrice(2)).eq(token4Amount),
+                      true
                     );
                   });
                 });
@@ -5988,8 +6015,8 @@ contract(
                   });
                   it('returns the updatedprice', async function () {
                     assert.equal(
-                      await dvp.getPrice(2),
-                      BigNumber.from(token3Amount / multiple2)
+                      (await dvp.getPrice(2)).eq(token3Amount / multiple2),
+                      true
                     );
                   });
                 });
@@ -5998,7 +6025,7 @@ contract(
           });
           describe('when the price ownership is not taken', function () {
             it('returns the price defined in the trade', async function () {
-              assert.equal(await dvp.getPrice(1), BigNumber.from(token2Amount));
+              assert.equal((await dvp.getPrice(1)).eq(token2Amount), true);
             });
           });
         });

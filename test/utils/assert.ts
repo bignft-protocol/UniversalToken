@@ -1,6 +1,15 @@
-import { BigNumber, BigNumberish, BytesLike } from 'ethers';
+import { BigNumber, BigNumberish, BytesLike, Event } from 'ethers';
 import { assert, ethers } from 'hardhat';
-import { ERC1400, ERC20, ERC721, FundIssuer, Swaps } from 'typechain-types';
+import {
+  ERC1400,
+  ERC1400HoldableCertificateToken,
+  ERC1400TokensValidator,
+  ERC1820Registry,
+  ERC20,
+  ERC721,
+  FundIssuer,
+  Swaps
+} from '../../typechain-types';
 import {
   extractTokenAccepted,
   extractTokenAddress,
@@ -9,6 +18,8 @@ import {
   extractTokenId,
   extractTokenStandard
 } from './extract';
+
+import { ERC1400_TOKENS_VALIDATOR } from '../common/extension';
 
 export const STATE_PENDING = 1;
 export const STATE_EXECUTED = 2;
@@ -771,4 +782,190 @@ export const fullAssertTrade = async (
   assert.equal(tokenData2.tradeType, _tradeType2);
 
   assert.equal(Number(trade.state), _tradeState);
+};
+
+export const assertTransferEvent = (
+  _logs: Event[],
+  _fromPartition: string,
+  _operator: any,
+  _from: any,
+  _to: any,
+  _amount: number,
+  _data: string | null,
+  _operatorData: string | null
+) => {
+  let i = 0;
+  if (_logs.length === 3) {
+    assert.equal(_logs[0].event, 'Checked');
+    assert.equal(_logs[0].args?.sender, _operator);
+    i = 1;
+  }
+
+  assert.equal(_logs[i].event, 'Transfer');
+  assert.equal(_logs[i].args?.from, _from);
+  assert.equal(_logs[i].args?.to, _to);
+  assert.equal(_logs[i].args?.value, _amount);
+
+  assert.equal(_logs[i + 1].event, 'TransferByPartition');
+  assert.equal(_logs[i + 1].args?.fromPartition, _fromPartition);
+  assert.equal(_logs[i + 1].args?.operator, _operator);
+  assert.equal(_logs[i + 1].args?.from, _from);
+  assert.equal(_logs[i + 1].args?.to, _to);
+  assert.equal(_logs[i + 1].args?.value, _amount);
+  assert.equal(_logs[i + 1].args?.data, _data);
+  assert.equal(_logs[i + 1].args?.operatorData, _operatorData);
+};
+
+export const assertBurnEvent = (
+  _logs: Event[],
+  _fromPartition: string,
+  _operator: any,
+  _from: any,
+  _amount: number,
+  _data: string | null,
+  _operatorData: string | null
+) => {
+  let i = 0;
+  if (_logs.length === 4) {
+    assert.equal(_logs[0].event, 'Checked');
+    assert.equal(_logs[0].args?.sender, _operator);
+    i = 1;
+  }
+
+  assert.equal(_logs[i].event, 'Redeemed');
+  assert.equal(_logs[i].args?.operator, _operator);
+  assert.equal(_logs[i].args?.from, _from);
+  assert.equal(_logs[i].args?.value, _amount);
+  assert.equal(_logs[i].args?.data, _data);
+
+  assert.equal(_logs[i + 1].event, 'Transfer');
+  assert.equal(_logs[i + 1].args?.from, _from);
+  assert.equal(_logs[i + 1].args?.to, ZERO_ADDRESS);
+  assert.equal(_logs[i + 1].args?.value, _amount);
+
+  assert.equal(_logs[i + 2].event, 'RedeemedByPartition');
+  assert.equal(_logs[i + 2].args?.partition, _fromPartition);
+  assert.equal(_logs[i + 2].args?.operator, _operator);
+  assert.equal(_logs[i + 2].args?.from, _from);
+  assert.equal(_logs[i + 2].args?.value, _amount);
+  assert.equal(_logs[i + 2].args?.operatorData, _operatorData);
+};
+
+export const assertBalances = async (
+  _contract: ERC1400,
+  _tokenHolder: string,
+  _partitions: BytesLike[],
+  _amounts: BigNumberish[]
+) => {
+  let totalBalance = BigNumber.from(0);
+  for (let i = 0; i < _partitions.length; i++) {
+    totalBalance = totalBalance.add(_amounts[i]);
+    await assertBalanceOfByPartition(
+      _contract as ERC1400,
+      _tokenHolder,
+      _partitions[i],
+      _amounts[i]
+    );
+  }
+  await assertBalance(_contract, _tokenHolder, totalBalance);
+};
+
+export const assertBalanceOfSecurityToken = async (
+  _contract: ERC1400 | ERC20,
+  _tokenHolder: any,
+  _partition: string,
+  _amount: number
+) => {
+  await assertBalance(_contract as ERC20, _tokenHolder, _amount);
+  await assertBalanceOfByPartition(
+    _contract as ERC1400,
+    _tokenHolder,
+    _partition,
+    _amount
+  );
+};
+
+export const assertBalance = async (
+  _contract: ERC1400 | ERC20,
+  _tokenHolder: any,
+  _amount: BigNumberish
+) => {
+  const balance = await _contract.balanceOf(_tokenHolder);
+  assert.equal(balance.eq(_amount), true);
+};
+
+export const assertTotalSupply = async (
+  _contract: ERC20 | ERC1400,
+  _amount: BigNumberish
+) => {
+  const totalSupply = await _contract.totalSupply();
+  assert.equal(totalSupply.eq(_amount), true);
+};
+
+export const assertTokenHasExtension = async (
+  _registry: ERC1820Registry,
+  _extension: ERC1400TokensValidator,
+  _token: ERC1400HoldableCertificateToken
+) => {
+  let extensionImplementer = await _registry.getInterfaceImplementer(
+    _token.address,
+    ethers.utils.id(ERC1400_TOKENS_VALIDATOR)
+  );
+  assert.equal(extensionImplementer, _extension.address);
+};
+
+export const assertCertificateActivated = async (
+  _extension: ERC1400TokensValidator,
+  _token: ERC1400HoldableCertificateToken,
+  _expectedValue: number
+) => {
+  const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
+  assert.equal(_expectedValue, tokenSetup[0]);
+};
+
+export const assertAllowListActivated = async (
+  _extension: ERC1400TokensValidator,
+  _token: ERC1400HoldableCertificateToken,
+  _expectedValue: boolean
+) => {
+  const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
+  assert.equal(_expectedValue, tokenSetup[1]);
+};
+
+export const assertBlockListActivated = async (
+  _extension: ERC1400TokensValidator,
+  _token: ERC1400HoldableCertificateToken,
+  _expectedValue: boolean
+) => {
+  const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
+  assert.equal(_expectedValue, tokenSetup[2]);
+};
+
+export const assertGranularityByPartitionActivated = async (
+  _extension: ERC1400TokensValidator,
+  _token: ERC1400HoldableCertificateToken,
+  _expectedValue: boolean
+) => {
+  const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
+  assert.equal(_expectedValue, tokenSetup[3]);
+};
+
+export const assertHoldsActivated = async (
+  _extension: ERC1400TokensValidator,
+  _token: ERC1400HoldableCertificateToken,
+  _expectedValue: boolean
+) => {
+  const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
+  assert.equal(_expectedValue, tokenSetup[4]);
+};
+
+export const assertIsTokenController = async (
+  _extension: ERC1400TokensValidator,
+  _token: ERC1400HoldableCertificateToken,
+  _controller: string,
+  _value: boolean
+) => {
+  const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
+  const controllerList = tokenSetup[5];
+  assert.equal(_value, controllerList.includes(_controller));
 };

@@ -14,21 +14,22 @@ import {
   addTokenController
 } from './common/extension';
 
-import { artifacts, contract, assert, ethers } from 'hardhat';
+import { contract, assert, ethers } from 'hardhat';
 import { newSecretHashPair, newHoldId } from './utils/crypto';
-import { BatchReader } from 'typechain-types';
-
-const BatchReader = artifacts.require('BatchReader');
-
-const ERC1820Registry = artifacts.require('ERC1820Registry');
-
-const ERC721Token = artifacts.require('ERC721Token');
-const ERC1400HoldableCertificate = artifacts.require(
-  'ERC1400HoldableCertificateToken'
-);
-const ERC1400TokensValidator = artifacts.require('ERC1400TokensValidator');
-
-const EMPTY_CERTIFICATE = '0x';
+import {
+  BatchReader,
+  BatchReader__factory,
+  ERC1400HoldableCertificateToken,
+  ERC1400HoldableCertificateToken__factory,
+  ERC1400TokensValidator,
+  ERC1400TokensValidator__factory,
+  ERC1820Registry,
+  ERC1820Registry__factory,
+  ERC721Token,
+  ERC721Token__factory
+} from '../typechain-types';
+import { ZERO_BYTE } from './utils/assert';
+import { Signer } from 'ethers';
 
 const partition1_short =
   '7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
@@ -38,10 +39,10 @@ const partition3_short =
   '6c6f636b65640000000000000000000000000000000000000000000000000000'; // locked in hex
 const partition4_short =
   '636f6c6c61746572616c00000000000000000000000000000000000000000000'; // collateral in hex
-const partition1 = '0x'.concat(partition1_short);
-const partition2 = '0x'.concat(partition2_short);
-const partition3 = '0x'.concat(partition3_short);
-const partition4 = '0x'.concat(partition4_short);
+const partition1 = ZERO_BYTE.concat(partition1_short);
+const partition2 = ZERO_BYTE.concat(partition2_short);
+const partition3 = ZERO_BYTE.concat(partition3_short);
+const partition4 = ZERO_BYTE.concat(partition4_short);
 
 const partitions = [partition1, partition2, partition3, partition4];
 
@@ -94,55 +95,70 @@ contract(
     unknown
   ]) => {
     let balanceReader: BatchReader;
+
+    let extension: ERC1400TokensValidator;
+    let extension2: ERC1400TokensValidator;
+    let token1: ERC1400HoldableCertificateToken;
+    let token2: ERC1400HoldableCertificateToken;
+    let token3: ERC1400HoldableCertificateToken;
+    let token4: ERC1400HoldableCertificateToken;
+    let token5: ERC721Token;
+    let token6: ERC721Token;
+    let signer: Signer;
     before(async function () {
-      this.registry = await ERC1820Registry.deployed();
+      signer = await ethers.getSigner(owner);
 
-      this.extension = await ERC1400TokensValidator.new({
-        from: deployer
-      });
-      this.extension2 = await ERC1400TokensValidator.new({
-        from: deployer
-      });
+      extension = await new ERC1400TokensValidator__factory(
+        await ethers.getSigner(deployer)
+      ).deploy();
+      extension2 = await new ERC1400TokensValidator__factory(
+        await ethers.getSigner(deployer)
+      ).deploy();
 
-      balanceReader = await BatchReader.new();
+      balanceReader = await new BatchReader__factory(signer).deploy();
 
-      this.token1 = await ERC1400HoldableCertificate.new(
+      token1 = await new ERC1400HoldableCertificateToken__factory(
+        await ethers.getSigner(controller1)
+      ).deploy(
         'ERC1400Token',
         'DAU',
         1,
         [controller1],
         token1DefaultPartitions,
-        this.extension.address,
+        extension.address,
         ZERO_ADDRESS, // owner
         ZERO_ADDRESS, // certitficate signer
-        CERTIFICATE_VALIDATION_NONE,
-        { from: controller1 }
+        CERTIFICATE_VALIDATION_NONE
       );
-      this.token2 = await ERC1400HoldableCertificate.new(
+      token2 = await new ERC1400HoldableCertificateToken__factory(
+        await ethers.getSigner(controller1)
+      ).deploy(
         'ERC1400Token',
         'DAU',
         1,
         [controller1],
         token2DefaultPartitions,
-        this.extension.address,
+        extension.address,
         ZERO_ADDRESS, // owner
         ZERO_ADDRESS, // certitficate signer
-        CERTIFICATE_VALIDATION_NONE,
-        { from: controller1 }
+        CERTIFICATE_VALIDATION_NONE
       );
-      this.token3 = await ERC1400HoldableCertificate.new(
+      token3 = await new ERC1400HoldableCertificateToken__factory(
+        await ethers.getSigner(controller2)
+      ).deploy(
         'ERC1400Token',
         'DAU',
         1,
         [],
         token3DefaultPartitions,
-        this.extension2.address,
+        extension2.address,
         owner, // owner
         ZERO_ADDRESS, // certitficate signer
-        CERTIFICATE_VALIDATION_SALT,
-        { from: controller2 }
+        CERTIFICATE_VALIDATION_SALT
       );
-      this.token4 = await ERC1400HoldableCertificate.new(
+      token4 = await new ERC1400HoldableCertificateToken__factory(
+        await ethers.getSigner(controller3)
+      ).deploy(
         'ERC1400Token',
         'DAU',
         1,
@@ -151,214 +167,218 @@ contract(
         ZERO_ADDRESS, // extension
         ZERO_ADDRESS, // owner
         ZERO_ADDRESS, // certitficate signer
-        CERTIFICATE_VALIDATION_NONE,
-        { from: controller3 }
+        CERTIFICATE_VALIDATION_NONE
       );
 
-      this.token5 = await ERC721Token.new('ERC721Token', 'DAU', '', '');
+      token5 = await new ERC721Token__factory(signer).deploy(
+        'ERC721Token',
+        'DAU',
+        '',
+        ''
+      );
 
-      this.token6 = await ERC721Token.new('ERC721Token', 'DAU', '', '');
+      token6 = await new ERC721Token__factory(signer).deploy(
+        'ERC721Token',
+        'DAU',
+        '',
+        ''
+      );
 
       // Add token extension controllers
-      await addTokenController(
-        this.extension2,
-        this.token3,
-        owner,
-        controller1
-      );
-      await addTokenController(
-        this.extension2,
-        this.token3,
-        owner,
-        controller2
-      );
+      await addTokenController(extension2, token3, owner, controller1);
+      await addTokenController(extension2, token3, owner, controller2);
 
       // Deactivate allowlist checks
-      await setAllowListActivated(
-        this.extension,
-        this.token1,
-        controller1,
-        false
-      );
-      await setAllowListActivated(
-        this.extension,
-        this.token2,
-        controller1,
-        false
-      );
+      await setAllowListActivated(extension, token1, controller1, false);
+      await setAllowListActivated(extension, token2, controller1, false);
 
       // Deactivate blocklist checks
-      await setBlockListActivated(
-        this.extension,
-        this.token2,
-        controller1,
-        false
-      );
+      await setBlockListActivated(extension, token2, controller1, false);
 
       // Deactivate granularity by partition checks
       await setGranularityByPartitionActivated(
-        this.extension,
-        this.token1,
+        extension,
+        token1,
         controller1,
         false
       );
 
       // Deactivate holds
-      await setHoldsActivated(this.extension2, this.token3, owner, false);
+      await setHoldsActivated(extension2, token3, owner, false);
 
       // Token1
-      await this.token1.issueByPartition(
-        partition1,
-        tokenHolder1,
-        issuanceAmount11,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
-      await this.token1.issueByPartition(
-        partition1,
-        tokenHolder2,
-        issuanceAmount12,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
-      await this.token1.issueByPartition(
-        partition1,
-        tokenHolder3,
-        issuanceAmount13,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
+      await token1
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition1,
+          tokenHolder1,
+          issuanceAmount11,
+          ZERO_BYTE
+        );
+      await token1
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition1,
+          tokenHolder2,
+          issuanceAmount12,
+          ZERO_BYTE
+        );
+      await token1
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition1,
+          tokenHolder3,
+          issuanceAmount13,
+          ZERO_BYTE
+        );
 
-      await this.token1.issueByPartition(
-        partition2,
-        tokenHolder1,
-        issuanceAmount21,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
-      await this.token1.issueByPartition(
-        partition2,
-        tokenHolder2,
-        issuanceAmount22,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
-      await this.token1.issueByPartition(
-        partition2,
-        tokenHolder3,
-        issuanceAmount23,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
+      await token1
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition2,
+          tokenHolder1,
+          issuanceAmount21,
+          ZERO_BYTE
+        );
+      await token1
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition2,
+          tokenHolder2,
+          issuanceAmount22,
+          ZERO_BYTE
+        );
+      await token1
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition2,
+          tokenHolder3,
+          issuanceAmount23,
+          ZERO_BYTE
+        );
 
-      await this.token1.issueByPartition(
-        partition3,
-        tokenHolder1,
-        issuanceAmount31,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
-      await this.token1.issueByPartition(
-        partition3,
-        tokenHolder2,
-        issuanceAmount32,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
-      await this.token1.issueByPartition(
-        partition3,
-        tokenHolder3,
-        issuanceAmount33,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
+      await token1
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition3,
+          tokenHolder1,
+          issuanceAmount31,
+          ZERO_BYTE
+        );
+      await token1
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition3,
+          tokenHolder2,
+          issuanceAmount32,
+          ZERO_BYTE
+        );
+      await token1
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition3,
+          tokenHolder3,
+          issuanceAmount33,
+          ZERO_BYTE
+        );
 
       // Token2
-      await this.token2.issueByPartition(
-        partition2,
-        tokenHolder1,
-        2 * issuanceAmount21,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
-      await this.token2.issueByPartition(
-        partition2,
-        tokenHolder2,
-        2 * issuanceAmount22,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
-      await this.token2.issueByPartition(
-        partition2,
-        tokenHolder3,
-        2 * issuanceAmount23,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
+      await token2
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition2,
+          tokenHolder1,
+          2 * issuanceAmount21,
+          ZERO_BYTE
+        );
+      await token2
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition2,
+          tokenHolder2,
+          2 * issuanceAmount22,
+          ZERO_BYTE
+        );
+      await token2
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition2,
+          tokenHolder3,
+          2 * issuanceAmount23,
+          ZERO_BYTE
+        );
 
-      await this.token2.issueByPartition(
-        partition3,
-        tokenHolder1,
-        2 * issuanceAmount31,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
-      await this.token2.issueByPartition(
-        partition3,
-        tokenHolder2,
-        2 * issuanceAmount32,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
-      await this.token2.issueByPartition(
-        partition3,
-        tokenHolder3,
-        2 * issuanceAmount33,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
+      await token2
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition3,
+          tokenHolder1,
+          2 * issuanceAmount31,
+          ZERO_BYTE
+        );
+      await token2
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition3,
+          tokenHolder2,
+          2 * issuanceAmount32,
+          ZERO_BYTE
+        );
+      await token2
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition3,
+          tokenHolder3,
+          2 * issuanceAmount33,
+          ZERO_BYTE
+        );
 
-      await this.token2.issueByPartition(
-        partition4,
-        tokenHolder1,
-        2 * issuanceAmount41,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
-      await this.token2.issueByPartition(
-        partition4,
-        tokenHolder2,
-        2 * issuanceAmount42,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
-      await this.token2.issueByPartition(
-        partition4,
-        tokenHolder3,
-        2 * issuanceAmount43,
-        EMPTY_CERTIFICATE,
-        { from: controller1 }
-      );
+      await token2
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition4,
+          tokenHolder1,
+          2 * issuanceAmount41,
+          ZERO_BYTE
+        );
+      await token2
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition4,
+          tokenHolder2,
+          2 * issuanceAmount42,
+          ZERO_BYTE
+        );
+      await token2
+        .connect(await ethers.getSigner(controller1))
+        .issueByPartition(
+          partition4,
+          tokenHolder3,
+          2 * issuanceAmount43,
+          ZERO_BYTE
+        );
 
       // Token4
-      await this.token4.issueByPartition(
-        partition1,
-        tokenHolder1,
-        4 * issuanceAmount11,
-        EMPTY_CERTIFICATE,
-        { from: controller3 }
-      );
+      await token4
+        .connect(await ethers.getSigner(controller3))
+        .issueByPartition(
+          partition1,
+          tokenHolder1,
+          4 * issuanceAmount11,
+          ZERO_BYTE
+        );
 
       // Transfer some ETH to modify the balances
-      const signer = await ethers.getSigner(tokenHolder1);
-      await signer.sendTransaction({
-        to: tokenHolder2,
-        value: ethers.utils.parseEther('5')
-      });
+      await ethers.getSigner(tokenHolder1).then((signer) =>
+        signer.sendTransaction({
+          to: tokenHolder2,
+          value: ethers.utils.parseEther('5')
+        })
+      );
 
       // Create token holds to modify the spendable balances by partition
-      await this.extension.hold(
-        this.token1.address,
+      await extension.connect(await ethers.getSigner(tokenHolder1)).hold(
+        token1.address,
         newHoldId(),
         tokenHolder2,
         unknown, // notary
@@ -366,11 +386,10 @@ contract(
         holdAmount,
         SECONDS_IN_AN_HOUR,
         newSecretHashPair().hash,
-        ZERO_BYTES32, // certificate
-        { from: tokenHolder1 }
+        ZERO_BYTES32 // certificate
       );
-      await this.extension.hold(
-        this.token2.address,
+      await extension.connect(await ethers.getSigner(tokenHolder3)).hold(
+        token2.address,
         newHoldId(),
         tokenHolder2,
         unknown, // notary
@@ -378,83 +397,79 @@ contract(
         2 * holdAmount,
         SECONDS_IN_AN_HOUR,
         newSecretHashPair().hash,
-        ZERO_BYTES32, // certificate
-        { from: tokenHolder3 }
+        ZERO_BYTES32 // certificate
       );
 
       // Add allowlisted
-      await this.extension.addAllowlisted(this.token1.address, tokenHolder1, {
-        from: controller1
-      });
-      await this.extension.addAllowlisted(this.token1.address, tokenHolder2, {
-        from: controller1
-      });
-      await this.extension.addAllowlisted(this.token2.address, tokenHolder3, {
-        from: controller1
-      });
+      await extension
+        .connect(await ethers.getSigner(controller1))
+        .addAllowlisted(token1.address, tokenHolder1);
+      await extension
+        .connect(await ethers.getSigner(controller1))
+        .addAllowlisted(token1.address, tokenHolder2);
+      await extension
+        .connect(await ethers.getSigner(controller1))
+        .addAllowlisted(token2.address, tokenHolder3);
 
       // Add blocklisted
-      await this.extension.addBlocklisted(this.token1.address, tokenHolder3, {
-        from: controller1
-      });
-      await this.extension.addBlocklisted(this.token2.address, tokenHolder2, {
-        from: controller1
-      });
-      await this.extension.addBlocklisted(this.token2.address, tokenHolder3, {
-        from: controller1
-      });
+      await extension
+        .connect(await ethers.getSigner(controller1))
+        .addBlocklisted(token1.address, tokenHolder3);
+      await extension
+        .connect(await ethers.getSigner(controller1))
+        .addBlocklisted(token2.address, tokenHolder2);
+      await extension
+        .connect(await ethers.getSigner(controller1))
+        .addBlocklisted(token2.address, tokenHolder3);
 
       // Mint NFTs
-      await this.token5.mint(tokenHolder1, 1);
-      await this.token5.mint(tokenHolder1, 2);
-      await this.token5.mint(tokenHolder1, 3);
-      await this.token5.mint(tokenHolder1, 4);
+      await token5.mint(tokenHolder1, 1);
+      await token5.mint(tokenHolder1, 2);
+      await token5.mint(tokenHolder1, 3);
+      await token5.mint(tokenHolder1, 4);
 
-      await this.token5.mint(tokenHolder2, 5);
-      await this.token5.mint(tokenHolder2, 6);
-      await this.token5.mint(tokenHolder2, 7);
+      await token5.mint(tokenHolder2, 5);
+      await token5.mint(tokenHolder2, 6);
+      await token5.mint(tokenHolder2, 7);
 
-      await this.token5.mint(tokenHolder3, 8);
-      await this.token5.mint(tokenHolder3, 9);
-      await this.token5.mint(tokenHolder3, 10);
-      await this.token5.mint(tokenHolder3, 11);
-      await this.token5.mint(tokenHolder3, 12);
-      await this.token5.mint(tokenHolder3, 13);
-      await this.token5.mint(tokenHolder3, 14);
+      await token5.mint(tokenHolder3, 8);
+      await token5.mint(tokenHolder3, 9);
+      await token5.mint(tokenHolder3, 10);
+      await token5.mint(tokenHolder3, 11);
+      await token5.mint(tokenHolder3, 12);
+      await token5.mint(tokenHolder3, 13);
+      await token5.mint(tokenHolder3, 14);
 
-      await this.token6.mint(tokenHolder1, 10);
-      await this.token6.mint(tokenHolder1, 20);
-      await this.token6.mint(tokenHolder1, 30);
-      await this.token6.mint(tokenHolder1, 40);
+      await token6.mint(tokenHolder1, 10);
+      await token6.mint(tokenHolder1, 20);
+      await token6.mint(tokenHolder1, 30);
+      await token6.mint(tokenHolder1, 40);
 
-      await this.token6.mint(tokenHolder2, 50);
-      await this.token6.mint(tokenHolder2, 60);
-      await this.token6.mint(tokenHolder2, 70);
+      await token6.mint(tokenHolder2, 50);
+      await token6.mint(tokenHolder2, 60);
+      await token6.mint(tokenHolder2, 70);
 
-      await this.token6.mint(tokenHolder3, 80);
-      await this.token6.mint(tokenHolder3, 90);
-      await this.token6.mint(tokenHolder3, 100);
-      await this.token6.mint(tokenHolder3, 110);
-      await this.token6.mint(tokenHolder3, 120);
-      await this.token6.mint(tokenHolder3, 130);
-      await this.token6.mint(tokenHolder3, 140);
+      await token6.mint(tokenHolder3, 80);
+      await token6.mint(tokenHolder3, 90);
+      await token6.mint(tokenHolder3, 100);
+      await token6.mint(tokenHolder3, 110);
+      await token6.mint(tokenHolder3, 120);
+      await token6.mint(tokenHolder3, 130);
+      await token6.mint(tokenHolder3, 140);
     });
 
     describe('batchTokenSuppliesInfos', function () {
       it('returns the list of token supplies', async function () {
         const tokenAddresses = [
-          this.token1.address,
-          this.token2.address,
-          this.token3.address,
-          this.token4.address
+          token1.address,
+          token2.address,
+          token3.address,
+          token4.address
         ];
 
-        const batchTokenSupplies = await balanceReader.batchTokenSuppliesInfos(
-          tokenAddresses,
-          {
-            from: unknown
-          }
-        );
+        const batchTokenSupplies = await balanceReader
+          .connect(await ethers.getSigner(unknown))
+          .batchTokenSuppliesInfos(tokenAddresses);
 
         const totalSupply1Partition1 =
           issuanceAmount11 + issuanceAmount12 + issuanceAmount13;
@@ -650,18 +665,15 @@ contract(
     describe('batchTokenRolesInfos', function () {
       it('returns the list of token roles', async function () {
         const tokenAddresses = [
-          this.token1.address,
-          this.token2.address,
-          this.token3.address,
-          this.token4.address
+          token1.address,
+          token2.address,
+          token3.address,
+          token4.address
         ];
 
-        const batchTokenRolesInfos = await balanceReader.batchTokenRolesInfos(
-          tokenAddresses,
-          {
-            from: unknown
-          }
-        );
+        const batchTokenRolesInfos = await balanceReader
+          .connect(await ethers.getSigner(unknown))
+          .batchTokenRolesInfos(tokenAddresses);
 
         const batchOwners = batchTokenRolesInfos[0];
         const batchControllersLength = batchTokenRolesInfos[1];
@@ -745,16 +757,15 @@ contract(
     describe('batchTokenExtensionSetup', function () {
       it('returns the list of token extensions setup', async function () {
         const tokenAddresses = [
-          this.token1.address,
-          this.token2.address,
-          this.token3.address,
-          this.token4.address
+          token1.address,
+          token2.address,
+          token3.address,
+          token4.address
         ];
 
-        const batchTokenRolesInfos =
-          await balanceReader.batchTokenExtensionSetup(tokenAddresses, {
-            from: unknown
-          });
+        const batchTokenRolesInfos = await balanceReader
+          .connect(await ethers.getSigner(unknown))
+          .batchTokenExtensionSetup(tokenAddresses);
 
         const batchTokenExtension = batchTokenRolesInfos[0];
         const batchCertificateActivated = batchTokenRolesInfos[1];
@@ -768,11 +779,11 @@ contract(
         assert.equal(batchTokenExtension.length, tokenAddresses.length);
         //
         // Token1
-        assert.equal(batchTokenExtension[0], this.extension.address);
+        assert.equal(batchTokenExtension[0], extension.address);
         // Token2
-        assert.equal(batchTokenExtension[1], this.extension.address);
+        assert.equal(batchTokenExtension[1], extension.address);
         // Token3
-        assert.equal(batchTokenExtension[2], this.extension2.address);
+        assert.equal(batchTokenExtension[2], extension2.address);
         // Token4
         assert.equal(batchTokenExtension[3], ZERO_ADDRESS);
 
@@ -850,17 +861,15 @@ contract(
       it('returns the lists of ETH, ERC20 and ERC1400 balances (spendable or not)', async function () {
         const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
         const tokenAddresses = [
-          this.token1.address,
-          this.token2.address,
-          this.token3.address,
-          this.token4.address
+          token1.address,
+          token2.address,
+          token3.address,
+          token4.address
         ];
 
-        const batchERC1400Balances = await balanceReader.batchERC1400Balances(
-          tokenAddresses,
-          tokenHolders,
-          { from: unknown }
-        );
+        const batchERC1400Balances = await balanceReader
+          .connect(await ethers.getSigner(unknown))
+          .batchERC1400Balances(tokenAddresses, tokenHolders);
 
         const batchEthBalances = batchERC1400Balances[0];
         const batchBalancesOf = batchERC1400Balances[1];
@@ -1195,11 +1204,9 @@ contract(
         //
         //
 
-        const batchERC20Balances = await balanceReader.batchERC20Balances(
-          tokenAddresses,
-          tokenHolders,
-          { from: unknown }
-        );
+        const batchERC20Balances = await balanceReader
+          .connect(await ethers.getSigner(unknown))
+          .batchERC20Balances(tokenAddresses, tokenHolders);
         const batchEthBalances2 = batchERC20Balances[0];
         const batchBalancesOf2 = batchERC20Balances[1];
 
@@ -1265,13 +1272,11 @@ contract(
     describe('batchERC721Balances', function () {
       it('returns the list of minted tokens', async function () {
         const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
-        const tokenAddresses = [this.token5.address, this.token6.address];
+        const tokenAddresses = [token5.address, token6.address];
 
-        const batchERC721Balances = await balanceReader.batchERC721Balances(
-          tokenAddresses,
-          tokenHolders,
-          { from: unknown }
-        );
+        const batchERC721Balances = await balanceReader
+          .connect(await ethers.getSigner(unknown))
+          .batchERC721Balances(tokenAddresses, tokenHolders);
 
         const batchEthBalances = batchERC721Balances[0];
         const batchBalancesOf = batchERC721Balances[1];
@@ -1341,17 +1346,15 @@ contract(
       it('returns the lists of allowlisted and blocklisted', async function () {
         const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
         const tokenAddresses = [
-          this.token1.address,
-          this.token2.address,
-          this.token3.address,
-          this.token4.address
+          token1.address,
+          token2.address,
+          token3.address,
+          token4.address
         ];
 
-        const batchValidations = await balanceReader.batchValidations(
-          tokenAddresses,
-          tokenHolders,
-          { from: unknown }
-        );
+        const batchValidations = await balanceReader
+          .connect(await ethers.getSigner(unknown))
+          .batchValidations(tokenAddresses, tokenHolders);
 
         const batchAllowlisted = batchValidations[0];
         const batchBlocklisted = batchValidations[1];
