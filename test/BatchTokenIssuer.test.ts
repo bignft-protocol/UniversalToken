@@ -2,6 +2,7 @@ import { artifacts, assert, contract, ethers } from 'hardhat';
 
 // @ts-ignore
 import { expectRevert } from '@openzeppelin/test-helpers';
+import { assertBalanceOfByPartition } from './utils/assert';
 
 const BatchTokenIssuer = artifacts.require('BatchTokenIssuer');
 
@@ -35,18 +36,6 @@ const CERTIFICATE_VALIDATION_SALT = 2;
 const CERTIFICATE_VALIDATION_DEFAULT = CERTIFICATE_VALIDATION_SALT;
 
 const MAX_NUMBER_OF_ISSUANCES_IN_A_BATCH = 40;
-
-const assertBalanceOfByPartition = async (
-  _contract: { balanceOfByPartition: (arg0: any, arg1: any) => any },
-  _tokenHolder: any,
-  _partition: any,
-  _amount: any
-) => {
-  const balanceByPartition = (
-    await _contract.balanceOfByPartition(_partition, _tokenHolder)
-  ).toNumber();
-  assert.equal(balanceByPartition, _amount);
-};
 
 contract('BatchTokenIssuer', ([owner, controller, unknown]) => {
   before(async function () {

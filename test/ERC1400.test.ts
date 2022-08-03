@@ -1,9 +1,9 @@
-// @ts-nocheck
-
 import { ethers, artifacts, network, assert, contract } from 'hardhat';
 import type { ERC1400, ERC1820Registry, MinterMock } from 'typechain-types';
 
+// @ts-ignore
 import { expectRevert } from '@openzeppelin/test-helpers';
+import { assertBalanceOfByPartition } from './utils/assert';
 
 const ERC1400 = artifacts.require('ERC1400');
 
@@ -161,19 +161,6 @@ const assertBalanceOf = async (
     _partition,
     _amount
   );
-};
-
-const assertBalanceOfByPartition = async (
-  _contract: { balanceOfByPartition: (arg0: any, arg1: any) => any },
-  _tokenHolder: any,
-  _partition: string,
-  _amount: number
-) => {
-  balanceByPartition = await _contract.balanceOfByPartition(
-    _partition,
-    _tokenHolder
-  );
-  assert.equal(balanceByPartition, _amount);
 };
 
 const assertBalance = async (

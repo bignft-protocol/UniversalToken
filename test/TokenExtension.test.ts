@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { artifacts, contract, ethers, assert } from 'hardhat';
 import { advanceTimeAndBlock } from './utils/time';
 import { newSecretHashPair, newHoldId } from './utils/crypto';
@@ -21,7 +20,9 @@ import {
   assertIsTokenController,
   addTokenController
 } from './common/extension';
+// @ts-ignore
 import { expectRevert } from '@openzeppelin/test-helpers';
+import { assertBalanceOfByPartition } from './utils/assert';
 
 const ERC1400HoldableCertificate = artifacts.require(
   'ERC1400HoldableCertificateToken'
@@ -168,19 +169,6 @@ const assertBalanceOf = async (
     _partition,
     _amount
   );
-};
-
-const assertBalanceOfByPartition = async (
-  _contract: { balanceOfByPartition: (arg0: any, arg1: any) => any },
-  _tokenHolder: any,
-  _partition: string,
-  _amount: number
-) => {
-  const balanceByPartition = await _contract.balanceOfByPartition(
-    _partition,
-    _tokenHolder
-  );
-  assert.equal(balanceByPartition, _amount);
 };
 
 const assertBalance = async (
