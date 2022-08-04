@@ -2878,7 +2878,7 @@ contract(
         it('returns the granularity of tokens', async function () {
           const granularity = await token.granularity();
 
-          assert.equal(granularity, 1);
+          assert.equal(granularity.toNumber(), 1);
         });
       });
 

@@ -969,3 +969,14 @@ export const assertIsTokenController = async (
   const controllerList = tokenSetup[5];
   assert.equal(_value, controllerList.includes(_controller));
 };
+
+export const assertEscResponse = async (
+  _response: string[],
+  _escCode: string,
+  _additionalCode: string,
+  _destinationPartition: string
+) => {
+  assert.equal(_response[0], _escCode);
+  assert.equal(_response[1], _additionalCode);
+  assert.equal(_response[2], _destinationPartition);
+};

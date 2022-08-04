@@ -33,3 +33,21 @@ export const NumTostringBytes32 = (_num: number, _fillTo = 32) => {
   }
   return arr1.join('');
 };
+
+export const numberToHexa = (num: number, pushTo: number) => {
+  const arr1 = ['0x'];
+  const str = num.toString(16);
+  if (str.length % 2 === 1) {
+    arr1.push('0');
+    pushTo -= 1;
+  }
+  for (let m = str.length / 2; m < pushTo; m++) {
+    arr1.push('0');
+    arr1.push('0');
+  }
+  for (let n = 0, l = str.length; n < l; n++) {
+    const hex = str.charAt(n);
+    arr1.push(hex);
+  }
+  return arr1.join('');
+};
