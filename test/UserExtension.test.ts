@@ -1,14 +1,20 @@
-import { artifacts, contract, assert, ethers } from 'hardhat';
-
+import { ethers } from 'hardhat';
+import { assert } from 'chai';
 // @ts-ignore
 import { expectRevert } from '@openzeppelin/test-helpers';
 import { ZERO_ADDRESS, ZERO_BYTE } from './utils/assert';
-
-const ERC1400 = artifacts.require('ERC1400');
-const ERC1820Registry = artifacts.require('ERC1820Registry');
-
-const ERC1400TokensSender = artifacts.require('ERC1400TokensSenderMock');
-const ERC1400TokensRecipient = artifacts.require('ERC1400TokensRecipientMock');
+import {
+  ERC1400,
+  ERC1400TokensRecipientMock,
+  ERC1400TokensRecipientMock__factory,
+  ERC1400TokensSenderMock,
+  ERC1400TokensSenderMock__factory,
+  ERC1400__factory,
+  ERC1820Registry,
+  ERC1820Registry__factory
+} from '../typechain-types';
+import { Signer } from 'ethers';
+import truffleFixture from './truffle-fixture';
 
 const ERC1400_TOKENS_SENDER = 'ERC1400TokensSender';
 const ERC1400_TOKENS_RECIPIENT = 'ERC1400TokensRecipient';
@@ -37,106 +43,135 @@ const partitions = [partition1, partition2, partition3];
 
 const issuanceAmount = 1000;
 
-contract(
-  'ERC1400 with sender and recipient hooks',
-  function ([owner, operator, controller, tokenHolder, recipient, unknown]) {
+describe('ERC1400 with sender and recipient hooks', function () {
+  let signer: Signer;
+  let operatorSigner: Signer;
+  let controllerSigner: Signer;
+  let tokenHolderSigner: Signer;
+  let recipientSigner: Signer;
+  let unknownSigner: Signer;
+  let owner: string;
+  let operator: string;
+  let controller: string;
+  let tokenHolder: string;
+  let recipient: string;
+  let unknown: string;
+  let registry: ERC1820Registry;
+
+  before(async function () {
+    const signers = await ethers.getSigners();
+    [
+      signer,
+      operatorSigner,
+      controllerSigner,
+      tokenHolderSigner,
+      recipientSigner,
+      unknownSigner
+    ] = signers;
+    [owner, operator, controller, tokenHolder, recipient, unknown] =
+      signers.map((s) => s.address);
+
+    await truffleFixture([2]);
+
+    registry = ERC1820Registry__factory.deployed;
+  });
+
+  // HOOKS
+
+  describe('hooks', function () {
+    let token: ERC1400;
+    let senderContract: ERC1400TokensSenderMock;
+    let recipientContract: ERC1400TokensRecipientMock;
+
     beforeEach(async function () {
-      this.registry = await ERC1820Registry.deployed();
-    });
+      token = await new ERC1400__factory(signer).deploy(
+        'ERC1400Token',
+        'DAU',
+        1,
+        [controller],
+        partitions
+      );
 
-    // HOOKS
+      senderContract = await new ERC1400TokensSenderMock__factory(
+        tokenHolderSigner
+      ).deploy();
 
-    describe('hooks', function () {
-      const amount = issuanceAmount;
-      const to = recipient;
-
-      beforeEach(async function () {
-        this.token = await ERC1400.new(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [controller],
-          partitions,
-          { from: owner }
-        );
-        this.registry = await ERC1820Registry.deployed();
-
-        this.senderContract = await ERC1400TokensSender.new({
-          from: tokenHolder
-        });
-        await this.registry.setInterfaceImplementer(
+      await registry
+        .connect(tokenHolderSigner)
+        .setInterfaceImplementer(
           tokenHolder,
           ethers.utils.id(ERC1400_TOKENS_SENDER),
-          this.senderContract.address,
-          { from: tokenHolder }
+          senderContract.address
         );
 
-        this.recipientContract = await ERC1400TokensRecipient.new({
-          from: recipient
-        });
-        await this.registry.setInterfaceImplementer(
+      recipientContract = await new ERC1400TokensRecipientMock__factory(
+        recipientSigner
+      ).deploy();
+      await registry
+        .connect(recipientSigner)
+        .setInterfaceImplementer(
           recipient,
           ethers.utils.id(ERC1400_TOKENS_RECIPIENT),
-          this.recipientContract.address,
-          { from: recipient }
+          recipientContract.address
         );
 
-        await this.token.issue(tokenHolder, issuanceAmount, VALID_CERTIFICATE, {
-          from: owner
-        });
-      });
-      afterEach(async function () {
-        await this.registry.setInterfaceImplementer(
+      await token
+        .connect(signer)
+        .issue(tokenHolder, issuanceAmount, VALID_CERTIFICATE);
+    });
+    afterEach(async function () {
+      await registry
+        .connect(tokenHolderSigner)
+        .setInterfaceImplementer(
           tokenHolder,
           ethers.utils.id(ERC1400_TOKENS_SENDER),
-          ZERO_ADDRESS,
-          { from: tokenHolder }
+          ZERO_ADDRESS
         );
-        await this.registry.setInterfaceImplementer(
+      await registry
+        .connect(recipientSigner)
+        .setInterfaceImplementer(
           recipient,
           ethers.utils.id(ERC1400_TOKENS_RECIPIENT),
-          ZERO_ADDRESS,
-          { from: recipient }
+          ZERO_ADDRESS
         );
-      });
-      describe('when the transfer is successfull', function () {
-        it('transfers the requested amount', async function () {
-          await this.token.transferWithData(to, amount, VALID_CERTIFICATE, {
-            from: tokenHolder
-          });
-          const senderBalance = await this.token.balanceOf(tokenHolder);
-          assert.equal(senderBalance, issuanceAmount - amount);
+    });
+    describe('when the transfer is successfull', function () {
+      it('transfers the requested amount', async function () {
+        await token
+          .connect(tokenHolderSigner)
+          .transferWithData(recipient, issuanceAmount, VALID_CERTIFICATE);
+        const senderBalance = await token.balanceOf(tokenHolder);
+        assert.equal(senderBalance.toNumber(), 0);
 
-          const recipientBalance = await this.token.balanceOf(to);
-          assert.equal(recipientBalance, amount);
-        });
-      });
-      describe('when the transfer fails', function () {
-        it('sender hook reverts', async function () {
-          // Default sender hook failure data for the mock only: 0x1100000000000000000000000000000000000000000000000000000000000000
-          await expectRevert.unspecified(
-            this.token.transferWithData(
-              to,
-              amount,
-              INVALID_CERTIFICATE_SENDER,
-              {
-                from: tokenHolder
-              }
-            )
-          );
-        });
-        it('recipient hook reverts', async function () {
-          // Default recipient hook failure data for the mock only: 0x2200000000000000000000000000000000000000000000000000000000000000
-          await expectRevert.unspecified(
-            this.token.transferWithData(
-              to,
-              amount,
-              INVALID_CERTIFICATE_RECIPIENT,
-              { from: tokenHolder }
-            )
-          );
-        });
+        const recipientBalance = await token.balanceOf(recipient);
+        assert.equal(recipientBalance.toNumber(), issuanceAmount);
       });
     });
-  }
-);
+    describe('when the transfer fails', function () {
+      it('sender hook reverts', async function () {
+        // Default sender hook failure data for the mock only: 0x1100000000000000000000000000000000000000000000000000000000000000
+        await expectRevert.unspecified(
+          token
+            .connect(tokenHolderSigner)
+            .transferWithData(
+              recipient,
+              issuanceAmount,
+              INVALID_CERTIFICATE_SENDER
+            )
+        );
+      });
+      it('recipient hook reverts', async function () {
+        // Default recipient hook failure data for the mock only: 0x2200000000000000000000000000000000000000000000000000000000000000
+        await expectRevert.unspecified(
+          token
+            .connect(tokenHolderSigner)
+            .transferWithData(
+              recipient,
+              issuanceAmount,
+              INVALID_CERTIFICATE_RECIPIENT
+            )
+        );
+      });
+    });
+  });
+});

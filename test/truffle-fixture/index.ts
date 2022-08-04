@@ -2,17 +2,22 @@ import { ethers } from 'hardhat';
 import fs from 'fs';
 import path from 'path';
 
-module.exports = async () => {
+export default async (steps: number[] = []) => {
   const network = await ethers.provider.getNetwork();
   if (network.name === 'test') return;
 
-  for (const file of fs
+  const items = fs
     .readdirSync(__dirname)
     .filter((file) => file.match(/index\.(?:t|j)s/) === null)
-    .sort(
-      (f1, f2) => parseInt(f1.split('_')[0]) - parseInt(f2.split('_')[0])
-    )) {
-    const { default: fn } = await import(path.resolve(__dirname, file));
+    .map((f) => ({
+      step: parseInt(f.split('_')[0]),
+      file: path.resolve(__dirname, f)
+    }))
+    .filter((item) => !steps.length || steps.includes(item.step))
+    .sort((item1, item2) => item1.step - item2.step);
+
+  for (const item of items) {
+    const { default: fn } = await import(item.file);
     await fn();
   }
 };

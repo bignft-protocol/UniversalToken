@@ -10,7 +10,19 @@ export const addressToBytes32 = (_addr: string, _fillTo = 32) => {
   return arr1.join('');
 };
 
-export const NumToNumBytes32 = (_num: number, _fillTo = 32) => {
+export const numToHexBytes32 = (_num: number, _fillTo = 32) => {
+  const arr1 = [];
+  const _str = _num.toString(16);
+  for (let n = 0, l = _str.length; n < l; n++) {
+    arr1.push(_str[n]);
+  }
+  for (let m = _str.length; m < 2 * _fillTo; m++) {
+    arr1.unshift(0);
+  }
+  return arr1.join('');
+};
+
+export const numToNumBytes32 = (_num: number, _fillTo = 32) => {
   const arr1 = [];
   const _str = _num.toString(16);
   for (let n = 0, l = _str.length; n < l; n++) {
@@ -22,7 +34,7 @@ export const NumToNumBytes32 = (_num: number, _fillTo = 32) => {
   return `0x${arr1.join('')}`;
 };
 
-export const NumTostringBytes32 = (_num: number, _fillTo = 32) => {
+export const numTostringBytes32 = (_num: number, _fillTo = 32) => {
   const arr1 = [];
   const _str = _num.toString(16);
   for (let n = 0, l = _str.length; n < l; n++) {

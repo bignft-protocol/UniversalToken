@@ -1,4 +1,5 @@
-import { contract, ethers, assert } from 'hardhat';
+import { ethers } from 'hardhat';
+import { assert } from 'chai';
 import { advanceTimeAndBlock } from './utils/time';
 import { newSecretHashPair, newHoldId } from './utils/crypto';
 import {
@@ -59,6 +60,7 @@ import {
 } from '../typechain-types';
 import { BigNumber, Signer } from 'ethers';
 import { numberToHexa } from './utils/bytes';
+import truffleFixture from './truffle-fixture';
 
 const ERC1400_TOKENS_VALIDATOR = 'ERC1400TokensValidator';
 const ERC1400_TOKENS_CHECKER = 'ERC1400TokensChecker';
@@ -309,109 +311,393 @@ const craftSaltBasedCertificate = async (
   return certificate;
 };
 
-contract(
-  'ERC1400HoldableCertificate with token extension',
-  function ([
-    deployer,
-    owner,
-    operator,
-    controller,
-    tokenHolder,
-    recipient,
-    notary,
-    unknown,
-    tokenController1,
-    tokenController2
-  ]) {
-    let extension: ERC1400TokensValidator;
-    let clock: ClockMock;
-    let signer: Signer;
-    let registry: ERC1820Registry;
-    let token: ERC1400HoldableCertificateToken;
+describe('ERC1400HoldableCertificate with token extension', function () {
+  let deployer: string;
+  let owner: string;
+  let operator: string;
+  let controller: string;
+  let tokenHolder: string;
+  let recipient: string;
+  let notary: string;
+  let unknown: string;
+  let tokenController1: string;
+  let tokenController2: string;
 
-    before(async function () {
-      signer = await ethers.getSigner(owner);
-      registry = ERC1820Registry__factory.deployed;
-      clock = await new ClockMock__factory(signer).deploy();
-      extension = await new ERC1400TokensValidator__factory(
-        await ethers.getSigner(deployer)
-      ).deploy();
-    });
+  let deployerSigner: Signer;
+  let signer: Signer;
+  let operatorSigner: Signer;
+  let controllerSigner: Signer;
+  let tokenHolderSigner: Signer;
+  let recipientSigner: Signer;
+  let notarySigner: Signer;
+  let unknownSigner: Signer;
+  let tokenController1Signer: Signer;
+  let tokenController2Signer: Signer;
 
-    beforeEach(async function () {
-      token = await new ERC1400HoldableCertificateToken__factory(
-        await ethers.getSigner(controller)
-      ).deploy(
+  let extension: ERC1400TokensValidator;
+  let clock: ClockMock;
+  let registry: ERC1820Registry;
+  let token: ERC1400HoldableCertificateToken;
+
+  before(async function () {
+    const signers = await ethers.getSigners();
+    [
+      deployerSigner,
+      signer,
+      operatorSigner,
+      controllerSigner,
+      tokenHolderSigner,
+      recipientSigner,
+      notarySigner,
+      unknownSigner,
+      tokenController1Signer,
+      tokenController2Signer
+    ] = signers;
+    [
+      deployer,
+      owner,
+      operator,
+      controller,
+      tokenHolder,
+      recipient,
+      notary,
+      unknown,
+      tokenController1,
+      tokenController2
+    ] = signers.map((s) => s.address);
+
+    await truffleFixture([2]);
+
+    registry = ERC1820Registry__factory.deployed;
+    clock = await new ClockMock__factory(signer).deploy();
+    extension = await new ERC1400TokensValidator__factory(
+      deployerSigner
+    ).deploy();
+  });
+
+  beforeEach(async function () {
+    token = await new ERC1400HoldableCertificateToken__factory(
+      controllerSigner
+    ).deploy(
+      'ERC1400Token',
+      'DAU',
+      1,
+      [controller],
+      partitions,
+      extension.address,
+      owner,
+      CERTIFICATE_SIGNER,
+      CERTIFICATE_VALIDATION_DEFAULT
+    );
+  });
+
+  // MOCK
+  describe('setTokenExtension', function () {
+    it('mock to test modifiers of roles functions', async function () {
+      await new FakeERC1400Mock__factory(controllerSigner).deploy(
         'ERC1400Token',
         'DAU',
         1,
         [controller],
         partitions,
         extension.address,
-        owner,
-        CERTIFICATE_SIGNER,
-        CERTIFICATE_VALIDATION_DEFAULT
+        owner
       );
     });
+  });
 
-    // MOCK
-    describe('setTokenExtension', function () {
-      it('mock to test modifiers of roles functions', async function () {
-        await new FakeERC1400Mock__factory(
-          await ethers.getSigner(controller)
-        ).deploy(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [controller],
-          partitions,
-          extension.address,
-          owner
-        );
-      });
-    });
+  // SET TOKEN EXTENSION
+  describe('setTokenExtension', function () {
+    describe('when the caller is the contract owner', function () {
+      describe('when the the validator contract is not already a minter', function () {
+        describe('when there is was no previous validator contract', function () {
+          it('sets the token extension', async function () {
+            token = await new ERC1400HoldableCertificateToken__factory(
+              controllerSigner
+            ).deploy(
+              'ERC1400Token',
+              'DAU',
+              1,
+              [controller],
+              partitions,
+              ZERO_ADDRESS,
+              owner,
+              ZERO_ADDRESS,
+              CERTIFICATE_VALIDATION_DEFAULT
+            );
 
-    // SET TOKEN EXTENSION
-    describe('setTokenExtension', function () {
-      describe('when the caller is the contract owner', function () {
-        describe('when the the validator contract is not already a minter', function () {
-          describe('when there is was no previous validator contract', function () {
-            it('sets the token extension', async function () {
-              token = await new ERC1400HoldableCertificateToken__factory(
-                await ethers.getSigner(controller)
-              ).deploy(
-                'ERC1400Token',
-                'DAU',
-                1,
-                [controller],
-                partitions,
-                ZERO_ADDRESS,
-                owner,
-                ZERO_ADDRESS,
-                CERTIFICATE_VALIDATION_DEFAULT
+            let [_currentOwner, extensionImplementer] = await Promise.all([
+              token.owner(),
+              registry.getInterfaceImplementer(
+                token.address,
+                ethers.utils.id(ERC1400_TOKENS_VALIDATOR)
+              )
+            ]);
+
+            assert.equal(_currentOwner, owner);
+            assert.equal(extensionImplementer, ZERO_ADDRESS);
+
+            let [isOperator, isMinter] = await Promise.all([
+              token.isOperator(extension.address, unknown),
+              token.isMinter(extension.address)
+            ]);
+
+            assert.equal(isOperator, false);
+            assert.equal(isMinter, false);
+
+            await token
+              .connect(signer)
+              .setTokenExtension(
+                extension.address,
+                ERC1400_TOKENS_VALIDATOR,
+                true,
+                true,
+                true
               );
 
-              let [_currentOwner, extensionImplementer] = await Promise.all([
-                token.owner(),
-                registry.getInterfaceImplementer(
-                  token.address,
-                  ethers.utils.id(ERC1400_TOKENS_VALIDATOR)
-                )
-              ]);
+            [extensionImplementer, isOperator, isMinter] = await Promise.all([
+              registry.getInterfaceImplementer(
+                token.address,
+                ethers.utils.id(ERC1400_TOKENS_VALIDATOR)
+              ),
+              token.isOperator(extension.address, unknown),
+              token.isMinter(extension.address)
+            ]);
 
-              assert.equal(_currentOwner, owner);
-              assert.equal(extensionImplementer, ZERO_ADDRESS);
+            assert.equal(extensionImplementer, extension.address);
+            assert.equal(isOperator, true);
+            assert.equal(isMinter, true);
+          });
+        });
+        describe('when there is was a previous validator contract', function () {
+          describe('when the previous validator contract was a minter', function () {
+            it('sets the token extension (with controller and minter rights)', async function () {
+              assert.equal(await token.owner(), owner);
 
-              let [isOperator, isMinter] = await Promise.all([
-                token.isOperator(extension.address, unknown),
-                token.isMinter(extension.address)
-              ]);
+              await assertTokenHasExtension(registry, extension, token);
+              assert.equal(
+                await token.isOperator(extension.address, unknown),
+                true
+              );
+              assert.equal(await token.isMinter(extension.address), true);
 
-              assert.equal(isOperator, false);
-              assert.equal(isMinter, false);
+              const validatorContract2 =
+                await new ERC1400TokensValidator__factory(
+                  controllerSigner
+                ).deploy();
 
               await token
-                .connect(await ethers.getSigner(owner))
+                .connect(signer)
+                .setTokenExtension(
+                  validatorContract2.address,
+                  ERC1400_TOKENS_VALIDATOR,
+                  true,
+                  true,
+                  true
+                );
+
+              await assertTokenHasExtension(
+                registry,
+                validatorContract2,
+                token
+              );
+              assert.equal(
+                await token.isOperator(validatorContract2.address, unknown),
+                true
+              );
+              assert.equal(
+                await token.isMinter(validatorContract2.address),
+                true
+              );
+
+              assert.equal(
+                await token.isOperator(extension.address, unknown),
+                false
+              );
+              assert.equal(await token.isMinter(extension.address), false);
+            });
+            it('sets the token extension (without controller rights)', async function () {
+              assert.equal(await token.owner(), owner);
+
+              await assertTokenHasExtension(registry, extension, token);
+              assert.equal(
+                await token.isOperator(extension.address, unknown),
+                true
+              );
+              assert.equal(await token.isMinter(extension.address), true);
+
+              const validatorContract2 =
+                await new ERC1400TokensValidator__factory(
+                  controllerSigner
+                ).deploy();
+
+              await token
+                .connect(signer)
+                .setTokenExtension(
+                  validatorContract2.address,
+                  ERC1400_TOKENS_VALIDATOR,
+                  true,
+                  true,
+                  false
+                );
+
+              await assertTokenHasExtension(
+                registry,
+                validatorContract2,
+                token
+              );
+              assert.equal(
+                await token.isOperator(validatorContract2.address, unknown),
+                false
+              );
+              assert.equal(
+                await token.isMinter(validatorContract2.address),
+                true
+              );
+
+              assert.equal(
+                await token.isOperator(extension.address, unknown),
+                false
+              );
+              assert.equal(await token.isMinter(extension.address), false);
+            });
+            it('sets the token extension (without minter rights)', async function () {
+              assert.equal(await token.owner(), owner);
+
+              await assertTokenHasExtension(registry, extension, token);
+              assert.equal(
+                await token.isOperator(extension.address, unknown),
+                true
+              );
+              assert.equal(await token.isMinter(extension.address), true);
+
+              const validatorContract2 =
+                await new ERC1400TokensValidator__factory(
+                  controllerSigner
+                ).deploy();
+
+              await token
+                .connect(signer)
+                .setTokenExtension(
+                  validatorContract2.address,
+                  ERC1400_TOKENS_VALIDATOR,
+                  true,
+                  false,
+                  true
+                );
+
+              await assertTokenHasExtension(
+                registry,
+                validatorContract2,
+                token
+              );
+              assert.equal(
+                await token.isOperator(validatorContract2.address, unknown),
+                true
+              );
+              assert.equal(
+                await token.isMinter(validatorContract2.address),
+                false
+              );
+
+              assert.equal(
+                await token.isOperator(extension.address, unknown),
+                false
+              );
+              assert.equal(await token.isMinter(extension.address), false);
+            });
+            it('sets the token extension (while leaving minter and controller rights to the old extension)', async function () {
+              assert.equal(await token.owner(), owner);
+
+              await assertTokenHasExtension(registry, extension, token);
+              assert.equal(
+                await token.isOperator(extension.address, unknown),
+                true
+              );
+              assert.equal(await token.isMinter(extension.address), true);
+
+              const validatorContract2 =
+                await new ERC1400TokensValidator__factory(
+                  controllerSigner
+                ).deploy();
+
+              await token
+                .connect(signer)
+                .setTokenExtension(
+                  validatorContract2.address,
+                  ERC1400_TOKENS_VALIDATOR,
+                  false,
+                  true,
+                  true
+                );
+
+              await assertTokenHasExtension(
+                registry,
+                validatorContract2,
+                token
+              );
+              assert.equal(
+                await token.isOperator(validatorContract2.address, unknown),
+                true
+              );
+              assert.equal(
+                await token.isMinter(validatorContract2.address),
+                true
+              );
+
+              assert.equal(
+                await token.isOperator(extension.address, unknown),
+                true
+              );
+              assert.equal(await token.isMinter(extension.address), true);
+            });
+          });
+          describe('when the previous validator contract was not a minter', function () {
+            it('sets the token extension', async function () {
+              const validatorContract2 =
+                await new ERC1400TokensValidatorMock__factory(
+                  deployerSigner
+                ).deploy();
+
+              await token
+                .connect(signer)
+                .setTokenExtension(
+                  validatorContract2.address,
+                  ERC1400_TOKENS_VALIDATOR,
+                  true,
+                  true,
+                  true
+                );
+
+              await assertTokenHasExtension(
+                registry,
+                validatorContract2,
+                token
+              );
+              assert.equal(
+                await token.isOperator(validatorContract2.address, unknown),
+                true
+              );
+              assert.equal(
+                await token.isMinter(validatorContract2.address),
+                true
+              );
+
+              await validatorContract2
+                .connect(signer)
+                .renounceMinter(token.address);
+
+              assert.equal(
+                await token.isOperator(validatorContract2.address, unknown),
+                true
+              );
+              assert.equal(
+                await token.isMinter(validatorContract2.address),
+                false
+              );
+
+              await token
+                .connect(signer)
                 .setTokenExtension(
                   extension.address,
                   ERC1400_TOKENS_VALIDATOR,
@@ -420,3356 +706,939 @@ contract(
                   true
                 );
 
-              [extensionImplementer, isOperator, isMinter] = await Promise.all([
-                registry.getInterfaceImplementer(
-                  token.address,
-                  ethers.utils.id(ERC1400_TOKENS_VALIDATOR)
-                ),
-                token.isOperator(extension.address, unknown),
-                token.isMinter(extension.address)
-              ]);
-
-              assert.equal(extensionImplementer, extension.address);
-              assert.equal(isOperator, true);
-              assert.equal(isMinter, true);
-            });
-          });
-          describe('when there is was a previous validator contract', function () {
-            describe('when the previous validator contract was a minter', function () {
-              it('sets the token extension (with controller and minter rights)', async function () {
-                assert.equal(await token.owner(), owner);
-
-                await assertTokenHasExtension(registry, extension, token);
-                assert.equal(
-                  await token.isOperator(extension.address, unknown),
-                  true
-                );
-                assert.equal(await token.isMinter(extension.address), true);
-
-                const validatorContract2 =
-                  await new ERC1400TokensValidator__factory(
-                    await ethers.getSigner(controller)
-                  ).deploy();
-
-                await token
-                  .connect(await ethers.getSigner(owner))
-                  .setTokenExtension(
-                    validatorContract2.address,
-                    ERC1400_TOKENS_VALIDATOR,
-                    true,
-                    true,
-                    true
-                  );
-
-                await assertTokenHasExtension(
-                  registry,
-                  validatorContract2,
-                  token
-                );
-                assert.equal(
-                  await token.isOperator(validatorContract2.address, unknown),
-                  true
-                );
-                assert.equal(
-                  await token.isMinter(validatorContract2.address),
-                  true
-                );
-
-                assert.equal(
-                  await token.isOperator(extension.address, unknown),
-                  false
-                );
-                assert.equal(await token.isMinter(extension.address), false);
-              });
-              it('sets the token extension (without controller rights)', async function () {
-                assert.equal(await token.owner(), owner);
-
-                await assertTokenHasExtension(registry, extension, token);
-                assert.equal(
-                  await token.isOperator(extension.address, unknown),
-                  true
-                );
-                assert.equal(await token.isMinter(extension.address), true);
-
-                const validatorContract2 =
-                  await new ERC1400TokensValidator__factory(
-                    await ethers.getSigner(controller)
-                  ).deploy();
-
-                await token
-                  .connect(await ethers.getSigner(owner))
-                  .setTokenExtension(
-                    validatorContract2.address,
-                    ERC1400_TOKENS_VALIDATOR,
-                    true,
-                    true,
-                    false
-                  );
-
-                await assertTokenHasExtension(
-                  registry,
-                  validatorContract2,
-                  token
-                );
-                assert.equal(
-                  await token.isOperator(validatorContract2.address, unknown),
-                  false
-                );
-                assert.equal(
-                  await token.isMinter(validatorContract2.address),
-                  true
-                );
-
-                assert.equal(
-                  await token.isOperator(extension.address, unknown),
-                  false
-                );
-                assert.equal(await token.isMinter(extension.address), false);
-              });
-              it('sets the token extension (without minter rights)', async function () {
-                assert.equal(await token.owner(), owner);
-
-                await assertTokenHasExtension(registry, extension, token);
-                assert.equal(
-                  await token.isOperator(extension.address, unknown),
-                  true
-                );
-                assert.equal(await token.isMinter(extension.address), true);
-
-                const validatorContract2 =
-                  await new ERC1400TokensValidator__factory(
-                    await ethers.getSigner(controller)
-                  ).deploy();
-
-                await token
-                  .connect(await ethers.getSigner(owner))
-                  .setTokenExtension(
-                    validatorContract2.address,
-                    ERC1400_TOKENS_VALIDATOR,
-                    true,
-                    false,
-                    true
-                  );
-
-                await assertTokenHasExtension(
-                  registry,
-                  validatorContract2,
-                  token
-                );
-                assert.equal(
-                  await token.isOperator(validatorContract2.address, unknown),
-                  true
-                );
-                assert.equal(
-                  await token.isMinter(validatorContract2.address),
-                  false
-                );
-
-                assert.equal(
-                  await token.isOperator(extension.address, unknown),
-                  false
-                );
-                assert.equal(await token.isMinter(extension.address), false);
-              });
-              it('sets the token extension (while leaving minter and controller rights to the old extension)', async function () {
-                assert.equal(await token.owner(), owner);
-
-                await assertTokenHasExtension(registry, extension, token);
-                assert.equal(
-                  await token.isOperator(extension.address, unknown),
-                  true
-                );
-                assert.equal(await token.isMinter(extension.address), true);
-
-                const validatorContract2 =
-                  await new ERC1400TokensValidator__factory(
-                    await ethers.getSigner(controller)
-                  ).deploy();
-
-                await token
-                  .connect(await ethers.getSigner(owner))
-                  .setTokenExtension(
-                    validatorContract2.address,
-                    ERC1400_TOKENS_VALIDATOR,
-                    false,
-                    true,
-                    true
-                  );
-
-                await assertTokenHasExtension(
-                  registry,
-                  validatorContract2,
-                  token
-                );
-                assert.equal(
-                  await token.isOperator(validatorContract2.address, unknown),
-                  true
-                );
-                assert.equal(
-                  await token.isMinter(validatorContract2.address),
-                  true
-                );
-
-                assert.equal(
-                  await token.isOperator(extension.address, unknown),
-                  true
-                );
-                assert.equal(await token.isMinter(extension.address), true);
-              });
-            });
-            describe('when the previous validator contract was not a minter', function () {
-              it('sets the token extension', async function () {
-                const validatorContract2 =
-                  await new ERC1400TokensValidatorMock__factory(
-                    await ethers.getSigner(deployer)
-                  ).deploy();
-
-                await token
-                  .connect(await ethers.getSigner(owner))
-                  .setTokenExtension(
-                    validatorContract2.address,
-                    ERC1400_TOKENS_VALIDATOR,
-                    true,
-                    true,
-                    true
-                  );
-
-                await assertTokenHasExtension(
-                  registry,
-                  validatorContract2,
-                  token
-                );
-                assert.equal(
-                  await token.isOperator(validatorContract2.address, unknown),
-                  true
-                );
-                assert.equal(
-                  await token.isMinter(validatorContract2.address),
-                  true
-                );
-
-                await validatorContract2
-                  .connect(await ethers.getSigner(owner))
-                  .renounceMinter(token.address);
-
-                assert.equal(
-                  await token.isOperator(validatorContract2.address, unknown),
-                  true
-                );
-                assert.equal(
-                  await token.isMinter(validatorContract2.address),
-                  false
-                );
-
-                await token
-                  .connect(await ethers.getSigner(owner))
-                  .setTokenExtension(
-                    extension.address,
-                    ERC1400_TOKENS_VALIDATOR,
-                    true,
-                    true,
-                    true
-                  );
-
-                assert.equal(
-                  await token.isOperator(validatorContract2.address, unknown),
-                  false
-                );
-                assert.equal(
-                  await token.isMinter(validatorContract2.address),
-                  false
-                );
-
-                await assertTokenHasExtension(registry, extension, token);
-                assert.equal(
-                  await token.isOperator(extension.address, unknown),
-                  true
-                );
-                assert.equal(await token.isMinter(extension.address), true);
-              });
-            });
-          });
-        });
-        describe('when the the validator contract is already a minter', function () {
-          it('sets the token extension', async function () {
-            const validatorContract2 =
-              await new ERC1400TokensValidatorMock__factory(
-                await ethers.getSigner(deployer)
-              ).deploy();
-
-            await assertTokenHasExtension(registry, extension, token);
-
-            await token
-              .connect(await ethers.getSigner(controller))
-              .addMinter(validatorContract2.address);
-
-            assert.equal(
-              await token.isOperator(validatorContract2.address, unknown),
-              false
-            );
-            assert.equal(
-              await token.isMinter(validatorContract2.address),
-              true
-            );
-
-            await token
-              .connect(await ethers.getSigner(owner))
-              .setTokenExtension(
-                validatorContract2.address,
-                ERC1400_TOKENS_VALIDATOR,
-                true,
-                true,
-                true
+              assert.equal(
+                await token.isOperator(validatorContract2.address, unknown),
+                false
+              );
+              assert.equal(
+                await token.isMinter(validatorContract2.address),
+                false
               );
 
-            await assertTokenHasExtension(registry, validatorContract2, token);
-            assert.equal(
-              await token.isOperator(validatorContract2.address, unknown),
-              true
-            );
-            assert.equal(
-              await token.isMinter(validatorContract2.address),
-              true
-            );
+              await assertTokenHasExtension(registry, extension, token);
+              assert.equal(
+                await token.isOperator(extension.address, unknown),
+                true
+              );
+              assert.equal(await token.isMinter(extension.address), true);
+            });
           });
         });
       });
-      describe('when the caller is not the contract owner', function () {
-        it('reverts', async function () {
-          const validatorContract2 = await new ERC1400TokensValidator__factory(
-            await ethers.getSigner(controller)
-          ).deploy();
-          await expectRevert.unspecified(
-            token
-              .connect(await ethers.getSigner(controller))
-              .setTokenExtension(
-                validatorContract2.address,
-                ERC1400_TOKENS_VALIDATOR,
-                true,
-                true,
-                true
-              )
+      describe('when the the validator contract is already a minter', function () {
+        it('sets the token extension', async function () {
+          const validatorContract2 =
+            await new ERC1400TokensValidatorMock__factory(
+              deployerSigner
+            ).deploy();
+
+          await assertTokenHasExtension(registry, extension, token);
+
+          await token
+            .connect(controllerSigner)
+            .addMinter(validatorContract2.address);
+
+          assert.equal(
+            await token.isOperator(validatorContract2.address, unknown),
+            false
           );
+          assert.equal(await token.isMinter(validatorContract2.address), true);
+
+          await token
+            .connect(signer)
+            .setTokenExtension(
+              validatorContract2.address,
+              ERC1400_TOKENS_VALIDATOR,
+              true,
+              true,
+              true
+            );
+
+          await assertTokenHasExtension(registry, validatorContract2, token);
+          assert.equal(
+            await token.isOperator(validatorContract2.address, unknown),
+            true
+          );
+          assert.equal(await token.isMinter(validatorContract2.address), true);
         });
       });
     });
-
-    // CERTIFICATE SIGNER
-    describe('certificate signer role', function () {
-      describe('addCertificateSigner/removeCertificateSigner', function () {
-        beforeEach(async function () {
-          await assertTokenHasExtension(registry, extension, token);
-        });
-        describe('add/renounce a certificate signer', function () {
-          describe('when caller is a certificate signer', function () {
-            it('adds a certificate signer as owner', async function () {
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .addCertificateSigner(token.address, unknown);
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                true
-              );
-            });
-            it('adds a certificate signer as token controller', async function () {
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addCertificateSigner(token.address, unknown);
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                true
-              );
-            });
-            it('adds a certificate signer as certificate signer', async function () {
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addCertificateSigner(token.address, unknown);
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                true
-              );
-
-              assert.equal(
-                await extension.isCertificateSigner(token.address, tokenHolder),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(unknown))
-                .addCertificateSigner(token.address, tokenHolder);
-              assert.equal(
-                await extension.isCertificateSigner(token.address, tokenHolder),
-                true
-              );
-            });
-            it('renounces certificate signer', async function () {
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addCertificateSigner(token.address, unknown);
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                true
-              );
-              await extension
-                .connect(await ethers.getSigner(unknown))
-                .renounceCertificateSigner(token.address);
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                false
-              );
-            });
-          });
-          describe('when caller is not a certificate signer', function () {
-            it('reverts', async function () {
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                false
-              );
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(unknown))
-                  .addCertificateSigner(token.address, unknown)
-              );
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                false
-              );
-            });
-          });
-        });
-        describe('remove a certificate signer', function () {
-          describe('when caller is a certificate signer', function () {
-            it('removes a certificate signer as owner', async function () {
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .addCertificateSigner(token.address, unknown);
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                true
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .removeCertificateSigner(token.address, unknown);
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                false
-              );
-            });
-          });
-          describe('when caller is not a certificate signer', function () {
-            it('reverts', async function () {
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .addCertificateSigner(token.address, unknown);
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                true
-              );
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .removeCertificateSigner(token.address, unknown)
-              );
-              assert.equal(
-                await extension.isCertificateSigner(token.address, unknown),
-                true
-              );
-            });
-          });
-        });
+    describe('when the caller is not the contract owner', function () {
+      it('reverts', async function () {
+        const validatorContract2 = await new ERC1400TokensValidator__factory(
+          controllerSigner
+        ).deploy();
+        await expectRevert.unspecified(
+          token
+            .connect(controllerSigner)
+            .setTokenExtension(
+              validatorContract2.address,
+              ERC1400_TOKENS_VALIDATOR,
+              true,
+              true,
+              true
+            )
+        );
       });
-      describe('case where certificate is not defined at creation [for coverage]', function () {
-        describe('can not call function if not certificate signer', function () {
-          it('creates the token', async function () {
-            await new ERC1400HoldableCertificateToken__factory(
-              await ethers.getSigner(controller)
-            ).deploy(
-              'ERC1400Token',
-              'DAU',
-              1,
-              [controller],
-              partitions,
-              extension.address,
-              owner,
-              ZERO_ADDRESS, // <-- certificate signer is not defined
-              CERTIFICATE_VALIDATION_DEFAULT
+    });
+  });
+
+  // CERTIFICATE SIGNER
+  describe('certificate signer role', function () {
+    describe('addCertificateSigner/removeCertificateSigner', function () {
+      beforeEach(async function () {
+        await assertTokenHasExtension(registry, extension, token);
+      });
+      describe('add/renounce a certificate signer', function () {
+        describe('when caller is a certificate signer', function () {
+          it('adds a certificate signer as owner', async function () {
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(signer)
+              .addCertificateSigner(token.address, unknown);
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              true
+            );
+          });
+          it('adds a certificate signer as token controller', async function () {
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(controllerSigner)
+              .addCertificateSigner(token.address, unknown);
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              true
+            );
+          });
+          it('adds a certificate signer as certificate signer', async function () {
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(controllerSigner)
+              .addCertificateSigner(token.address, unknown);
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              true
+            );
+
+            assert.equal(
+              await extension.isCertificateSigner(token.address, tokenHolder),
+              false
+            );
+            await extension
+              .connect(unknownSigner)
+              .addCertificateSigner(token.address, tokenHolder);
+            assert.equal(
+              await extension.isCertificateSigner(token.address, tokenHolder),
+              true
+            );
+          });
+          it('renounces certificate signer', async function () {
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(controllerSigner)
+              .addCertificateSigner(token.address, unknown);
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              true
+            );
+            await extension
+              .connect(unknownSigner)
+              .renounceCertificateSigner(token.address);
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              false
             );
           });
         });
-      });
-      describe('onlyCertificateSigner [mock for coverage]', function () {
-        let certificateSignerMock: CertificateSignerMock;
-        beforeEach(async function () {
-          certificateSignerMock = await new CertificateSignerMock__factory(
-            signer
-          ).deploy(token.address);
-        });
-        describe('can not call function if not certificate signer', function () {
+        describe('when caller is not a certificate signer', function () {
           it('reverts', async function () {
             assert.equal(
-              await certificateSignerMock.isCertificateSigner(
-                token.address,
-                unknown
-              ),
+              await extension.isCertificateSigner(token.address, unknown),
               false
             );
             await expectRevert.unspecified(
-              certificateSignerMock
-                .connect(await ethers.getSigner(unknown))
+              extension
+                .connect(unknownSigner)
                 .addCertificateSigner(token.address, unknown)
             );
             assert.equal(
-              await certificateSignerMock.isCertificateSigner(
-                token.address,
-                unknown
-              ),
+              await extension.isCertificateSigner(token.address, unknown),
               false
             );
-            await certificateSignerMock
-              .connect(await ethers.getSigner(owner))
+          });
+        });
+      });
+      describe('remove a certificate signer', function () {
+        describe('when caller is a certificate signer', function () {
+          it('removes a certificate signer as owner', async function () {
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(signer)
               .addCertificateSigner(token.address, unknown);
             assert.equal(
-              await certificateSignerMock.isCertificateSigner(
-                token.address,
-                unknown
-              ),
+              await extension.isCertificateSigner(token.address, unknown),
+              true
+            );
+            await extension
+              .connect(signer)
+              .removeCertificateSigner(token.address, unknown);
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              false
+            );
+          });
+        });
+        describe('when caller is not a certificate signer', function () {
+          it('reverts', async function () {
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(signer)
+              .addCertificateSigner(token.address, unknown);
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
+              true
+            );
+            await expectRevert.unspecified(
+              extension
+                .connect(tokenHolderSigner)
+                .removeCertificateSigner(token.address, unknown)
+            );
+            assert.equal(
+              await extension.isCertificateSigner(token.address, unknown),
               true
             );
           });
         });
       });
     });
-
-    // ALLOWLIST ADMIN
-    describe('allowlist admin role', function () {
-      describe('addAllowlisted/removeAllowlistAdmin', function () {
-        beforeEach(async function () {
-          await assertTokenHasExtension(registry, extension, token);
-
-          await extension
-            .connect(await ethers.getSigner(controller))
-            .addAllowlisted(token.address, tokenHolder);
-          await extension
-            .connect(await ethers.getSigner(controller))
-            .addAllowlisted(token.address, recipient);
-          assert.equal(
-            await extension.isAllowlisted(token.address, tokenHolder),
-            true
+    describe('case where certificate is not defined at creation [for coverage]', function () {
+      describe('can not call function if not certificate signer', function () {
+        it('creates the token', async function () {
+          await new ERC1400HoldableCertificateToken__factory(
+            controllerSigner
+          ).deploy(
+            'ERC1400Token',
+            'DAU',
+            1,
+            [controller],
+            partitions,
+            extension.address,
+            owner,
+            ZERO_ADDRESS, // <-- certificate signer is not defined
+            CERTIFICATE_VALIDATION_DEFAULT
           );
-          assert.equal(
-            await extension.isAllowlisted(token.address, recipient),
-            true
-          );
-        });
-        describe('add/renounce a allowlist admin', function () {
-          describe('when caller is a allowlist admin', function () {
-            it('adds a allowlist admin as owner', async function () {
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .addAllowlistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                true
-              );
-            });
-            it('adds a allowlist admin as token controller', async function () {
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                true
-              );
-            });
-            it('adds a allowlist admin as allowlist admin', async function () {
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                true
-              );
-
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, tokenHolder),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(unknown))
-                .addAllowlistAdmin(token.address, tokenHolder);
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, tokenHolder),
-                true
-              );
-            });
-            it('renounces allowlist admin', async function () {
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                true
-              );
-              await extension
-                .connect(await ethers.getSigner(unknown))
-                .renounceAllowlistAdmin(token.address);
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                false
-              );
-            });
-          });
-          describe('when caller is not a allowlist admin', function () {
-            it('reverts', async function () {
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                false
-              );
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(unknown))
-                  .addAllowlistAdmin(token.address, unknown)
-              );
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                false
-              );
-            });
-          });
-        });
-        describe('remove a allowlist admin', function () {
-          describe('when caller is a allowlist admin', function () {
-            it('removes a allowlist admin as owner', async function () {
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .addAllowlistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                true
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .removeAllowlistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                false
-              );
-            });
-          });
-          describe('when caller is not a allowlist admin', function () {
-            it('reverts', async function () {
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .addAllowlistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                true
-              );
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .removeAllowlistAdmin(token.address, unknown)
-              );
-              assert.equal(
-                await extension.isAllowlistAdmin(token.address, unknown),
-                true
-              );
-            });
-          });
         });
       });
-      describe('onlyNotAllowlisted [mock for coverage]', function () {
-        let allowlistMock: AllowlistMock;
-        beforeEach(async function () {
-          allowlistMock = await new AllowlistMock__factory(signer).deploy(
-            token.address
+    });
+    describe('onlyCertificateSigner [mock for coverage]', function () {
+      let certificateSignerMock: CertificateSignerMock;
+      beforeEach(async function () {
+        certificateSignerMock = await new CertificateSignerMock__factory(
+          signer
+        ).deploy(token.address);
+      });
+      describe('can not call function if not certificate signer', function () {
+        it('reverts', async function () {
+          assert.equal(
+            await certificateSignerMock.isCertificateSigner(
+              token.address,
+              unknown
+            ),
+            false
+          );
+          await expectRevert.unspecified(
+            certificateSignerMock
+              .connect(unknownSigner)
+              .addCertificateSigner(token.address, unknown)
+          );
+          assert.equal(
+            await certificateSignerMock.isCertificateSigner(
+              token.address,
+              unknown
+            ),
+            false
+          );
+          await certificateSignerMock
+            .connect(signer)
+            .addCertificateSigner(token.address, unknown);
+          assert.equal(
+            await certificateSignerMock.isCertificateSigner(
+              token.address,
+              unknown
+            ),
+            true
           );
         });
-        describe('can not call function if allowlisted', function () {
-          it('reverts', async function () {
+      });
+    });
+  });
+
+  // ALLOWLIST ADMIN
+  describe('allowlist admin role', function () {
+    describe('addAllowlisted/removeAllowlistAdmin', function () {
+      beforeEach(async function () {
+        await assertTokenHasExtension(registry, extension, token);
+
+        await extension
+          .connect(controllerSigner)
+          .addAllowlisted(token.address, tokenHolder);
+        await extension
+          .connect(controllerSigner)
+          .addAllowlisted(token.address, recipient);
+        assert.equal(
+          await extension.isAllowlisted(token.address, tokenHolder),
+          true
+        );
+        assert.equal(
+          await extension.isAllowlisted(token.address, recipient),
+          true
+        );
+      });
+      describe('add/renounce a allowlist admin', function () {
+        describe('when caller is a allowlist admin', function () {
+          it('adds a allowlist admin as owner', async function () {
             assert.equal(
-              await allowlistMock.isAllowlisted(token.address, unknown),
+              await extension.isAllowlistAdmin(token.address, unknown),
               false
             );
-            await allowlistMock
-              .connect(await ethers.getSigner(unknown))
-              .mockFunction(token.address, true);
-            await allowlistMock
-              .connect(await ethers.getSigner(owner))
-              .addAllowlisted(token.address, unknown);
+            await extension
+              .connect(signer)
+              .addAllowlistAdmin(token.address, unknown);
             assert.equal(
-              await allowlistMock.isAllowlisted(token.address, unknown),
+              await extension.isAllowlistAdmin(token.address, unknown),
+              true
+            );
+          });
+          it('adds a allowlist admin as token controller', async function () {
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(controllerSigner)
+              .addAllowlistAdmin(token.address, unknown);
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, unknown),
+              true
+            );
+          });
+          it('adds a allowlist admin as allowlist admin', async function () {
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(controllerSigner)
+              .addAllowlistAdmin(token.address, unknown);
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, unknown),
               true
             );
 
-            await expectRevert.unspecified(
-              allowlistMock
-                .connect(await ethers.getSigner(unknown))
-                .mockFunction(token.address, true)
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, tokenHolder),
+              false
+            );
+            await extension
+              .connect(unknownSigner)
+              .addAllowlistAdmin(token.address, tokenHolder);
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, tokenHolder),
+              true
+            );
+          });
+          it('renounces allowlist admin', async function () {
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(controllerSigner)
+              .addAllowlistAdmin(token.address, unknown);
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, unknown),
+              true
+            );
+            await extension
+              .connect(unknownSigner)
+              .renounceAllowlistAdmin(token.address);
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, unknown),
+              false
             );
           });
         });
-      });
-      describe('onlyAllowlistAdmin [mock for coverage]', function () {
-        let allowlistMock: AllowlistMock;
-        beforeEach(async function () {
-          allowlistMock = await new AllowlistMock__factory(signer).deploy(
-            token.address
-          );
-        });
-        describe('can not call function if not allowlist admin', function () {
+        describe('when caller is not a allowlist admin', function () {
           it('reverts', async function () {
             assert.equal(
-              await allowlistMock.isAllowlistAdmin(token.address, unknown),
+              await extension.isAllowlistAdmin(token.address, unknown),
               false
             );
             await expectRevert.unspecified(
-              allowlistMock
-                .connect(await ethers.getSigner(unknown))
+              extension
+                .connect(unknownSigner)
                 .addAllowlistAdmin(token.address, unknown)
             );
             assert.equal(
-              await allowlistMock.isAllowlistAdmin(token.address, unknown),
+              await extension.isAllowlistAdmin(token.address, unknown),
               false
             );
-            await allowlistMock
-              .connect(await ethers.getSigner(owner))
+          });
+        });
+      });
+      describe('remove a allowlist admin', function () {
+        describe('when caller is a allowlist admin', function () {
+          it('removes a allowlist admin as owner', async function () {
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(signer)
               .addAllowlistAdmin(token.address, unknown);
             assert.equal(
-              await allowlistMock.isAllowlistAdmin(token.address, unknown),
+              await extension.isAllowlistAdmin(token.address, unknown),
+              true
+            );
+            await extension
+              .connect(signer)
+              .removeAllowlistAdmin(token.address, unknown);
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, unknown),
+              false
+            );
+          });
+        });
+        describe('when caller is not a allowlist admin', function () {
+          it('reverts', async function () {
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(signer)
+              .addAllowlistAdmin(token.address, unknown);
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, unknown),
+              true
+            );
+            await expectRevert.unspecified(
+              extension
+                .connect(tokenHolderSigner)
+                .removeAllowlistAdmin(token.address, unknown)
+            );
+            assert.equal(
+              await extension.isAllowlistAdmin(token.address, unknown),
               true
             );
           });
         });
       });
     });
-
-    // BLOCKLIST ADMIN
-    describe('blocklist admin role', function () {
-      describe('addBlocklisted/removeBlocklistAdmin', function () {
-        beforeEach(async function () {
-          await assertTokenHasExtension(registry, extension, token);
-
-          await extension
-            .connect(await ethers.getSigner(controller))
-            .addBlocklisted(token.address, tokenHolder);
-          await extension
-            .connect(await ethers.getSigner(controller))
-            .addBlocklisted(token.address, recipient);
+    describe('onlyNotAllowlisted [mock for coverage]', function () {
+      let allowlistMock: AllowlistMock;
+      beforeEach(async function () {
+        allowlistMock = await new AllowlistMock__factory(signer).deploy(
+          token.address
+        );
+      });
+      describe('can not call function if allowlisted', function () {
+        it('reverts', async function () {
           assert.equal(
-            await extension.isBlocklisted(token.address, tokenHolder),
+            await allowlistMock.isAllowlisted(token.address, unknown),
+            false
+          );
+          await allowlistMock
+            .connect(unknownSigner)
+            .mockFunction(token.address, true);
+          await allowlistMock
+            .connect(signer)
+            .addAllowlisted(token.address, unknown);
+          assert.equal(
+            await allowlistMock.isAllowlisted(token.address, unknown),
             true
           );
-          assert.equal(
-            await extension.isBlocklisted(token.address, recipient),
-            true
-          );
-        });
-        describe('add/renounce a blocklist admin', function () {
-          describe('when caller is a blocklist admin', function () {
-            it('adds a blocklist admin as owner', async function () {
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .addBlocklistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                true
-              );
-            });
-            it('adds a blocklist admin as token controller', async function () {
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addBlocklistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                true
-              );
-            });
-            it('adds a blocklist admin as blocklist admin', async function () {
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addBlocklistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                true
-              );
 
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, tokenHolder),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(unknown))
-                .addBlocklistAdmin(token.address, tokenHolder);
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, tokenHolder),
-                true
-              );
-            });
-            it('renounces blocklist admin', async function () {
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addBlocklistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                true
-              );
-              await extension
-                .connect(await ethers.getSigner(unknown))
-                .renounceBlocklistAdmin(token.address);
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                false
-              );
-            });
-          });
-          describe('when caller is not a blocklist admin', function () {
-            it('reverts', async function () {
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                false
-              );
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(unknown))
-                  .addBlocklistAdmin(token.address, unknown)
-              );
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                false
-              );
-            });
-          });
-        });
-        describe('remove a blocklist admin', function () {
-          describe('when caller is a blocklist admin', function () {
-            it('removes a blocklist admin as owner', async function () {
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .addBlocklistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                true
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .removeBlocklistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                false
-              );
-            });
-          });
-          describe('when caller is not a blocklist admin', function () {
-            it('reverts', async function () {
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .addBlocklistAdmin(token.address, unknown);
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                true
-              );
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .removeBlocklistAdmin(token.address, unknown)
-              );
-              assert.equal(
-                await extension.isBlocklistAdmin(token.address, unknown),
-                true
-              );
-            });
-          });
+          await expectRevert.unspecified(
+            allowlistMock
+              .connect(unknownSigner)
+              .mockFunction(token.address, true)
+          );
         });
       });
-      describe('onlyNotBlocklisted [mock for coverage]', function () {
-        let blocklistMock: BlocklistMock;
-        beforeEach(async function () {
-          blocklistMock = await new BlocklistMock__factory(signer).deploy(
-            token.address
+    });
+    describe('onlyAllowlistAdmin [mock for coverage]', function () {
+      let allowlistMock: AllowlistMock;
+      beforeEach(async function () {
+        allowlistMock = await new AllowlistMock__factory(signer).deploy(
+          token.address
+        );
+      });
+      describe('can not call function if not allowlist admin', function () {
+        it('reverts', async function () {
+          assert.equal(
+            await allowlistMock.isAllowlistAdmin(token.address, unknown),
+            false
+          );
+          await expectRevert.unspecified(
+            allowlistMock
+              .connect(unknownSigner)
+              .addAllowlistAdmin(token.address, unknown)
+          );
+          assert.equal(
+            await allowlistMock.isAllowlistAdmin(token.address, unknown),
+            false
+          );
+          await allowlistMock
+            .connect(signer)
+            .addAllowlistAdmin(token.address, unknown);
+          assert.equal(
+            await allowlistMock.isAllowlistAdmin(token.address, unknown),
+            true
           );
         });
-        describe('can not call function if blocklisted', function () {
-          it('reverts', async function () {
+      });
+    });
+  });
+
+  // BLOCKLIST ADMIN
+  describe('blocklist admin role', function () {
+    describe('addBlocklisted/removeBlocklistAdmin', function () {
+      beforeEach(async function () {
+        await assertTokenHasExtension(registry, extension, token);
+
+        await extension
+          .connect(controllerSigner)
+          .addBlocklisted(token.address, tokenHolder);
+        await extension
+          .connect(controllerSigner)
+          .addBlocklisted(token.address, recipient);
+        assert.equal(
+          await extension.isBlocklisted(token.address, tokenHolder),
+          true
+        );
+        assert.equal(
+          await extension.isBlocklisted(token.address, recipient),
+          true
+        );
+      });
+      describe('add/renounce a blocklist admin', function () {
+        describe('when caller is a blocklist admin', function () {
+          it('adds a blocklist admin as owner', async function () {
             assert.equal(
-              await blocklistMock.isBlocklisted(token.address, unknown),
+              await extension.isBlocklistAdmin(token.address, unknown),
               false
             );
-            await blocklistMock
-              .connect(await ethers.getSigner(unknown))
-              .mockFunction(token.address, true);
-            await blocklistMock
-              .connect(await ethers.getSigner(owner))
-              .addBlocklisted(token.address, unknown);
+            await extension
+              .connect(signer)
+              .addBlocklistAdmin(token.address, unknown);
             assert.equal(
-              await blocklistMock.isBlocklisted(token.address, unknown),
+              await extension.isBlocklistAdmin(token.address, unknown),
+              true
+            );
+          });
+          it('adds a blocklist admin as token controller', async function () {
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(controllerSigner)
+              .addBlocklistAdmin(token.address, unknown);
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, unknown),
+              true
+            );
+          });
+          it('adds a blocklist admin as blocklist admin', async function () {
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(controllerSigner)
+              .addBlocklistAdmin(token.address, unknown);
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, unknown),
               true
             );
 
-            await expectRevert.unspecified(
-              blocklistMock
-                .connect(await ethers.getSigner(unknown))
-                .mockFunction(token.address, true)
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, tokenHolder),
+              false
+            );
+            await extension
+              .connect(unknownSigner)
+              .addBlocklistAdmin(token.address, tokenHolder);
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, tokenHolder),
+              true
+            );
+          });
+          it('renounces blocklist admin', async function () {
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(controllerSigner)
+              .addBlocklistAdmin(token.address, unknown);
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, unknown),
+              true
+            );
+            await extension
+              .connect(unknownSigner)
+              .renounceBlocklistAdmin(token.address);
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, unknown),
+              false
             );
           });
         });
-      });
-      describe('onlyBlocklistAdmin [mock for coverage]', function () {
-        let blocklistMock: BlocklistMock;
-        beforeEach(async function () {
-          blocklistMock = await new BlocklistMock__factory(signer).deploy(
-            token.address
-          );
-        });
-        describe('can not call function if not blocklist admin', function () {
+        describe('when caller is not a blocklist admin', function () {
           it('reverts', async function () {
             assert.equal(
-              await blocklistMock.isBlocklistAdmin(token.address, unknown),
+              await extension.isBlocklistAdmin(token.address, unknown),
               false
             );
             await expectRevert.unspecified(
-              blocklistMock
-                .connect(await ethers.getSigner(unknown))
+              extension
+                .connect(unknownSigner)
                 .addBlocklistAdmin(token.address, unknown)
             );
             assert.equal(
-              await blocklistMock.isBlocklistAdmin(token.address, unknown),
+              await extension.isBlocklistAdmin(token.address, unknown),
               false
             );
-            await blocklistMock
-              .connect(await ethers.getSigner(owner))
+          });
+        });
+      });
+      describe('remove a blocklist admin', function () {
+        describe('when caller is a blocklist admin', function () {
+          it('removes a blocklist admin as owner', async function () {
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(signer)
               .addBlocklistAdmin(token.address, unknown);
             assert.equal(
-              await blocklistMock.isBlocklistAdmin(token.address, unknown),
+              await extension.isBlocklistAdmin(token.address, unknown),
+              true
+            );
+            await extension
+              .connect(signer)
+              .removeBlocklistAdmin(token.address, unknown);
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, unknown),
+              false
+            );
+          });
+        });
+        describe('when caller is not a blocklist admin', function () {
+          it('reverts', async function () {
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(signer)
+              .addBlocklistAdmin(token.address, unknown);
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, unknown),
+              true
+            );
+            await expectRevert.unspecified(
+              extension
+                .connect(tokenHolderSigner)
+                .removeBlocklistAdmin(token.address, unknown)
+            );
+            assert.equal(
+              await extension.isBlocklistAdmin(token.address, unknown),
               true
             );
           });
         });
       });
     });
-
-    // PAUSER
-    describe('pauser role', function () {
-      describe('addPauser/removePauser', function () {
-        beforeEach(async function () {
-          await assertTokenHasExtension(registry, extension, token);
-        });
-        describe('add/renounce a pauser', function () {
-          describe('when caller is a pauser', function () {
-            it('adds a pauser as token owner', async function () {
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .addPauser(token.address, unknown);
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                true
-              );
-            });
-            it('adds a pauser as token controller', async function () {
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addPauser(token.address, unknown);
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                true
-              );
-            });
-            it('adds a pauser as pauser', async function () {
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addPauser(token.address, unknown);
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                true
-              );
-
-              assert.equal(
-                await extension.isPauser(token.address, tokenHolder),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(unknown))
-                .addPauser(token.address, tokenHolder);
-              assert.equal(
-                await extension.isPauser(token.address, tokenHolder),
-                true
-              );
-            });
-            it('renounces pauser', async function () {
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addPauser(token.address, unknown);
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                true
-              );
-              await extension
-                .connect(await ethers.getSigner(unknown))
-                .renouncePauser(token.address);
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                false
-              );
-            });
-          });
-          describe('when caller is not a pauser', function () {
-            it('reverts', async function () {
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                false
-              );
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(unknown))
-                  .addPauser(token.address, unknown)
-              );
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                false
-              );
-            });
-          });
-        });
-        describe('remove a pauser', function () {
-          describe('when caller is a pauser', function () {
-            it('adds a pauser as token owner', async function () {
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .addPauser(token.address, unknown);
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                true
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .removePauser(token.address, unknown);
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                false
-              );
-            });
-          });
-          describe('when caller is not a pauser', function () {
-            it('reverts', async function () {
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                false
-              );
-              await extension
-                .connect(await ethers.getSigner(owner))
-                .addPauser(token.address, unknown);
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                true
-              );
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .removePauser(token.address, unknown)
-              );
-              assert.equal(
-                await extension.isPauser(token.address, unknown),
-                true
-              );
-            });
-          });
-        });
+    describe('onlyNotBlocklisted [mock for coverage]', function () {
+      let blocklistMock: BlocklistMock;
+      beforeEach(async function () {
+        blocklistMock = await new BlocklistMock__factory(signer).deploy(
+          token.address
+        );
       });
-      describe('onlyPauser [mock for coverage]', function () {
-        let pauserMock: PauserMock;
-        beforeEach(async function () {
-          pauserMock = await new PauserMock__factory(signer).deploy(
-            token.address
+      describe('can not call function if blocklisted', function () {
+        it('reverts', async function () {
+          assert.equal(
+            await blocklistMock.isBlocklisted(token.address, unknown),
+            false
+          );
+          await blocklistMock
+            .connect(unknownSigner)
+            .mockFunction(token.address, true);
+          await blocklistMock
+            .connect(signer)
+            .addBlocklisted(token.address, unknown);
+          assert.equal(
+            await blocklistMock.isBlocklisted(token.address, unknown),
+            true
+          );
+
+          await expectRevert.unspecified(
+            blocklistMock
+              .connect(unknownSigner)
+              .mockFunction(token.address, true)
           );
         });
-        describe('can not call function if pauser', function () {
+      });
+    });
+    describe('onlyBlocklistAdmin [mock for coverage]', function () {
+      let blocklistMock: BlocklistMock;
+      beforeEach(async function () {
+        blocklistMock = await new BlocklistMock__factory(signer).deploy(
+          token.address
+        );
+      });
+      describe('can not call function if not blocklist admin', function () {
+        it('reverts', async function () {
+          assert.equal(
+            await blocklistMock.isBlocklistAdmin(token.address, unknown),
+            false
+          );
+          await expectRevert.unspecified(
+            blocklistMock
+              .connect(unknownSigner)
+              .addBlocklistAdmin(token.address, unknown)
+          );
+          assert.equal(
+            await blocklistMock.isBlocklistAdmin(token.address, unknown),
+            false
+          );
+          await blocklistMock
+            .connect(signer)
+            .addBlocklistAdmin(token.address, unknown);
+          assert.equal(
+            await blocklistMock.isBlocklistAdmin(token.address, unknown),
+            true
+          );
+        });
+      });
+    });
+  });
+
+  // PAUSER
+  describe('pauser role', function () {
+    describe('addPauser/removePauser', function () {
+      beforeEach(async function () {
+        await assertTokenHasExtension(registry, extension, token);
+      });
+      describe('add/renounce a pauser', function () {
+        describe('when caller is a pauser', function () {
+          it('adds a pauser as token owner', async function () {
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              false
+            );
+            await extension.connect(signer).addPauser(token.address, unknown);
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              true
+            );
+          });
+          it('adds a pauser as token controller', async function () {
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(controllerSigner)
+              .addPauser(token.address, unknown);
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              true
+            );
+          });
+          it('adds a pauser as pauser', async function () {
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(controllerSigner)
+              .addPauser(token.address, unknown);
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              true
+            );
+
+            assert.equal(
+              await extension.isPauser(token.address, tokenHolder),
+              false
+            );
+            await extension
+              .connect(unknownSigner)
+              .addPauser(token.address, tokenHolder);
+            assert.equal(
+              await extension.isPauser(token.address, tokenHolder),
+              true
+            );
+          });
+          it('renounces pauser', async function () {
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              false
+            );
+            await extension
+              .connect(controllerSigner)
+              .addPauser(token.address, unknown);
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              true
+            );
+            await extension
+              .connect(unknownSigner)
+              .renouncePauser(token.address);
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              false
+            );
+          });
+        });
+        describe('when caller is not a pauser', function () {
           it('reverts', async function () {
             assert.equal(
-              await pauserMock.isPauser(token.address, unknown),
+              await extension.isPauser(token.address, unknown),
               false
             );
             await expectRevert.unspecified(
-              pauserMock
-                .connect(await ethers.getSigner(unknown))
-                .mockFunction(token.address, true)
+              extension.connect(unknownSigner).addPauser(token.address, unknown)
             );
-            await pauserMock
-              .connect(await ethers.getSigner(owner))
-              .addPauser(token.address, unknown);
             assert.equal(
-              await pauserMock.isPauser(token.address, unknown),
+              await extension.isPauser(token.address, unknown),
+              false
+            );
+          });
+        });
+      });
+      describe('remove a pauser', function () {
+        describe('when caller is a pauser', function () {
+          it('adds a pauser as token owner', async function () {
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              false
+            );
+            await extension.connect(signer).addPauser(token.address, unknown);
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
               true
             );
-
-            await pauserMock
-              .connect(await ethers.getSigner(unknown))
-              .mockFunction(token.address, true);
+            await extension
+              .connect(signer)
+              .removePauser(token.address, unknown);
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              false
+            );
+          });
+        });
+        describe('when caller is not a pauser', function () {
+          it('reverts', async function () {
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              false
+            );
+            await extension.connect(signer).addPauser(token.address, unknown);
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              true
+            );
+            await expectRevert.unspecified(
+              extension
+                .connect(tokenHolderSigner)
+                .removePauser(token.address, unknown)
+            );
+            assert.equal(
+              await extension.isPauser(token.address, unknown),
+              true
+            );
           });
         });
       });
     });
-
-    // CERTIFICATE ACTIVATED
-    describe('setCertificateActivated', function () {
+    describe('onlyPauser [mock for coverage]', function () {
+      let pauserMock: PauserMock;
       beforeEach(async function () {
-        await assertTokenHasExtension(registry, extension, token);
+        pauserMock = await new PauserMock__factory(signer).deploy(
+          token.address
+        );
       });
-      describe('when the caller is the contract owner', function () {
-        it('activates the certificate', async function () {
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_SALT
-          );
-
-          await setCertificateActivated(
-            extension,
-            token,
-            controller,
-            CERTIFICATE_VALIDATION_NONCE
-          );
-
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_NONCE
-          );
-
-          await setCertificateActivated(
-            extension,
-            token,
-            controller,
-            CERTIFICATE_VALIDATION_NONE
-          );
-
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_NONE
-          );
-        });
-      });
-      describe('when the caller is not the contract owner', function () {
+      describe('can not call function if pauser', function () {
         it('reverts', async function () {
-          await expectRevert.unspecified(
-            setAllowListActivated(
-              extension,
-              token,
-              unknown,
-              CERTIFICATE_VALIDATION_NONCE
-            )
-          );
-        });
-      });
-    });
-
-    // ALLOWLIST ACTIVATED
-    describe('setAllowlistActivated', function () {
-      beforeEach(async function () {
-        await assertTokenHasExtension(registry, extension, token);
-      });
-      describe('when the caller is the contract owner', function () {
-        it('activates the allowlist', async function () {
-          await assertAllowListActivated(extension, token, true);
-
-          await setAllowListActivated(extension, token, controller, false);
-
-          await assertAllowListActivated(extension, token, false);
-        });
-      });
-      describe('when the caller is not the contract owner', function () {
-        it('reverts', async function () {
-          await expectRevert.unspecified(
-            setAllowListActivated(extension, token, unknown, false)
-          );
-        });
-      });
-    });
-
-    // BLOCKLIST ACTIVATED
-    describe('setBlocklistActivated', function () {
-      beforeEach(async function () {
-        await assertTokenHasExtension(registry, extension, token);
-      });
-      describe('when the caller is the contract owner', function () {
-        it('activates the blocklist', async function () {
-          await assertBlockListActivated(extension, token, true);
-
-          await setBlockListActivated(extension, token, controller, false);
-
-          await assertBlockListActivated(extension, token, false);
-        });
-      });
-      describe('when the caller is not the contract owner', function () {
-        it('reverts', async function () {
-          await expectRevert.unspecified(
-            setBlockListActivated(extension, token, unknown, false)
-          );
-        });
-      });
-    });
-
-    // PARTITION GRANULARITY ACTIVATED
-    describe('setPartitionGranularityActivated', function () {
-      beforeEach(async function () {
-        await assertTokenHasExtension(registry, extension, token);
-      });
-      describe('when the caller is the contract owner', function () {
-        it('activates the partition granularity', async function () {
-          await assertGranularityByPartitionActivated(extension, token, true);
-
-          await setGranularityByPartitionActivated(
-            extension,
-            token,
-            controller,
+          assert.equal(
+            await pauserMock.isPauser(token.address, unknown),
             false
           );
-
-          await assertGranularityByPartitionActivated(extension, token, false);
-        });
-      });
-      describe('when the caller is not the contract owner', function () {
-        it('reverts', async function () {
           await expectRevert.unspecified(
-            setGranularityByPartitionActivated(extension, token, unknown, false)
+            pauserMock.connect(unknownSigner).mockFunction(token.address, true)
           );
+          await pauserMock.connect(signer).addPauser(token.address, unknown);
+          assert.equal(await pauserMock.isPauser(token.address, unknown), true);
+
+          await pauserMock
+            .connect(unknownSigner)
+            .mockFunction(token.address, true);
         });
       });
     });
+  });
 
-    // CANTRANSFER
-    describe('canTransferByPartition/canOperatorTransferByPartition', function () {
-      const localGranularity = 10;
-      const transferAmount = 10 * localGranularity;
-      let token2: ERC1400HoldableCertificateToken;
-      let senderContract: ERC1400TokensSenderMock;
-      let recipientContract: ERC1400TokensRecipientMock;
-      before(async function () {
-        senderContract = await new ERC1400TokensSenderMock__factory(
-          await ethers.getSigner(tokenHolder)
-        ).deploy();
-        await registry
-          .connect(await ethers.getSigner(tokenHolder))
-          .setInterfaceImplementer(
-            tokenHolder,
-            ethers.utils.id(ERC1400_TOKENS_SENDER),
-            senderContract.address
-          );
-
-        recipientContract = await new ERC1400TokensRecipientMock__factory(
-          await ethers.getSigner(recipient)
-        ).deploy();
-        await registry
-          .connect(await ethers.getSigner(recipient))
-          .setInterfaceImplementer(
-            recipient,
-            ethers.utils.id(ERC1400_TOKENS_RECIPIENT),
-            recipientContract.address
-          );
-      });
-      after(async function () {
-        await registry
-          .connect(await ethers.getSigner(tokenHolder))
-          .setInterfaceImplementer(
-            tokenHolder,
-            ethers.utils.id(ERC1400_TOKENS_SENDER),
-            ZERO_ADDRESS
-          );
-        await registry
-          .connect(await ethers.getSigner(recipient))
-          .setInterfaceImplementer(
-            recipient,
-            ethers.utils.id(ERC1400_TOKENS_RECIPIENT),
-            ZERO_ADDRESS
-          );
-      });
-
-      beforeEach(async function () {
-        token2 = await new ERC1400HoldableCertificateToken__factory(
-          await ethers.getSigner(controller)
-        ).deploy(
-          'ERC1400Token',
-          'DAU',
-          localGranularity,
-          [controller],
-          partitions,
-          extension.address,
-          owner,
-          CERTIFICATE_SIGNER,
-          CERTIFICATE_VALIDATION_DEFAULT
-        );
-
-        const certificate = await craftCertificate(
-          token2.interface.encodeFunctionData('issueByPartition', [
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            ZERO_BYTE
-          ]),
-          token2,
-          extension,
-          clock, // clock
-          controller
-        );
-        await token2
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
-          );
-      });
-
-      describe('when checker has been setup', function () {
-        let checkerContract: ERC1400TokensChecker;
-        before(async function () {
-          checkerContract = await new ERC1400TokensChecker__factory(
-            signer
-          ).deploy();
-        });
-        beforeEach(async function () {
-          await token2
-            .connect(await ethers.getSigner(owner))
-            .setTokenExtension(
-              checkerContract.address,
-              ERC1400_TOKENS_CHECKER,
-              true,
-              true,
-              true
-            );
-        });
-        describe('when certificate is valid', function () {
-          describe('when the operator is authorized', function () {
-            describe('when balance is sufficient', function () {
-              describe('when receiver is not the zero address', function () {
-                describe('when sender is eligible', function () {
-                  describe('when validator is ok', function () {
-                    describe('when receiver is eligible', function () {
-                      describe('when the amount is a multiple of the granularity', function () {
-                        it('returns Ethereum status code 51 (canTransferByPartition)', async function () {
-                          const certificate = await craftCertificate(
-                            token2.interface.encodeFunctionData(
-                              'transferByPartition',
-                              [partition1, recipient, transferAmount, ZERO_BYTE]
-                            ),
-                            token2,
-                            extension,
-                            clock, // clock
-                            tokenHolder
-                          );
-                          const response = await token2
-                            .connect(await ethers.getSigner(tokenHolder))
-                            .canTransferByPartition(
-                              partition1,
-                              recipient,
-                              transferAmount,
-                              certificate
-                            );
-                          await assertEscResponse(
-                            response,
-                            ESC_51,
-                            EMPTY_BYTE32,
-                            partition1
-                          );
-                        });
-                        it('returns Ethereum status code 51 (canOperatorTransferByPartition)', async function () {
-                          const certificate = await craftCertificate(
-                            token2.interface.encodeFunctionData(
-                              'operatorTransferByPartition',
-                              [
-                                partition1,
-                                tokenHolder,
-                                recipient,
-                                transferAmount,
-                                ZERO_BYTE,
-                                ZERO_BYTE
-                              ]
-                            ),
-                            token2,
-                            extension,
-                            clock, // clock
-                            tokenHolder
-                          );
-                          const response = await token2
-                            .connect(await ethers.getSigner(tokenHolder))
-                            .canOperatorTransferByPartition(
-                              partition1,
-                              tokenHolder,
-                              recipient,
-                              transferAmount,
-                              ZERO_BYTE,
-                              certificate
-                            );
-                          await assertEscResponse(
-                            response,
-                            ESC_51,
-                            EMPTY_BYTE32,
-                            partition1
-                          );
-                        });
-                      });
-                      describe('when the amount is not a multiple of the granularity', function () {
-                        it('returns Ethereum status code 50', async function () {
-                          const certificate = await craftCertificate(
-                            token2.interface.encodeFunctionData(
-                              'transferByPartition',
-                              [
-                                partition1,
-                                recipient,
-                                1, // transferAmount
-                                ZERO_BYTE
-                              ]
-                            ),
-                            token2,
-                            extension,
-                            clock, // clock
-                            tokenHolder
-                          );
-                          const response = await token2
-                            .connect(await ethers.getSigner(tokenHolder))
-                            .canTransferByPartition(
-                              partition1,
-                              recipient,
-                              1, // transferAmount
-                              certificate
-                            );
-                          await assertEscResponse(
-                            response,
-                            ESC_50,
-                            EMPTY_BYTE32,
-                            partition1
-                          );
-                        });
-                      });
-                    });
-                    describe('when receiver is not eligible', function () {
-                      it('returns Ethereum status code 57', async function () {
-                        await setCertificateActivated(
-                          extension,
-                          token2,
-                          controller,
-                          CERTIFICATE_VALIDATION_NONE
-                        );
-
-                        await assertCertificateActivated(
-                          extension,
-                          token2,
-                          CERTIFICATE_VALIDATION_NONE
-                        );
-
-                        await extension
-                          .connect(await ethers.getSigner(controller))
-                          .addAllowlisted(token2.address, tokenHolder);
-                        await extension
-                          .connect(await ethers.getSigner(controller))
-                          .addAllowlisted(token2.address, recipient);
-
-                        const response = await token2
-                          .connect(await ethers.getSigner(tokenHolder))
-                          .canTransferByPartition(
-                            partition1,
-                            recipient,
-                            transferAmount,
-                            INVALID_CERTIFICATE_RECIPIENT
-                          );
-                        await assertEscResponse(
-                          response,
-                          ESC_57,
-                          EMPTY_BYTE32,
-                          partition1
-                        );
-                      });
-                    });
-                  });
-                  describe('when validator is not ok', function () {
-                    it('returns Ethereum status code 54 (canTransferByPartition)', async function () {
-                      const holdId = newHoldId();
-                      const secretHashPair = newSecretHashPair();
-                      const certificate = await craftCertificate(
-                        extension.interface.encodeFunctionData('holdFrom', [
-                          token2.address,
-                          holdId,
-                          tokenHolder,
-                          recipient,
-                          notary,
-                          partition1,
-                          issuanceAmount,
-                          SECONDS_IN_AN_HOUR,
-                          secretHashPair.hash,
-                          ZERO_BYTE
-                        ]),
-                        token2,
-                        extension,
-                        clock, // clock
-                        controller
-                      );
-                      await extension
-                        .connect(await ethers.getSigner(controller))
-                        .holdFrom(
-                          token2.address,
-                          holdId,
-                          tokenHolder,
-                          recipient,
-                          notary,
-                          partition1,
-                          issuanceAmount,
-                          SECONDS_IN_AN_HOUR,
-                          secretHashPair.hash,
-                          certificate
-                        );
-
-                      const certificate2 = await craftCertificate(
-                        token2.interface.encodeFunctionData(
-                          'transferByPartition',
-                          [partition1, recipient, transferAmount, ZERO_BYTE]
-                        ),
-                        token2,
-                        extension,
-                        clock, // clock
-                        tokenHolder
-                      );
-                      const response = await token2
-                        .connect(await ethers.getSigner(tokenHolder))
-                        .canTransferByPartition(
-                          partition1,
-                          recipient,
-                          transferAmount,
-                          certificate2
-                        );
-                      await assertEscResponse(
-                        response,
-                        ESC_54,
-                        EMPTY_BYTE32,
-                        partition1
-                      );
-                    });
-                  });
-                });
-                describe('when sender is not eligible', function () {
-                  it('returns Ethereum status code 56', async function () {
-                    const response = await token2
-                      .connect(await ethers.getSigner(tokenHolder))
-                      .canTransferByPartition(
-                        partition1,
-                        recipient,
-                        transferAmount,
-                        INVALID_CERTIFICATE_SENDER
-                      );
-                    await assertEscResponse(
-                      response,
-                      ESC_56,
-                      EMPTY_BYTE32,
-                      partition1
-                    );
-                  });
-                });
-              });
-              describe('when receiver is the zero address', function () {
-                it('returns Ethereum status code 57', async function () {
-                  const certificate = await craftCertificate(
-                    token2.interface.encodeFunctionData('transferByPartition', [
-                      partition1,
-                      ZERO_ADDRESS,
-                      transferAmount,
-                      ZERO_BYTE
-                    ]),
-                    token2,
-                    extension,
-                    clock, // clock
-                    tokenHolder
-                  );
-                  const response = await token2
-                    .connect(await ethers.getSigner(tokenHolder))
-                    .canTransferByPartition(
-                      partition1,
-                      ZERO_ADDRESS,
-                      transferAmount,
-                      certificate
-                    );
-                  await assertEscResponse(
-                    response,
-                    ESC_57,
-                    EMPTY_BYTE32,
-                    partition1
-                  );
-                });
-              });
-            });
-            describe('when balance is not sufficient', function () {
-              it('returns Ethereum status code 52 (insuficient global balance)', async function () {
-                const certificate = await craftCertificate(
-                  token2.interface.encodeFunctionData('transferByPartition', [
-                    partition1,
-                    recipient,
-                    issuanceAmount + localGranularity,
-                    ZERO_BYTE
-                  ]),
-                  token2,
-                  extension,
-                  clock, // clock
-                  tokenHolder
-                );
-                const response = await token2
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .canTransferByPartition(
-                    partition1,
-                    recipient,
-                    issuanceAmount + localGranularity,
-                    certificate
-                  );
-                await assertEscResponse(
-                  response,
-                  ESC_52,
-                  EMPTY_BYTE32,
-                  partition1
-                );
-              });
-              it('returns Ethereum status code 52 (insuficient partition balance)', async function () {
-                const issuanceCertificate = await craftCertificate(
-                  token2.interface.encodeFunctionData('issueByPartition', [
-                    partition2,
-                    tokenHolder,
-                    localGranularity,
-                    ZERO_BYTE
-                  ]),
-                  token2,
-                  extension,
-                  clock, // clock
-                  controller
-                );
-                await token2
-                  .connect(await ethers.getSigner(controller))
-                  .issueByPartition(
-                    partition2,
-                    tokenHolder,
-                    localGranularity,
-                    issuanceCertificate
-                  );
-                const certificate = await craftCertificate(
-                  token2.interface.encodeFunctionData('transferByPartition', [
-                    partition2,
-                    recipient,
-                    transferAmount,
-                    ZERO_BYTE
-                  ]),
-                  token2,
-                  extension,
-                  clock, // clock
-                  tokenHolder
-                );
-                const response = await token2
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .canTransferByPartition(
-                    partition2,
-                    recipient,
-                    transferAmount,
-                    certificate
-                  );
-                await assertEscResponse(
-                  response,
-                  ESC_52,
-                  EMPTY_BYTE32,
-                  partition2
-                );
-              });
-            });
-          });
-          describe('when the operator is not authorized', function () {
-            it('returns Ethereum status code 58 (canOperatorTransferByPartition)', async function () {
-              const certificate = await craftCertificate(
-                token2.interface.encodeFunctionData(
-                  'operatorTransferByPartition',
-                  [
-                    partition1,
-                    operator,
-                    recipient,
-                    transferAmount,
-                    ZERO_BYTE,
-                    ZERO_BYTE
-                  ]
-                ),
-                token2,
-                extension,
-                clock, // clock
-                tokenHolder
-              );
-              const response = await token2
-                .connect(await ethers.getSigner(tokenHolder))
-                .canOperatorTransferByPartition(
-                  partition1,
-                  operator,
-                  recipient,
-                  transferAmount,
-                  ZERO_BYTE,
-                  certificate
-                );
-              await assertEscResponse(
-                response,
-                ESC_58,
-                EMPTY_BYTE32,
-                partition1
-              );
-            });
-          });
-        });
-        describe('when certificate is not valid', function () {
-          it('returns Ethereum status code 54 (canTransferByPartition)', async function () {
-            const response = await token2
-              .connect(await ethers.getSigner(tokenHolder))
-              .canTransferByPartition(
-                partition1,
-                recipient,
-                transferAmount,
-                ZERO_BYTE
-              );
-            await assertEscResponse(response, ESC_54, EMPTY_BYTE32, partition1);
-          });
-          it('returns Ethereum status code 54 (canOperatorTransferByPartition)', async function () {
-            const response = await token2
-              .connect(await ethers.getSigner(tokenHolder))
-              .canOperatorTransferByPartition(
-                partition1,
-                tokenHolder,
-                recipient,
-                transferAmount,
-                ZERO_BYTE,
-                ZERO_BYTE
-              );
-            await assertEscResponse(response, ESC_54, EMPTY_BYTE32, partition1);
-          });
-        });
-      });
-      describe('when checker has not been setup', function () {
-        it('returns empty Ethereum status code 00 (canTransferByPartition)', async function () {
-          const certificate = await craftCertificate(
-            token2.interface.encodeFunctionData('transferByPartition', [
-              partition1,
-              recipient,
-              transferAmount,
-              ZERO_BYTE
-            ]),
-            token2,
-            extension,
-            clock, // clock
-            tokenHolder
-          );
-          const response = await token2
-            .connect(await ethers.getSigner(tokenHolder))
-            .canTransferByPartition(
-              partition1,
-              recipient,
-              transferAmount,
-              certificate
-            );
-          await assertEscResponse(response, ESC_00, EMPTY_BYTE32, partition1);
-        });
-      });
+  // CERTIFICATE ACTIVATED
+  describe('setCertificateActivated', function () {
+    beforeEach(async function () {
+      await assertTokenHasExtension(registry, extension, token);
     });
-
-    // CERTIFICATE EXTENSION
-    describe('certificate', function () {
-      const redeemAmount = 50;
-      const transferAmount = 300;
-      beforeEach(async function () {
-        await assertTokenHasExtension(registry, extension, token);
-
+    describe('when the caller is the contract owner', function () {
+      it('activates the certificate', async function () {
         await assertCertificateActivated(
           extension,
           token,
           CERTIFICATE_VALIDATION_SALT
         );
 
-        await assertAllowListActivated(extension, token, true);
-
-        const certificate = await craftCertificate(
-          token.interface.encodeFunctionData('issueByPartition', [
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            ZERO_BYTE
-          ]),
-          token,
+        await setCertificateActivated(
           extension,
-          clock, // clock
-          controller
+          token,
+          controller,
+          CERTIFICATE_VALIDATION_NONCE
         );
 
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
-          );
-      });
-      describe('when certificate is valid', function () {
-        describe('ERC1400 functions', function () {
-          describe('issue', function () {
-            it('issues new tokens when certificate is provided', async function () {
-              const certificate = await craftCertificate(
-                token.interface.encodeFunctionData('issue', [
-                  tokenHolder,
-                  issuanceAmount,
-                  ZERO_BYTE
-                ]),
-                token,
-                extension,
-                clock, // clock
-                controller
-              );
-              await token
-                .connect(await ethers.getSigner(controller))
-                .issue(tokenHolder, issuanceAmount, certificate);
-              await assertTotalSupply(token, 2 * issuanceAmount);
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                2 * issuanceAmount
-              );
-            });
-            it('fails issuing when when certificate is not provided', async function () {
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(controller))
-                  .issue(tokenHolder, issuanceAmount, ZERO_BYTE)
-              );
-            });
-          });
-          describe('issueByPartition', function () {
-            it('issues new tokens when certificate is provided', async function () {
-              const certificate = await craftCertificate(
-                token.interface.encodeFunctionData('issueByPartition', [
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  ZERO_BYTE
-                ]),
-                token,
-                extension,
-                clock, // clock
-                controller
-              );
-              await token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                );
-              await assertTotalSupply(token, 2 * issuanceAmount);
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                2 * issuanceAmount
-              );
-            });
-            it('issues new tokens when certificate is not provided, but sender is certificate signer', async function () {
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addCertificateSigner(token.address, controller);
-              await token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  ZERO_BYTE
-                );
-              await assertTotalSupply(token, 2 * issuanceAmount);
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                2 * issuanceAmount
-              );
-            });
-            it('fails issuing when certificate is not provided', async function () {
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(controller))
-                  .issueByPartition(
-                    partition1,
-                    tokenHolder,
-                    issuanceAmount,
-                    ZERO_BYTE
-                  )
-              );
-            });
-            it('fails issuing when certificate is not provided (even if allowlisted)', async function () {
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, tokenHolder);
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(controller))
-                  .issueByPartition(
-                    partition1,
-                    tokenHolder,
-                    issuanceAmount,
-                    ZERO_BYTE
-                  )
-              );
-            });
-          });
-          describe('redeem', function () {
-            it('redeeems the requested amount when certificate is provided', async function () {
-              await assertTotalSupply(token, issuanceAmount);
-              await assertBalance(token, tokenHolder, issuanceAmount);
-
-              const certificate = await craftCertificate(
-                token.interface.encodeFunctionData('redeem', [
-                  issuanceAmount,
-                  ZERO_BYTE
-                ]),
-                token,
-                extension,
-                clock, // clock
-                tokenHolder
-              );
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .redeem(issuanceAmount, certificate);
-
-              await assertTotalSupply(token, 0);
-              await assertBalance(token, tokenHolder, 0);
-            });
-            it('fails redeeming when certificate is not provided', async function () {
-              await assertTotalSupply(token, issuanceAmount);
-              await assertBalance(token, tokenHolder, issuanceAmount);
-
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .redeem(issuanceAmount, ZERO_BYTE)
-              );
-
-              await assertTotalSupply(token, issuanceAmount);
-              await assertBalance(token, tokenHolder, issuanceAmount);
-            });
-          });
-          describe('redeemFrom', function () {
-            it('redeems the requested amount when certificate is provided', async function () {
-              await assertTotalSupply(token, issuanceAmount);
-              await assertBalance(token, tokenHolder, issuanceAmount);
-
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .authorizeOperator(operator);
-
-              const certificate = await craftCertificate(
-                token.interface.encodeFunctionData('redeemFrom', [
-                  tokenHolder,
-                  issuanceAmount,
-                  ZERO_BYTE
-                ]),
-                token,
-                extension,
-                clock, // clock
-                operator
-              );
-              await token
-                .connect(await ethers.getSigner(operator))
-                .redeemFrom(tokenHolder, issuanceAmount, certificate);
-
-              await assertTotalSupply(token, 0);
-              await assertBalance(token, tokenHolder, 0);
-            });
-            it('fails redeeming the requested amount when certificate is not provided', async function () {
-              await assertTotalSupply(token, issuanceAmount);
-              await assertBalance(token, tokenHolder, issuanceAmount);
-
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .authorizeOperator(operator);
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(operator))
-                  .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE)
-              );
-
-              await assertTotalSupply(token, issuanceAmount);
-              await assertBalance(token, tokenHolder, issuanceAmount);
-            });
-          });
-          describe('redeemByPartition', function () {
-            it('redeems the requested amount when certificate is provided', async function () {
-              const certificate = await craftCertificate(
-                token.interface.encodeFunctionData('redeemByPartition', [
-                  partition1,
-                  redeemAmount,
-                  ZERO_BYTE
-                ]),
-                token,
-                extension,
-                clock, // clock
-                tokenHolder
-              );
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .redeemByPartition(partition1, redeemAmount, certificate);
-              await assertTotalSupply(token, issuanceAmount - redeemAmount);
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount - redeemAmount
-              );
-            });
-            it('fails redeems when sender when certificate is not provided', async function () {
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .redeemByPartition(partition1, redeemAmount, ZERO_BYTE)
-              );
-              await assertTotalSupply(token, issuanceAmount);
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-            });
-            it('fails redeems when sender when certificate is not provided (even if allowlisted)', async function () {
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, tokenHolder);
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .redeemByPartition(partition1, redeemAmount, ZERO_BYTE)
-              );
-              await assertTotalSupply(token, issuanceAmount);
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-            });
-          });
-          describe('operatorRedeemByPartition', function () {
-            it('redeems the requested amount when certificate is provided', async function () {
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .authorizeOperatorByPartition(partition1, operator);
-
-              const certificate = await craftCertificate(
-                token.interface.encodeFunctionData(
-                  'operatorRedeemByPartition',
-                  [partition1, tokenHolder, redeemAmount, ZERO_BYTE]
-                ),
-                token,
-                extension,
-                clock, // clock
-                operator
-              );
-              await token
-                .connect(await ethers.getSigner(operator))
-                .operatorRedeemByPartition(
-                  partition1,
-                  tokenHolder,
-                  redeemAmount,
-                  certificate
-                );
-
-              await assertTotalSupply(token, issuanceAmount - redeemAmount);
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount - redeemAmount
-              );
-            });
-            it('redeems the requested amount when certificate is provided, but sender is certificate signer', async function () {
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .authorizeOperatorByPartition(partition1, operator);
-
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addCertificateSigner(token.address, operator);
-
-              await token
-                .connect(await ethers.getSigner(operator))
-                .operatorRedeemByPartition(
-                  partition1,
-                  tokenHolder,
-                  redeemAmount,
-                  ZERO_BYTE
-                );
-
-              await assertTotalSupply(token, issuanceAmount - redeemAmount);
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount - redeemAmount
-              );
-            });
-            it('fails redeeming when certificate is not provided', async function () {
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .authorizeOperatorByPartition(partition1, operator);
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(operator))
-                  .operatorRedeemByPartition(
-                    partition1,
-                    tokenHolder,
-                    redeemAmount,
-                    ZERO_BYTE
-                  )
-              );
-
-              await assertTotalSupply(token, issuanceAmount);
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-            });
-          });
-          describe('transferWithData', function () {
-            it('transfers the requested amount when certificate is provided', async function () {
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-
-              const certificate = await craftCertificate(
-                token.interface.encodeFunctionData('transferWithData', [
-                  recipient,
-                  transferAmount,
-                  ZERO_BYTE
-                ]),
-                token,
-                extension,
-                clock, // clock
-                tokenHolder
-              );
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .transferWithData(recipient, transferAmount, certificate);
-
-              await assertBalance(
-                token,
-                tokenHolder,
-                issuanceAmount - transferAmount
-              );
-              await assertBalance(token, recipient, transferAmount);
-            });
-            it('fails transferring when certificate is not provided', async function () {
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .transferWithData(recipient, transferAmount, ZERO_BYTE)
-              );
-
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-            });
-          });
-          describe('transferFromWithData', function () {
-            it('transfers the requested amount when certificate is provided', async function () {
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .authorizeOperator(operator);
-
-              const certificate = await craftCertificate(
-                token.interface.encodeFunctionData('transferFromWithData', [
-                  tokenHolder,
-                  recipient,
-                  transferAmount,
-                  ZERO_BYTE
-                ]),
-                token,
-                extension,
-                clock, // clock
-                operator
-              );
-              await token
-                .connect(await ethers.getSigner(operator))
-                .transferFromWithData(
-                  tokenHolder,
-                  recipient,
-                  transferAmount,
-                  certificate
-                );
-
-              await assertBalance(
-                token,
-                tokenHolder,
-                issuanceAmount - transferAmount
-              );
-              await assertBalance(token, recipient, transferAmount);
-            });
-            it('fails transferring when certificate is not provided', async function () {
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .authorizeOperator(operator);
-
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(operator))
-                  .transferFromWithData(
-                    tokenHolder,
-                    recipient,
-                    transferAmount,
-                    ZERO_BYTE
-                  )
-              );
-
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-            });
-          });
-          describe('transferByPartition', function () {
-            it('transfers the requested amount when certificate is provided', async function () {
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-              await assertBalanceOfSecurityToken(
-                token,
-                recipient,
-                partition1,
-                0
-              );
-
-              const certificate = await craftCertificate(
-                token.interface.encodeFunctionData('transferByPartition', [
-                  partition1,
-                  recipient,
-                  transferAmount,
-                  ZERO_BYTE
-                ]),
-                token,
-                extension,
-                clock, // clock
-                tokenHolder
-              );
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .transferByPartition(
-                  partition1,
-                  recipient,
-                  transferAmount,
-                  certificate
-                );
-
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount - transferAmount
-              );
-              await assertBalanceOfSecurityToken(
-                token,
-                recipient,
-                partition1,
-                transferAmount
-              );
-            });
-            it('fails transferring when certificate is not provided', async function () {
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-              await assertBalanceOfSecurityToken(
-                token,
-                recipient,
-                partition1,
-                0
-              );
-
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .transferByPartition(
-                    partition1,
-                    recipient,
-                    transferAmount,
-                    ZERO_BYTE
-                  )
-              );
-
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-              await assertBalanceOfSecurityToken(
-                token,
-                recipient,
-                partition1,
-                0
-              );
-            });
-            it('fails transferring when certificate is not provided (even when allowlisted)', async function () {
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, tokenHolder);
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, recipient);
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-              await assertBalanceOfSecurityToken(
-                token,
-                recipient,
-                partition1,
-                0
-              );
-
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .transferByPartition(
-                    partition1,
-                    recipient,
-                    transferAmount,
-                    ZERO_BYTE
-                  )
-              );
-
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-              await assertBalanceOfSecurityToken(
-                token,
-                recipient,
-                partition1,
-                0
-              );
-            });
-          });
-          describe('operatorTransferByPartition', function () {
-            it('transfers the requested amount when certificate is provided', async function () {
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-              await assertBalanceOfSecurityToken(
-                token,
-                recipient,
-                partition1,
-                0
-              );
-              assert.equal(
-                (
-                  await token.allowanceByPartition(
-                    partition1,
-                    tokenHolder,
-                    operator
-                  )
-                ).toNumber(),
-                0
-              );
-
-              const approvedAmount = 400;
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .approveByPartition(partition1, operator, approvedAmount);
-              assert.equal(
-                (
-                  await token.allowanceByPartition(
-                    partition1,
-                    tokenHolder,
-                    operator
-                  )
-                ).toNumber(),
-                approvedAmount
-              );
-              const certificate = await craftCertificate(
-                token.interface.encodeFunctionData(
-                  'operatorTransferByPartition',
-                  [
-                    partition1,
-                    tokenHolder,
-                    recipient,
-                    transferAmount,
-                    ZERO_BYTE,
-                    ZERO_BYTE
-                  ]
-                ),
-                token,
-                extension,
-                clock, // clock
-                operator
-              );
-              await token
-                .connect(await ethers.getSigner(operator))
-                .operatorTransferByPartition(
-                  partition1,
-                  tokenHolder,
-                  recipient,
-                  transferAmount,
-                  ZERO_BYTE,
-                  certificate
-                );
-
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount - transferAmount
-              );
-              await assertBalanceOfSecurityToken(
-                token,
-                recipient,
-                partition1,
-                transferAmount
-              );
-              assert.equal(
-                (
-                  await token.allowanceByPartition(
-                    partition1,
-                    tokenHolder,
-                    operator
-                  )
-                ).toNumber(),
-                approvedAmount - transferAmount
-              );
-            });
-            it('transfers the requested amount when certificate is provided, but sender is certificate signer', async function () {
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-              await assertBalanceOfSecurityToken(
-                token,
-                recipient,
-                partition1,
-                0
-              );
-              assert.equal(
-                (
-                  await token.allowanceByPartition(
-                    partition1,
-                    tokenHolder,
-                    operator
-                  )
-                ).toNumber(),
-                0
-              );
-
-              const approvedAmount = 400;
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .approveByPartition(partition1, operator, approvedAmount);
-              assert.equal(
-                (
-                  await token.allowanceByPartition(
-                    partition1,
-                    tokenHolder,
-                    operator
-                  )
-                ).toNumber(),
-                approvedAmount
-              );
-
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addCertificateSigner(token.address, operator);
-              await token
-                .connect(await ethers.getSigner(operator))
-                .operatorTransferByPartition(
-                  partition1,
-                  tokenHolder,
-                  recipient,
-                  transferAmount,
-                  ZERO_BYTE,
-                  ZERO_BYTE
-                );
-
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount - transferAmount
-              );
-              await assertBalanceOfSecurityToken(
-                token,
-                recipient,
-                partition1,
-                transferAmount
-              );
-              assert.equal(
-                (
-                  await token.allowanceByPartition(
-                    partition1,
-                    tokenHolder,
-                    operator
-                  )
-                ).toNumber(),
-                approvedAmount - transferAmount
-              );
-            });
-            it('updates the token partition', async function () {
-              await assertBalanceOfByPartition(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-
-              const updateAmount = 400;
-
-              const certificate = await craftCertificate(
-                token.interface.encodeFunctionData(
-                  'operatorTransferByPartition',
-                  [
-                    partition1,
-                    tokenHolder,
-                    tokenHolder,
-                    updateAmount,
-                    changeToPartition2,
-                    ZERO_BYTE
-                  ]
-                ),
-                token,
-                extension,
-                clock, // clock
-                controller
-              );
-              await token
-                .connect(await ethers.getSigner(controller))
-                .operatorTransferByPartition(
-                  partition1,
-                  tokenHolder,
-                  tokenHolder,
-                  updateAmount,
-                  changeToPartition2,
-                  certificate
-                );
-
-              await assertBalanceOfByPartition(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount - updateAmount
-              );
-              await assertBalanceOfByPartition(
-                token,
-                tokenHolder,
-                partition2,
-                updateAmount
-              );
-            });
-            it('fails transferring when certificate is not provided', async function () {
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-              await assertBalanceOfSecurityToken(
-                token,
-                recipient,
-                partition1,
-                0
-              );
-              assert.equal(
-                (
-                  await token.allowanceByPartition(
-                    partition1,
-                    tokenHolder,
-                    operator
-                  )
-                ).toNumber(),
-                0
-              );
-
-              const approvedAmount = 400;
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .approveByPartition(partition1, operator, approvedAmount);
-              assert.equal(
-                (
-                  await token.allowanceByPartition(
-                    partition1,
-                    tokenHolder,
-                    operator
-                  )
-                ).toNumber(),
-                approvedAmount
-              );
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(operator))
-                  .operatorTransferByPartition(
-                    partition1,
-                    tokenHolder,
-                    recipient,
-                    transferAmount,
-                    ZERO_BYTE,
-                    ZERO_BYTE
-                  )
-              );
-
-              await assertBalanceOfSecurityToken(
-                token,
-                tokenHolder,
-                partition1,
-                issuanceAmount
-              );
-              await assertBalanceOfSecurityToken(
-                token,
-                recipient,
-                partition1,
-                0
-              );
-              assert.equal(
-                (
-                  await token.allowanceByPartition(
-                    partition1,
-                    tokenHolder,
-                    operator
-                  )
-                ).toNumber(),
-                approvedAmount
-              );
-            });
-          });
-        });
-        describe('ERC20 functions', function () {
-          describe('transfer', function () {
-            it('transfers the requested amount when sender and recipient are allowlisted', async function () {
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, tokenHolder);
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, recipient);
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .transfer(recipient, transferAmount);
-
-              await assertBalance(
-                token,
-                tokenHolder,
-                issuanceAmount - transferAmount
-              );
-              await assertBalance(token, recipient, transferAmount);
-            });
-            it('fails transferring when sender and is not allowlisted', async function () {
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, recipient);
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .transfer(recipient, transferAmount)
-              );
-
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-            });
-            it('fails transferring when recipient and is not allowlisted', async function () {
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, tokenHolder);
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .transfer(recipient, transferAmount)
-              );
-
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-            });
-          });
-          describe('transferFrom', function () {
-            it('transfers the requested amount when sender and recipient are allowlisted', async function () {
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, tokenHolder);
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, recipient);
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .authorizeOperator(operator);
-              await token
-                .connect(await ethers.getSigner(operator))
-                .transferFrom(tokenHolder, recipient, transferAmount);
-
-              await assertBalance(
-                token,
-                tokenHolder,
-                issuanceAmount - transferAmount
-              );
-              await assertBalance(token, recipient, transferAmount);
-            });
-            it('fails transferring when sender is not allowlisted', async function () {
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, recipient);
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .authorizeOperator(operator);
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(operator))
-                  .transferFrom(tokenHolder, recipient, transferAmount)
-              );
-
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-            });
-            it('fails transferring when recipient is not allowlisted', async function () {
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, tokenHolder);
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .authorizeOperator(operator);
-              await expectRevert.unspecified(
-                token
-                  .connect(await ethers.getSigner(operator))
-                  .transferFrom(tokenHolder, recipient, transferAmount)
-              );
-
-              await assertBalance(token, tokenHolder, issuanceAmount);
-              await assertBalance(token, recipient, 0);
-            });
-          });
-        });
-      });
-      describe('when certificate is not valid', function () {
-        describe('salt-based certificate control', function () {
-          it('issues new tokens when certificate is valid', async function () {
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('issueByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-            await token
-              .connect(await ethers.getSigner(controller))
-              .issueByPartition(
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                certificate
-              );
-            await assertTotalSupply(token, 2 * issuanceAmount);
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              2 * issuanceAmount
-            );
-          });
-          it('fails issuing when certificate is not valid (wrong function selector)', async function () {
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('operatorRedeemByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (wrong parameter)', async function () {
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('issueByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount - 1,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (expiration time is past)', async function () {
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('issueByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-
-            // Wait until certificate expiration
-            await advanceTimeAndBlock(
-              CERTIFICATE_VALIDITY_PERIOD * SECONDS_IN_AN_HOUR + 100
-            );
-
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (certificate already used)', async function () {
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('issueByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-            await token
-              .connect(await ethers.getSigner(controller))
-              .issueByPartition(
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                certificate
-              );
-            await assertTotalSupply(token, 2 * issuanceAmount);
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              2 * issuanceAmount
-            );
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (certificate signer has been revoked)', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeCertificateSigner(token.address, CERTIFICATE_SIGNER);
-
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('issueByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (wrong transaction sender)', async function () {
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('issueByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              tokenHolder
-            );
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (certificate with v=27) [for coverage]', async function () {
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  SALT_CERTIFICATE_WITH_V_EQUAL_TO_27
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (certificate with v=28) [for coverage]', async function () {
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  SALT_CERTIFICATE_WITH_V_EQUAL_TO_28
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (certificate with v=29) [for coverage]', async function () {
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  SALT_CERTIFICATE_WITH_V_EQUAL_TO_29
-                )
-            );
-          });
-        });
-        describe('nonce-based certificate control', function () {
-          beforeEach(async function () {
-            await setCertificateActivated(
-              extension,
-              token,
-              controller,
-              CERTIFICATE_VALIDATION_NONCE
-            );
-
-            await assertCertificateActivated(
-              extension,
-              token,
-              CERTIFICATE_VALIDATION_NONCE
-            );
-          });
-          it('issues new tokens when certificate is valid', async function () {
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('issueByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-            await token
-              .connect(await ethers.getSigner(controller))
-              .issueByPartition(
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                certificate
-              );
-            await assertTotalSupply(token, 2 * issuanceAmount);
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              2 * issuanceAmount
-            );
-          });
-          it('fails issuing when certificate is not valid (wrong function selector)', async function () {
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('operatorRedeemByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (wrong parameter)', async function () {
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('issueByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount - 1,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (expiration time is past)', async function () {
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('issueByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-
-            // Wait until certificate expiration
-            await advanceTimeAndBlock(
-              CERTIFICATE_VALIDITY_PERIOD * SECONDS_IN_AN_HOUR + 100
-            );
-
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (certificate already used)', async function () {
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('issueByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-            await token
-              .connect(await ethers.getSigner(controller))
-              .issueByPartition(
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                certificate
-              );
-            await assertTotalSupply(token, 2 * issuanceAmount);
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              2 * issuanceAmount
-            );
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (certificate signer has been revoked)', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeCertificateSigner(token.address, CERTIFICATE_SIGNER);
-
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('issueByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (wrong transaction sender)', async function () {
-            const certificate = await craftCertificate(
-              token.interface.encodeFunctionData('issueByPartition', [
-                partition1,
-                tokenHolder,
-                issuanceAmount,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              tokenHolder
-            );
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  certificate
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (certificate with v=27) [for coverage]', async function () {
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  NONCE_CERTIFICATE_WITH_V_EQUAL_TO_27
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (certificate with v=28) [for coverage]', async function () {
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  NONCE_CERTIFICATE_WITH_V_EQUAL_TO_28
-                )
-            );
-          });
-          it('fails issuing when certificate is not valid (certificate with v=29) [for coverage]', async function () {
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  NONCE_CERTIFICATE_WITH_V_EQUAL_TO_29
-                )
-            );
-          });
-        });
-      });
-    });
-
-    // ALLOWLIST EXTENSION
-    describe('allowlist', function () {
-      const redeemAmount = 50;
-      const transferAmount = 300;
-      beforeEach(async function () {
-        await assertTokenHasExtension(registry, extension, token);
+        await assertCertificateActivated(
+          extension,
+          token,
+          CERTIFICATE_VALIDATION_NONCE
+        );
 
         await setCertificateActivated(
           extension,
@@ -3783,23 +1652,666 @@ contract(
           token,
           CERTIFICATE_VALIDATION_NONE
         );
+      });
+    });
+    describe('when the caller is not the contract owner', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          setAllowListActivated(
+            extension,
+            token,
+            unknown,
+            CERTIFICATE_VALIDATION_NONCE
+          )
+        );
+      });
+    });
+  });
 
+  // ALLOWLIST ACTIVATED
+  describe('setAllowlistActivated', function () {
+    beforeEach(async function () {
+      await assertTokenHasExtension(registry, extension, token);
+    });
+    describe('when the caller is the contract owner', function () {
+      it('activates the allowlist', async function () {
         await assertAllowListActivated(extension, token, true);
 
-        await extension
-          .connect(await ethers.getSigner(controller))
-          .addAllowlisted(token.address, tokenHolder);
+        await setAllowListActivated(extension, token, controller, false);
 
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(partition1, tokenHolder, issuanceAmount, ZERO_BYTE);
+        await assertAllowListActivated(extension, token, false);
       });
+    });
+    describe('when the caller is not the contract owner', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          setAllowListActivated(extension, token, unknown, false)
+        );
+      });
+    });
+  });
+
+  // BLOCKLIST ACTIVATED
+  describe('setBlocklistActivated', function () {
+    beforeEach(async function () {
+      await assertTokenHasExtension(registry, extension, token);
+    });
+    describe('when the caller is the contract owner', function () {
+      it('activates the blocklist', async function () {
+        await assertBlockListActivated(extension, token, true);
+
+        await setBlockListActivated(extension, token, controller, false);
+
+        await assertBlockListActivated(extension, token, false);
+      });
+    });
+    describe('when the caller is not the contract owner', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          setBlockListActivated(extension, token, unknown, false)
+        );
+      });
+    });
+  });
+
+  // PARTITION GRANULARITY ACTIVATED
+  describe('setPartitionGranularityActivated', function () {
+    beforeEach(async function () {
+      await assertTokenHasExtension(registry, extension, token);
+    });
+    describe('when the caller is the contract owner', function () {
+      it('activates the partition granularity', async function () {
+        await assertGranularityByPartitionActivated(extension, token, true);
+
+        await setGranularityByPartitionActivated(
+          extension,
+          token,
+          controller,
+          false
+        );
+
+        await assertGranularityByPartitionActivated(extension, token, false);
+      });
+    });
+    describe('when the caller is not the contract owner', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          setGranularityByPartitionActivated(extension, token, unknown, false)
+        );
+      });
+    });
+  });
+
+  // CANTRANSFER
+  describe('canTransferByPartition/canOperatorTransferByPartition', function () {
+    const localGranularity = 10;
+    const transferAmount = 10 * localGranularity;
+    let token2: ERC1400HoldableCertificateToken;
+    let senderContract: ERC1400TokensSenderMock;
+    let recipientContract: ERC1400TokensRecipientMock;
+    before(async function () {
+      senderContract = await new ERC1400TokensSenderMock__factory(
+        tokenHolderSigner
+      ).deploy();
+      await registry
+        .connect(tokenHolderSigner)
+        .setInterfaceImplementer(
+          tokenHolder,
+          ethers.utils.id(ERC1400_TOKENS_SENDER),
+          senderContract.address
+        );
+
+      recipientContract = await new ERC1400TokensRecipientMock__factory(
+        recipientSigner
+      ).deploy();
+      await registry
+        .connect(recipientSigner)
+        .setInterfaceImplementer(
+          recipient,
+          ethers.utils.id(ERC1400_TOKENS_RECIPIENT),
+          recipientContract.address
+        );
+    });
+    after(async function () {
+      await registry
+        .connect(tokenHolderSigner)
+        .setInterfaceImplementer(
+          tokenHolder,
+          ethers.utils.id(ERC1400_TOKENS_SENDER),
+          ZERO_ADDRESS
+        );
+      await registry
+        .connect(recipientSigner)
+        .setInterfaceImplementer(
+          recipient,
+          ethers.utils.id(ERC1400_TOKENS_RECIPIENT),
+          ZERO_ADDRESS
+        );
+    });
+
+    beforeEach(async function () {
+      token2 = await new ERC1400HoldableCertificateToken__factory(
+        controllerSigner
+      ).deploy(
+        'ERC1400Token',
+        'DAU',
+        localGranularity,
+        [controller],
+        partitions,
+        extension.address,
+        owner,
+        CERTIFICATE_SIGNER,
+        CERTIFICATE_VALIDATION_DEFAULT
+      );
+
+      const certificate = await craftCertificate(
+        token2.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token2,
+        extension,
+        clock, // clock
+        controller
+      );
+      await token2
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+    });
+
+    describe('when checker has been setup', function () {
+      let checkerContract: ERC1400TokensChecker;
+      before(async function () {
+        checkerContract = await new ERC1400TokensChecker__factory(
+          signer
+        ).deploy();
+      });
+      beforeEach(async function () {
+        await token2
+          .connect(signer)
+          .setTokenExtension(
+            checkerContract.address,
+            ERC1400_TOKENS_CHECKER,
+            true,
+            true,
+            true
+          );
+      });
+      describe('when certificate is valid', function () {
+        describe('when the operator is authorized', function () {
+          describe('when balance is sufficient', function () {
+            describe('when receiver is not the zero address', function () {
+              describe('when sender is eligible', function () {
+                describe('when validator is ok', function () {
+                  describe('when receiver is eligible', function () {
+                    describe('when the amount is a multiple of the granularity', function () {
+                      it('returns Ethereum status code 51 (canTransferByPartition)', async function () {
+                        const certificate = await craftCertificate(
+                          token2.interface.encodeFunctionData(
+                            'transferByPartition',
+                            [partition1, recipient, transferAmount, ZERO_BYTE]
+                          ),
+                          token2,
+                          extension,
+                          clock, // clock
+                          tokenHolder
+                        );
+                        const response = await token2
+                          .connect(tokenHolderSigner)
+                          .canTransferByPartition(
+                            partition1,
+                            recipient,
+                            transferAmount,
+                            certificate
+                          );
+                        await assertEscResponse(
+                          response,
+                          ESC_51,
+                          EMPTY_BYTE32,
+                          partition1
+                        );
+                      });
+                      it('returns Ethereum status code 51 (canOperatorTransferByPartition)', async function () {
+                        const certificate = await craftCertificate(
+                          token2.interface.encodeFunctionData(
+                            'operatorTransferByPartition',
+                            [
+                              partition1,
+                              tokenHolder,
+                              recipient,
+                              transferAmount,
+                              ZERO_BYTE,
+                              ZERO_BYTE
+                            ]
+                          ),
+                          token2,
+                          extension,
+                          clock, // clock
+                          tokenHolder
+                        );
+                        const response = await token2
+                          .connect(tokenHolderSigner)
+                          .canOperatorTransferByPartition(
+                            partition1,
+                            tokenHolder,
+                            recipient,
+                            transferAmount,
+                            ZERO_BYTE,
+                            certificate
+                          );
+                        await assertEscResponse(
+                          response,
+                          ESC_51,
+                          EMPTY_BYTE32,
+                          partition1
+                        );
+                      });
+                    });
+                    describe('when the amount is not a multiple of the granularity', function () {
+                      it('returns Ethereum status code 50', async function () {
+                        const certificate = await craftCertificate(
+                          token2.interface.encodeFunctionData(
+                            'transferByPartition',
+                            [
+                              partition1,
+                              recipient,
+                              1, // transferAmount
+                              ZERO_BYTE
+                            ]
+                          ),
+                          token2,
+                          extension,
+                          clock, // clock
+                          tokenHolder
+                        );
+                        const response = await token2
+                          .connect(tokenHolderSigner)
+                          .canTransferByPartition(
+                            partition1,
+                            recipient,
+                            1, // transferAmount
+                            certificate
+                          );
+                        await assertEscResponse(
+                          response,
+                          ESC_50,
+                          EMPTY_BYTE32,
+                          partition1
+                        );
+                      });
+                    });
+                  });
+                  describe('when receiver is not eligible', function () {
+                    it('returns Ethereum status code 57', async function () {
+                      await setCertificateActivated(
+                        extension,
+                        token2,
+                        controller,
+                        CERTIFICATE_VALIDATION_NONE
+                      );
+
+                      await assertCertificateActivated(
+                        extension,
+                        token2,
+                        CERTIFICATE_VALIDATION_NONE
+                      );
+
+                      await extension
+                        .connect(controllerSigner)
+                        .addAllowlisted(token2.address, tokenHolder);
+                      await extension
+                        .connect(controllerSigner)
+                        .addAllowlisted(token2.address, recipient);
+
+                      const response = await token2
+                        .connect(tokenHolderSigner)
+                        .canTransferByPartition(
+                          partition1,
+                          recipient,
+                          transferAmount,
+                          INVALID_CERTIFICATE_RECIPIENT
+                        );
+                      await assertEscResponse(
+                        response,
+                        ESC_57,
+                        EMPTY_BYTE32,
+                        partition1
+                      );
+                    });
+                  });
+                });
+                describe('when validator is not ok', function () {
+                  it('returns Ethereum status code 54 (canTransferByPartition)', async function () {
+                    const holdId = newHoldId();
+                    const secretHashPair = newSecretHashPair();
+                    const certificate = await craftCertificate(
+                      extension.interface.encodeFunctionData('holdFrom', [
+                        token2.address,
+                        holdId,
+                        tokenHolder,
+                        recipient,
+                        notary,
+                        partition1,
+                        issuanceAmount,
+                        SECONDS_IN_AN_HOUR,
+                        secretHashPair.hash,
+                        ZERO_BYTE
+                      ]),
+                      token2,
+                      extension,
+                      clock, // clock
+                      controller
+                    );
+                    await extension
+                      .connect(controllerSigner)
+                      .holdFrom(
+                        token2.address,
+                        holdId,
+                        tokenHolder,
+                        recipient,
+                        notary,
+                        partition1,
+                        issuanceAmount,
+                        SECONDS_IN_AN_HOUR,
+                        secretHashPair.hash,
+                        certificate
+                      );
+
+                    const certificate2 = await craftCertificate(
+                      token2.interface.encodeFunctionData(
+                        'transferByPartition',
+                        [partition1, recipient, transferAmount, ZERO_BYTE]
+                      ),
+                      token2,
+                      extension,
+                      clock, // clock
+                      tokenHolder
+                    );
+                    const response = await token2
+                      .connect(tokenHolderSigner)
+                      .canTransferByPartition(
+                        partition1,
+                        recipient,
+                        transferAmount,
+                        certificate2
+                      );
+                    await assertEscResponse(
+                      response,
+                      ESC_54,
+                      EMPTY_BYTE32,
+                      partition1
+                    );
+                  });
+                });
+              });
+              describe('when sender is not eligible', function () {
+                it('returns Ethereum status code 56', async function () {
+                  const response = await token2
+                    .connect(tokenHolderSigner)
+                    .canTransferByPartition(
+                      partition1,
+                      recipient,
+                      transferAmount,
+                      INVALID_CERTIFICATE_SENDER
+                    );
+                  await assertEscResponse(
+                    response,
+                    ESC_56,
+                    EMPTY_BYTE32,
+                    partition1
+                  );
+                });
+              });
+            });
+            describe('when receiver is the zero address', function () {
+              it('returns Ethereum status code 57', async function () {
+                const certificate = await craftCertificate(
+                  token2.interface.encodeFunctionData('transferByPartition', [
+                    partition1,
+                    ZERO_ADDRESS,
+                    transferAmount,
+                    ZERO_BYTE
+                  ]),
+                  token2,
+                  extension,
+                  clock, // clock
+                  tokenHolder
+                );
+                const response = await token2
+                  .connect(tokenHolderSigner)
+                  .canTransferByPartition(
+                    partition1,
+                    ZERO_ADDRESS,
+                    transferAmount,
+                    certificate
+                  );
+                await assertEscResponse(
+                  response,
+                  ESC_57,
+                  EMPTY_BYTE32,
+                  partition1
+                );
+              });
+            });
+          });
+          describe('when balance is not sufficient', function () {
+            it('returns Ethereum status code 52 (insuficient global balance)', async function () {
+              const certificate = await craftCertificate(
+                token2.interface.encodeFunctionData('transferByPartition', [
+                  partition1,
+                  recipient,
+                  issuanceAmount + localGranularity,
+                  ZERO_BYTE
+                ]),
+                token2,
+                extension,
+                clock, // clock
+                tokenHolder
+              );
+              const response = await token2
+                .connect(tokenHolderSigner)
+                .canTransferByPartition(
+                  partition1,
+                  recipient,
+                  issuanceAmount + localGranularity,
+                  certificate
+                );
+              await assertEscResponse(
+                response,
+                ESC_52,
+                EMPTY_BYTE32,
+                partition1
+              );
+            });
+            it('returns Ethereum status code 52 (insuficient partition balance)', async function () {
+              const issuanceCertificate = await craftCertificate(
+                token2.interface.encodeFunctionData('issueByPartition', [
+                  partition2,
+                  tokenHolder,
+                  localGranularity,
+                  ZERO_BYTE
+                ]),
+                token2,
+                extension,
+                clock, // clock
+                controller
+              );
+              await token2
+                .connect(controllerSigner)
+                .issueByPartition(
+                  partition2,
+                  tokenHolder,
+                  localGranularity,
+                  issuanceCertificate
+                );
+              const certificate = await craftCertificate(
+                token2.interface.encodeFunctionData('transferByPartition', [
+                  partition2,
+                  recipient,
+                  transferAmount,
+                  ZERO_BYTE
+                ]),
+                token2,
+                extension,
+                clock, // clock
+                tokenHolder
+              );
+              const response = await token2
+                .connect(tokenHolderSigner)
+                .canTransferByPartition(
+                  partition2,
+                  recipient,
+                  transferAmount,
+                  certificate
+                );
+              await assertEscResponse(
+                response,
+                ESC_52,
+                EMPTY_BYTE32,
+                partition2
+              );
+            });
+          });
+        });
+        describe('when the operator is not authorized', function () {
+          it('returns Ethereum status code 58 (canOperatorTransferByPartition)', async function () {
+            const certificate = await craftCertificate(
+              token2.interface.encodeFunctionData(
+                'operatorTransferByPartition',
+                [
+                  partition1,
+                  operator,
+                  recipient,
+                  transferAmount,
+                  ZERO_BYTE,
+                  ZERO_BYTE
+                ]
+              ),
+              token2,
+              extension,
+              clock, // clock
+              tokenHolder
+            );
+            const response = await token2
+              .connect(tokenHolderSigner)
+              .canOperatorTransferByPartition(
+                partition1,
+                operator,
+                recipient,
+                transferAmount,
+                ZERO_BYTE,
+                certificate
+              );
+            await assertEscResponse(response, ESC_58, EMPTY_BYTE32, partition1);
+          });
+        });
+      });
+      describe('when certificate is not valid', function () {
+        it('returns Ethereum status code 54 (canTransferByPartition)', async function () {
+          const response = await token2
+            .connect(tokenHolderSigner)
+            .canTransferByPartition(
+              partition1,
+              recipient,
+              transferAmount,
+              ZERO_BYTE
+            );
+          await assertEscResponse(response, ESC_54, EMPTY_BYTE32, partition1);
+        });
+        it('returns Ethereum status code 54 (canOperatorTransferByPartition)', async function () {
+          const response = await token2
+            .connect(tokenHolderSigner)
+            .canOperatorTransferByPartition(
+              partition1,
+              tokenHolder,
+              recipient,
+              transferAmount,
+              ZERO_BYTE,
+              ZERO_BYTE
+            );
+          await assertEscResponse(response, ESC_54, EMPTY_BYTE32, partition1);
+        });
+      });
+    });
+    describe('when checker has not been setup', function () {
+      it('returns empty Ethereum status code 00 (canTransferByPartition)', async function () {
+        const certificate = await craftCertificate(
+          token2.interface.encodeFunctionData('transferByPartition', [
+            partition1,
+            recipient,
+            transferAmount,
+            ZERO_BYTE
+          ]),
+          token2,
+          extension,
+          clock, // clock
+          tokenHolder
+        );
+        const response = await token2
+          .connect(tokenHolderSigner)
+          .canTransferByPartition(
+            partition1,
+            recipient,
+            transferAmount,
+            certificate
+          );
+        await assertEscResponse(response, ESC_00, EMPTY_BYTE32, partition1);
+      });
+    });
+  });
+
+  // CERTIFICATE EXTENSION
+  describe('certificate', function () {
+    const redeemAmount = 50;
+    const transferAmount = 300;
+    beforeEach(async function () {
+      await assertTokenHasExtension(registry, extension, token);
+
+      await assertCertificateActivated(
+        extension,
+        token,
+        CERTIFICATE_VALIDATION_SALT
+      );
+
+      await assertAllowListActivated(extension, token, true);
+
+      const certificate = await craftCertificate(
+        token.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        controller
+      );
+
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+    });
+    describe('when certificate is valid', function () {
       describe('ERC1400 functions', function () {
         describe('issue', function () {
-          it('issues new tokens when recipient is allowlisted', async function () {
+          it('issues new tokens when certificate is provided', async function () {
+            const certificate = await craftCertificate(
+              token.interface.encodeFunctionData('issue', [
+                tokenHolder,
+                issuanceAmount,
+                ZERO_BYTE
+              ]),
+              token,
+              extension,
+              clock, // clock
+              controller
+            );
             await token
-              .connect(await ethers.getSigner(controller))
-              .issue(tokenHolder, issuanceAmount, ZERO_BYTE);
+              .connect(controllerSigner)
+              .issue(tokenHolder, issuanceAmount, certificate);
             await assertTotalSupply(token, 2 * issuanceAmount);
             await assertBalanceOfSecurityToken(
               token,
@@ -3808,21 +2320,50 @@ contract(
               2 * issuanceAmount
             );
           });
-          it('fails issuing when recipient is not allowlisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeAllowlisted(token.address, tokenHolder);
+          it('fails issuing when when certificate is not provided', async function () {
             await expectRevert.unspecified(
               token
-                .connect(await ethers.getSigner(controller))
+                .connect(controllerSigner)
                 .issue(tokenHolder, issuanceAmount, ZERO_BYTE)
             );
           });
         });
         describe('issueByPartition', function () {
-          it('issues new tokens when recipient is allowlisted', async function () {
+          it('issues new tokens when certificate is provided', async function () {
+            const certificate = await craftCertificate(
+              token.interface.encodeFunctionData('issueByPartition', [
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                ZERO_BYTE
+              ]),
+              token,
+              extension,
+              clock, // clock
+              controller
+            );
             await token
-              .connect(await ethers.getSigner(controller))
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              );
+            await assertTotalSupply(token, 2 * issuanceAmount);
+            await assertBalanceOfSecurityToken(
+              token,
+              tokenHolder,
+              partition1,
+              2 * issuanceAmount
+            );
+          });
+          it('issues new tokens when certificate is not provided, but sender is certificate signer', async function () {
+            await extension
+              .connect(controllerSigner)
+              .addCertificateSigner(token.address, controller);
+            await token
+              .connect(controllerSigner)
               .issueByPartition(
                 partition1,
                 tokenHolder,
@@ -3837,13 +2378,25 @@ contract(
               2 * issuanceAmount
             );
           });
-          it('fails issuing when recipient is not allowlisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeAllowlisted(token.address, tokenHolder);
+          it('fails issuing when certificate is not provided', async function () {
             await expectRevert.unspecified(
               token
-                .connect(await ethers.getSigner(controller))
+                .connect(controllerSigner)
+                .issueByPartition(
+                  partition1,
+                  tokenHolder,
+                  issuanceAmount,
+                  ZERO_BYTE
+                )
+            );
+          });
+          it('fails issuing when certificate is not provided (even if allowlisted)', async function () {
+            await extension
+              .connect(controllerSigner)
+              .addAllowlisted(token.address, tokenHolder);
+            await expectRevert.unspecified(
+              token
+                .connect(controllerSigner)
                 .issueByPartition(
                   partition1,
                   tokenHolder,
@@ -3854,28 +2407,33 @@ contract(
           });
         });
         describe('redeem', function () {
-          it('redeeems the requested amount when sender is allowlisted', async function () {
+          it('redeeems the requested amount when certificate is provided', async function () {
             await assertTotalSupply(token, issuanceAmount);
             await assertBalance(token, tokenHolder, issuanceAmount);
 
+            const certificate = await craftCertificate(
+              token.interface.encodeFunctionData('redeem', [
+                issuanceAmount,
+                ZERO_BYTE
+              ]),
+              token,
+              extension,
+              clock, // clock
+              tokenHolder
+            );
             await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .redeem(issuanceAmount, ZERO_BYTE);
+              .connect(tokenHolderSigner)
+              .redeem(issuanceAmount, certificate);
 
             await assertTotalSupply(token, 0);
             await assertBalance(token, tokenHolder, 0);
           });
-          it('fails redeeming when sender is not allowlisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeAllowlisted(token.address, tokenHolder);
+          it('fails redeeming when certificate is not provided', async function () {
             await assertTotalSupply(token, issuanceAmount);
             await assertBalance(token, tokenHolder, issuanceAmount);
 
             await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(tokenHolder))
-                .redeem(issuanceAmount, ZERO_BYTE)
+              token.connect(tokenHolderSigner).redeem(issuanceAmount, ZERO_BYTE)
             );
 
             await assertTotalSupply(token, issuanceAmount);
@@ -3883,33 +2441,38 @@ contract(
           });
         });
         describe('redeemFrom', function () {
-          it('redeems the requested amount when sender is allowlisted', async function () {
+          it('redeems the requested amount when certificate is provided', async function () {
             await assertTotalSupply(token, issuanceAmount);
             await assertBalance(token, tokenHolder, issuanceAmount);
 
+            await token.connect(tokenHolderSigner).authorizeOperator(operator);
+
+            const certificate = await craftCertificate(
+              token.interface.encodeFunctionData('redeemFrom', [
+                tokenHolder,
+                issuanceAmount,
+                ZERO_BYTE
+              ]),
+              token,
+              extension,
+              clock, // clock
+              operator
+            );
             await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperator(operator);
-            await token
-              .connect(await ethers.getSigner(operator))
-              .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE);
+              .connect(operatorSigner)
+              .redeemFrom(tokenHolder, issuanceAmount, certificate);
 
             await assertTotalSupply(token, 0);
             await assertBalance(token, tokenHolder, 0);
           });
-          it('fails redeeming the requested amount when sender is not allowlisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeAllowlisted(token.address, tokenHolder);
+          it('fails redeeming the requested amount when certificate is not provided', async function () {
             await assertTotalSupply(token, issuanceAmount);
             await assertBalance(token, tokenHolder, issuanceAmount);
 
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperator(operator);
+            await token.connect(tokenHolderSigner).authorizeOperator(operator);
             await expectRevert.unspecified(
               token
-                .connect(await ethers.getSigner(operator))
+                .connect(operatorSigner)
                 .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE)
             );
 
@@ -3918,10 +2481,21 @@ contract(
           });
         });
         describe('redeemByPartition', function () {
-          it('redeems the requested amount when sender is allowlisted', async function () {
+          it('redeems the requested amount when certificate is provided', async function () {
+            const certificate = await craftCertificate(
+              token.interface.encodeFunctionData('redeemByPartition', [
+                partition1,
+                redeemAmount,
+                ZERO_BYTE
+              ]),
+              token,
+              extension,
+              clock, // clock
+              tokenHolder
+            );
             await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .redeemByPartition(partition1, redeemAmount, ZERO_BYTE);
+              .connect(tokenHolderSigner)
+              .redeemByPartition(partition1, redeemAmount, certificate);
             await assertTotalSupply(token, issuanceAmount - redeemAmount);
             await assertBalanceOfSecurityToken(
               token,
@@ -3930,13 +2504,27 @@ contract(
               issuanceAmount - redeemAmount
             );
           });
-          it('fails redeems when sender is not allowlisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeAllowlisted(token.address, tokenHolder);
+          it('fails redeems when sender when certificate is not provided', async function () {
             await expectRevert.unspecified(
               token
-                .connect(await ethers.getSigner(tokenHolder))
+                .connect(tokenHolderSigner)
+                .redeemByPartition(partition1, redeemAmount, ZERO_BYTE)
+            );
+            await assertTotalSupply(token, issuanceAmount);
+            await assertBalanceOfSecurityToken(
+              token,
+              tokenHolder,
+              partition1,
+              issuanceAmount
+            );
+          });
+          it('fails redeems when sender when certificate is not provided (even if allowlisted)', async function () {
+            await extension
+              .connect(controllerSigner)
+              .addAllowlisted(token.address, tokenHolder);
+            await expectRevert.unspecified(
+              token
+                .connect(tokenHolderSigner)
                 .redeemByPartition(partition1, redeemAmount, ZERO_BYTE)
             );
             await assertTotalSupply(token, issuanceAmount);
@@ -3949,12 +2537,51 @@ contract(
           });
         });
         describe('operatorRedeemByPartition', function () {
-          it('redeems the requested amount when sender is allowlisted', async function () {
+          it('redeems the requested amount when certificate is provided', async function () {
             await token
-              .connect(await ethers.getSigner(tokenHolder))
+              .connect(tokenHolderSigner)
               .authorizeOperatorByPartition(partition1, operator);
+
+            const certificate = await craftCertificate(
+              token.interface.encodeFunctionData('operatorRedeemByPartition', [
+                partition1,
+                tokenHolder,
+                redeemAmount,
+                ZERO_BYTE
+              ]),
+              token,
+              extension,
+              clock, // clock
+              operator
+            );
             await token
-              .connect(await ethers.getSigner(operator))
+              .connect(operatorSigner)
+              .operatorRedeemByPartition(
+                partition1,
+                tokenHolder,
+                redeemAmount,
+                certificate
+              );
+
+            await assertTotalSupply(token, issuanceAmount - redeemAmount);
+            await assertBalanceOfSecurityToken(
+              token,
+              tokenHolder,
+              partition1,
+              issuanceAmount - redeemAmount
+            );
+          });
+          it('redeems the requested amount when certificate is provided, but sender is certificate signer', async function () {
+            await token
+              .connect(tokenHolderSigner)
+              .authorizeOperatorByPartition(partition1, operator);
+
+            await extension
+              .connect(controllerSigner)
+              .addCertificateSigner(token.address, operator);
+
+            await token
+              .connect(operatorSigner)
               .operatorRedeemByPartition(
                 partition1,
                 tokenHolder,
@@ -3970,16 +2597,13 @@ contract(
               issuanceAmount - redeemAmount
             );
           });
-          it('fails redeeming when sender is not allowlisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeAllowlisted(token.address, tokenHolder);
+          it('fails redeeming when certificate is not provided', async function () {
             await token
-              .connect(await ethers.getSigner(tokenHolder))
+              .connect(tokenHolderSigner)
               .authorizeOperatorByPartition(partition1, operator);
             await expectRevert.unspecified(
               token
-                .connect(await ethers.getSigner(operator))
+                .connect(operatorSigner)
                 .operatorRedeemByPartition(
                   partition1,
                   tokenHolder,
@@ -3998,16 +2622,24 @@ contract(
           });
         });
         describe('transferWithData', function () {
-          it('transfers the requested amount when sender and recipient are allowlisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addAllowlisted(token.address, recipient);
+          it('transfers the requested amount when certificate is provided', async function () {
             await assertBalance(token, tokenHolder, issuanceAmount);
             await assertBalance(token, recipient, 0);
 
+            const certificate = await craftCertificate(
+              token.interface.encodeFunctionData('transferWithData', [
+                recipient,
+                transferAmount,
+                ZERO_BYTE
+              ]),
+              token,
+              extension,
+              clock, // clock
+              tokenHolder
+            );
             await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .transferWithData(recipient, transferAmount, ZERO_BYTE);
+              .connect(tokenHolderSigner)
+              .transferWithData(recipient, transferAmount, certificate);
 
             await assertBalance(
               token,
@@ -4016,32 +2648,13 @@ contract(
             );
             await assertBalance(token, recipient, transferAmount);
           });
-          it('fails transferring when sender is not allowlisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addAllowlisted(token.address, recipient);
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeAllowlisted(token.address, tokenHolder);
+          it('fails transferring when certificate is not provided', async function () {
             await assertBalance(token, tokenHolder, issuanceAmount);
             await assertBalance(token, recipient, 0);
 
             await expectRevert.unspecified(
               token
-                .connect(await ethers.getSigner(tokenHolder))
-                .transferWithData(recipient, transferAmount, ZERO_BYTE)
-            );
-
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-          });
-          it('fails transferring when recipient is not allowlisted', async function () {
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(tokenHolder))
+                .connect(tokenHolderSigner)
                 .transferWithData(recipient, transferAmount, ZERO_BYTE)
             );
 
@@ -4050,24 +2663,31 @@ contract(
           });
         });
         describe('transferFromWithData', function () {
-          it('transfers the requested amount when sender and recipient are allowliste', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addAllowlisted(token.address, recipient);
-
+          it('transfers the requested amount when certificate is provided', async function () {
             await assertBalance(token, tokenHolder, issuanceAmount);
             await assertBalance(token, recipient, 0);
 
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperator(operator);
-            await token
-              .connect(await ethers.getSigner(operator))
-              .transferFromWithData(
+            await token.connect(tokenHolderSigner).authorizeOperator(operator);
+
+            const certificate = await craftCertificate(
+              token.interface.encodeFunctionData('transferFromWithData', [
                 tokenHolder,
                 recipient,
                 transferAmount,
                 ZERO_BYTE
+              ]),
+              token,
+              extension,
+              clock, // clock
+              operator
+            );
+            await token
+              .connect(operatorSigner)
+              .transferFromWithData(
+                tokenHolder,
+                recipient,
+                transferAmount,
+                certificate
               );
 
             await assertBalance(
@@ -4077,12 +2697,29 @@ contract(
             );
             await assertBalance(token, recipient, transferAmount);
           });
+          it('fails transferring when certificate is not provided', async function () {
+            await assertBalance(token, tokenHolder, issuanceAmount);
+            await assertBalance(token, recipient, 0);
+
+            await token.connect(tokenHolderSigner).authorizeOperator(operator);
+
+            await expectRevert.unspecified(
+              token
+                .connect(operatorSigner)
+                .transferFromWithData(
+                  tokenHolder,
+                  recipient,
+                  transferAmount,
+                  ZERO_BYTE
+                )
+            );
+
+            await assertBalance(token, tokenHolder, issuanceAmount);
+            await assertBalance(token, recipient, 0);
+          });
         });
         describe('transferByPartition', function () {
-          it('transfers the requested amount when sender and recipient are allowlisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addAllowlisted(token.address, recipient);
+          it('transfers the requested amount when certificate is provided', async function () {
             await assertBalanceOfSecurityToken(
               token,
               tokenHolder,
@@ -4091,13 +2728,25 @@ contract(
             );
             await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
 
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .transferByPartition(
+            const certificate = await craftCertificate(
+              token.interface.encodeFunctionData('transferByPartition', [
                 partition1,
                 recipient,
                 transferAmount,
                 ZERO_BYTE
+              ]),
+              token,
+              extension,
+              clock, // clock
+              tokenHolder
+            );
+            await token
+              .connect(tokenHolderSigner)
+              .transferByPartition(
+                partition1,
+                recipient,
+                transferAmount,
+                certificate
               );
 
             await assertBalanceOfSecurityToken(
@@ -4113,13 +2762,7 @@ contract(
               transferAmount
             );
           });
-          it('fails transferring when sender is not allowlisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addAllowlisted(token.address, recipient);
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeAllowlisted(token.address, tokenHolder);
+          it('fails transferring when certificate is not provided', async function () {
             await assertBalanceOfSecurityToken(
               token,
               tokenHolder,
@@ -4130,7 +2773,7 @@ contract(
 
             await expectRevert.unspecified(
               token
-                .connect(await ethers.getSigner(tokenHolder))
+                .connect(tokenHolderSigner)
                 .transferByPartition(
                   partition1,
                   recipient,
@@ -4147,7 +2790,13 @@ contract(
             );
             await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
           });
-          it('fails transferring when recipient is not allowlisted', async function () {
+          it('fails transferring when certificate is not provided (even when allowlisted)', async function () {
+            await extension
+              .connect(controllerSigner)
+              .addAllowlisted(token.address, tokenHolder);
+            await extension
+              .connect(controllerSigner)
+              .addAllowlisted(token.address, recipient);
             await assertBalanceOfSecurityToken(
               token,
               tokenHolder,
@@ -4158,7 +2807,7 @@ contract(
 
             await expectRevert.unspecified(
               token
-                .connect(await ethers.getSigner(tokenHolder))
+                .connect(tokenHolderSigner)
                 .transferByPartition(
                   partition1,
                   recipient,
@@ -4177,10 +2826,7 @@ contract(
           });
         });
         describe('operatorTransferByPartition', function () {
-          it('transfers the requested amount when sender and recipient are allowlisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addAllowlisted(token.address, recipient);
+          it('transfers the requested amount when certificate is provided', async function () {
             await assertBalanceOfSecurityToken(
               token,
               tokenHolder,
@@ -4201,7 +2847,7 @@ contract(
 
             const approvedAmount = 400;
             await token
-              .connect(await ethers.getSigner(tokenHolder))
+              .connect(tokenHolderSigner)
               .approveByPartition(partition1, operator, approvedAmount);
             assert.equal(
               (
@@ -4213,8 +2859,96 @@ contract(
               ).toNumber(),
               approvedAmount
             );
+            const certificate = await craftCertificate(
+              token.interface.encodeFunctionData(
+                'operatorTransferByPartition',
+                [
+                  partition1,
+                  tokenHolder,
+                  recipient,
+                  transferAmount,
+                  ZERO_BYTE,
+                  ZERO_BYTE
+                ]
+              ),
+              token,
+              extension,
+              clock, // clock
+              operator
+            );
             await token
-              .connect(await ethers.getSigner(operator))
+              .connect(operatorSigner)
+              .operatorTransferByPartition(
+                partition1,
+                tokenHolder,
+                recipient,
+                transferAmount,
+                ZERO_BYTE,
+                certificate
+              );
+
+            await assertBalanceOfSecurityToken(
+              token,
+              tokenHolder,
+              partition1,
+              issuanceAmount - transferAmount
+            );
+            await assertBalanceOfSecurityToken(
+              token,
+              recipient,
+              partition1,
+              transferAmount
+            );
+            assert.equal(
+              (
+                await token.allowanceByPartition(
+                  partition1,
+                  tokenHolder,
+                  operator
+                )
+              ).toNumber(),
+              approvedAmount - transferAmount
+            );
+          });
+          it('transfers the requested amount when certificate is provided, but sender is certificate signer', async function () {
+            await assertBalanceOfSecurityToken(
+              token,
+              tokenHolder,
+              partition1,
+              issuanceAmount
+            );
+            await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
+            assert.equal(
+              (
+                await token.allowanceByPartition(
+                  partition1,
+                  tokenHolder,
+                  operator
+                )
+              ).toNumber(),
+              0
+            );
+
+            const approvedAmount = 400;
+            await token
+              .connect(tokenHolderSigner)
+              .approveByPartition(partition1, operator, approvedAmount);
+            assert.equal(
+              (
+                await token.allowanceByPartition(
+                  partition1,
+                  tokenHolder,
+                  operator
+                )
+              ).toNumber(),
+              approvedAmount
+            );
+
+            await extension
+              .connect(controllerSigner)
+              .addCertificateSigner(token.address, operator);
+            await token
+              .connect(operatorSigner)
               .operatorTransferByPartition(
                 partition1,
                 tokenHolder,
@@ -4247,19 +2981,137 @@ contract(
               approvedAmount - transferAmount
             );
           });
+          it('updates the token partition', async function () {
+            await assertBalanceOfByPartition(
+              token,
+              tokenHolder,
+              partition1,
+              issuanceAmount
+            );
+
+            const updateAmount = 400;
+
+            const certificate = await craftCertificate(
+              token.interface.encodeFunctionData(
+                'operatorTransferByPartition',
+                [
+                  partition1,
+                  tokenHolder,
+                  tokenHolder,
+                  updateAmount,
+                  changeToPartition2,
+                  ZERO_BYTE
+                ]
+              ),
+              token,
+              extension,
+              clock, // clock
+              controller
+            );
+            await token
+              .connect(controllerSigner)
+              .operatorTransferByPartition(
+                partition1,
+                tokenHolder,
+                tokenHolder,
+                updateAmount,
+                changeToPartition2,
+                certificate
+              );
+
+            await assertBalanceOfByPartition(
+              token,
+              tokenHolder,
+              partition1,
+              issuanceAmount - updateAmount
+            );
+            await assertBalanceOfByPartition(
+              token,
+              tokenHolder,
+              partition2,
+              updateAmount
+            );
+          });
+          it('fails transferring when certificate is not provided', async function () {
+            await assertBalanceOfSecurityToken(
+              token,
+              tokenHolder,
+              partition1,
+              issuanceAmount
+            );
+            await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
+            assert.equal(
+              (
+                await token.allowanceByPartition(
+                  partition1,
+                  tokenHolder,
+                  operator
+                )
+              ).toNumber(),
+              0
+            );
+
+            const approvedAmount = 400;
+            await token
+              .connect(tokenHolderSigner)
+              .approveByPartition(partition1, operator, approvedAmount);
+            assert.equal(
+              (
+                await token.allowanceByPartition(
+                  partition1,
+                  tokenHolder,
+                  operator
+                )
+              ).toNumber(),
+              approvedAmount
+            );
+            await expectRevert.unspecified(
+              token
+                .connect(operatorSigner)
+                .operatorTransferByPartition(
+                  partition1,
+                  tokenHolder,
+                  recipient,
+                  transferAmount,
+                  ZERO_BYTE,
+                  ZERO_BYTE
+                )
+            );
+
+            await assertBalanceOfSecurityToken(
+              token,
+              tokenHolder,
+              partition1,
+              issuanceAmount
+            );
+            await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
+            assert.equal(
+              (
+                await token.allowanceByPartition(
+                  partition1,
+                  tokenHolder,
+                  operator
+                )
+              ).toNumber(),
+              approvedAmount
+            );
+          });
         });
       });
       describe('ERC20 functions', function () {
         describe('transfer', function () {
           it('transfers the requested amount when sender and recipient are allowlisted', async function () {
             await extension
-              .connect(await ethers.getSigner(controller))
+              .connect(controllerSigner)
+              .addAllowlisted(token.address, tokenHolder);
+            await extension
+              .connect(controllerSigner)
               .addAllowlisted(token.address, recipient);
             await assertBalance(token, tokenHolder, issuanceAmount);
             await assertBalance(token, recipient, 0);
 
             await token
-              .connect(await ethers.getSigner(tokenHolder))
+              .connect(tokenHolderSigner)
               .transfer(recipient, transferAmount);
 
             await assertBalance(
@@ -4271,17 +3123,14 @@ contract(
           });
           it('fails transferring when sender and is not allowlisted', async function () {
             await extension
-              .connect(await ethers.getSigner(controller))
+              .connect(controllerSigner)
               .addAllowlisted(token.address, recipient);
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeAllowlisted(token.address, tokenHolder);
             await assertBalance(token, tokenHolder, issuanceAmount);
             await assertBalance(token, recipient, 0);
 
             await expectRevert.unspecified(
               token
-                .connect(await ethers.getSigner(tokenHolder))
+                .connect(tokenHolderSigner)
                 .transfer(recipient, transferAmount)
             );
 
@@ -4289,12 +3138,15 @@ contract(
             await assertBalance(token, recipient, 0);
           });
           it('fails transferring when recipient and is not allowlisted', async function () {
+            await extension
+              .connect(controllerSigner)
+              .addAllowlisted(token.address, tokenHolder);
             await assertBalance(token, tokenHolder, issuanceAmount);
             await assertBalance(token, recipient, 0);
 
             await expectRevert.unspecified(
               token
-                .connect(await ethers.getSigner(tokenHolder))
+                .connect(tokenHolderSigner)
                 .transfer(recipient, transferAmount)
             );
 
@@ -4305,16 +3157,17 @@ contract(
         describe('transferFrom', function () {
           it('transfers the requested amount when sender and recipient are allowlisted', async function () {
             await extension
-              .connect(await ethers.getSigner(controller))
+              .connect(controllerSigner)
+              .addAllowlisted(token.address, tokenHolder);
+            await extension
+              .connect(controllerSigner)
               .addAllowlisted(token.address, recipient);
             await assertBalance(token, tokenHolder, issuanceAmount);
             await assertBalance(token, recipient, 0);
 
+            await token.connect(tokenHolderSigner).authorizeOperator(operator);
             await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperator(operator);
-            await token
-              .connect(await ethers.getSigner(operator))
+              .connect(operatorSigner)
               .transferFrom(tokenHolder, recipient, transferAmount);
 
             await assertBalance(
@@ -4325,15 +3178,16 @@ contract(
             await assertBalance(token, recipient, transferAmount);
           });
           it('fails transferring when sender is not allowlisted', async function () {
+            await extension
+              .connect(controllerSigner)
+              .addAllowlisted(token.address, recipient);
             await assertBalance(token, tokenHolder, issuanceAmount);
             await assertBalance(token, recipient, 0);
 
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperator(operator);
+            await token.connect(tokenHolderSigner).authorizeOperator(operator);
             await expectRevert.unspecified(
               token
-                .connect(await ethers.getSigner(operator))
+                .connect(operatorSigner)
                 .transferFrom(tokenHolder, recipient, transferAmount)
             );
 
@@ -4341,15 +3195,16 @@ contract(
             await assertBalance(token, recipient, 0);
           });
           it('fails transferring when recipient is not allowlisted', async function () {
+            await extension
+              .connect(controllerSigner)
+              .addAllowlisted(token.address, tokenHolder);
             await assertBalance(token, tokenHolder, issuanceAmount);
             await assertBalance(token, recipient, 0);
 
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperator(operator);
+            await token.connect(tokenHolderSigner).authorizeOperator(operator);
             await expectRevert.unspecified(
               token
-                .connect(await ethers.getSigner(operator))
+                .connect(operatorSigner)
                 .transferFrom(tokenHolder, recipient, transferAmount)
             );
 
@@ -4359,917 +3214,1885 @@ contract(
         });
       });
     });
-
-    // BLOCKLIST EXTENSION
-    describe('blocklist', function () {
-      const redeemAmount = 50;
-      const transferAmount = 300;
-      beforeEach(async function () {
-        await assertTokenHasExtension(registry, extension, token);
-
-        await setCertificateActivated(
-          extension,
-          token,
-          controller,
-          CERTIFICATE_VALIDATION_NONE
-        );
-
-        await assertCertificateActivated(
-          extension,
-          token,
-          CERTIFICATE_VALIDATION_NONE
-        );
-
-        await assertBlockListActivated(extension, token, true);
-
-        await extension
-          .connect(await ethers.getSigner(controller))
-          .addAllowlisted(token.address, tokenHolder);
-
-        await extension
-          .connect(await ethers.getSigner(controller))
-          .addAllowlisted(token.address, recipient);
-
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(partition1, tokenHolder, issuanceAmount, ZERO_BYTE);
-      });
-      describe('ERC1400 functions', function () {
-        describe('issue', function () {
-          it('issues new tokens when recipient is not  blocklisted', async function () {
-            await token
-              .connect(await ethers.getSigner(controller))
-              .issue(tokenHolder, issuanceAmount, ZERO_BYTE);
-            await assertTotalSupply(token, 2 * issuanceAmount);
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
+    describe('when certificate is not valid', function () {
+      describe('salt-based certificate control', function () {
+        it('issues new tokens when certificate is valid', async function () {
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('issueByPartition', [
               partition1,
-              2 * issuanceAmount
-            );
-          });
-          it('issues new tokens when recipient is blocklisted, but blocklist is not activated', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, tokenHolder);
-            await setBlockListActivated(extension, token, controller, false);
-
-            await assertBlockListActivated(extension, token, false);
-            await token
-              .connect(await ethers.getSigner(controller))
-              .issue(tokenHolder, issuanceAmount, ZERO_BYTE);
-            await assertTotalSupply(token, 2 * issuanceAmount);
-            await assertBalanceOfSecurityToken(
-              token,
               tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          await token
+            .connect(controllerSigner)
+            .issueByPartition(
               partition1,
-              2 * issuanceAmount
+              tokenHolder,
+              issuanceAmount,
+              certificate
             );
-          });
-          it('fails issuing when recipient is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, tokenHolder);
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeBlocklisted(token.address, tokenHolder); // for coverage
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, tokenHolder);
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issue(tokenHolder, issuanceAmount, ZERO_BYTE)
-            );
-          });
+          await assertTotalSupply(token, 2 * issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            2 * issuanceAmount
+          );
         });
-        describe('issueByPartition', function () {
-          it('issues new tokens when recipient is not blocklisted', async function () {
-            await token
-              .connect(await ethers.getSigner(controller))
+        it('fails issuing when certificate is not valid (wrong function selector)', async function () {
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('operatorRedeemByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (wrong parameter)', async function () {
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('issueByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount - 1,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (expiration time is past)', async function () {
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('issueByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+
+          // Wait until certificate expiration
+          await advanceTimeAndBlock(
+            CERTIFICATE_VALIDITY_PERIOD * SECONDS_IN_AN_HOUR + 100
+          );
+
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (certificate already used)', async function () {
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('issueByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          await token
+            .connect(controllerSigner)
+            .issueByPartition(
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              certificate
+            );
+          await assertTotalSupply(token, 2 * issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            2 * issuanceAmount
+          );
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (certificate signer has been revoked)', async function () {
+          await extension
+            .connect(controllerSigner)
+            .removeCertificateSigner(token.address, CERTIFICATE_SIGNER);
+
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('issueByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (wrong transaction sender)', async function () {
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('issueByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            tokenHolder
+          );
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (certificate with v=27) [for coverage]', async function () {
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                SALT_CERTIFICATE_WITH_V_EQUAL_TO_27
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (certificate with v=28) [for coverage]', async function () {
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                SALT_CERTIFICATE_WITH_V_EQUAL_TO_28
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (certificate with v=29) [for coverage]', async function () {
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                SALT_CERTIFICATE_WITH_V_EQUAL_TO_29
+              )
+          );
+        });
+      });
+      describe('nonce-based certificate control', function () {
+        beforeEach(async function () {
+          await setCertificateActivated(
+            extension,
+            token,
+            controller,
+            CERTIFICATE_VALIDATION_NONCE
+          );
+
+          await assertCertificateActivated(
+            extension,
+            token,
+            CERTIFICATE_VALIDATION_NONCE
+          );
+        });
+        it('issues new tokens when certificate is valid', async function () {
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('issueByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          await token
+            .connect(controllerSigner)
+            .issueByPartition(
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              certificate
+            );
+          await assertTotalSupply(token, 2 * issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            2 * issuanceAmount
+          );
+        });
+        it('fails issuing when certificate is not valid (wrong function selector)', async function () {
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('operatorRedeemByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (wrong parameter)', async function () {
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('issueByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount - 1,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (expiration time is past)', async function () {
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('issueByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+
+          // Wait until certificate expiration
+          await advanceTimeAndBlock(
+            CERTIFICATE_VALIDITY_PERIOD * SECONDS_IN_AN_HOUR + 100
+          );
+
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (certificate already used)', async function () {
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('issueByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          await token
+            .connect(controllerSigner)
+            .issueByPartition(
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              certificate
+            );
+          await assertTotalSupply(token, 2 * issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            2 * issuanceAmount
+          );
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (certificate signer has been revoked)', async function () {
+          await extension
+            .connect(controllerSigner)
+            .removeCertificateSigner(token.address, CERTIFICATE_SIGNER);
+
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('issueByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (wrong transaction sender)', async function () {
+          const certificate = await craftCertificate(
+            token.interface.encodeFunctionData('issueByPartition', [
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            tokenHolder
+          );
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                certificate
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (certificate with v=27) [for coverage]', async function () {
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                NONCE_CERTIFICATE_WITH_V_EQUAL_TO_27
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (certificate with v=28) [for coverage]', async function () {
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                NONCE_CERTIFICATE_WITH_V_EQUAL_TO_28
+              )
+          );
+        });
+        it('fails issuing when certificate is not valid (certificate with v=29) [for coverage]', async function () {
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                NONCE_CERTIFICATE_WITH_V_EQUAL_TO_29
+              )
+          );
+        });
+      });
+    });
+  });
+
+  // ALLOWLIST EXTENSION
+  describe('allowlist', function () {
+    const redeemAmount = 50;
+    const transferAmount = 300;
+    beforeEach(async function () {
+      await assertTokenHasExtension(registry, extension, token);
+
+      await setCertificateActivated(
+        extension,
+        token,
+        controller,
+        CERTIFICATE_VALIDATION_NONE
+      );
+
+      await assertCertificateActivated(
+        extension,
+        token,
+        CERTIFICATE_VALIDATION_NONE
+      );
+
+      await assertAllowListActivated(extension, token, true);
+
+      await extension
+        .connect(controllerSigner)
+        .addAllowlisted(token.address, tokenHolder);
+
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, ZERO_BYTE);
+    });
+    describe('ERC1400 functions', function () {
+      describe('issue', function () {
+        it('issues new tokens when recipient is allowlisted', async function () {
+          await token
+            .connect(controllerSigner)
+            .issue(tokenHolder, issuanceAmount, ZERO_BYTE);
+          await assertTotalSupply(token, 2 * issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            2 * issuanceAmount
+          );
+        });
+        it('fails issuing when recipient is not allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .removeAllowlisted(token.address, tokenHolder);
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issue(tokenHolder, issuanceAmount, ZERO_BYTE)
+          );
+        });
+      });
+      describe('issueByPartition', function () {
+        it('issues new tokens when recipient is allowlisted', async function () {
+          await token
+            .connect(controllerSigner)
+            .issueByPartition(
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            );
+          await assertTotalSupply(token, 2 * issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            2 * issuanceAmount
+          );
+        });
+        it('fails issuing when recipient is not allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .removeAllowlisted(token.address, tokenHolder);
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
               .issueByPartition(
                 partition1,
                 tokenHolder,
                 issuanceAmount,
                 ZERO_BYTE
-              );
-            await assertTotalSupply(token, 2 * issuanceAmount);
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
+              )
+          );
+        });
+      });
+      describe('redeem', function () {
+        it('redeeems the requested amount when sender is allowlisted', async function () {
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+
+          await token
+            .connect(tokenHolderSigner)
+            .redeem(issuanceAmount, ZERO_BYTE);
+
+          await assertTotalSupply(token, 0);
+          await assertBalance(token, tokenHolder, 0);
+        });
+        it('fails redeeming when sender is not allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .removeAllowlisted(token.address, tokenHolder);
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+
+          await expectRevert.unspecified(
+            token.connect(tokenHolderSigner).redeem(issuanceAmount, ZERO_BYTE)
+          );
+
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+        });
+      });
+      describe('redeemFrom', function () {
+        it('redeems the requested amount when sender is allowlisted', async function () {
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+
+          await token.connect(tokenHolderSigner).authorizeOperator(operator);
+          await token
+            .connect(operatorSigner)
+            .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE);
+
+          await assertTotalSupply(token, 0);
+          await assertBalance(token, tokenHolder, 0);
+        });
+        it('fails redeeming the requested amount when sender is not allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .removeAllowlisted(token.address, tokenHolder);
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+
+          await token.connect(tokenHolderSigner).authorizeOperator(operator);
+          await expectRevert.unspecified(
+            token
+              .connect(operatorSigner)
+              .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE)
+          );
+
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+        });
+      });
+      describe('redeemByPartition', function () {
+        it('redeems the requested amount when sender is allowlisted', async function () {
+          await token
+            .connect(tokenHolderSigner)
+            .redeemByPartition(partition1, redeemAmount, ZERO_BYTE);
+          await assertTotalSupply(token, issuanceAmount - redeemAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount - redeemAmount
+          );
+        });
+        it('fails redeems when sender is not allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .removeAllowlisted(token.address, tokenHolder);
+          await expectRevert.unspecified(
+            token
+              .connect(tokenHolderSigner)
+              .redeemByPartition(partition1, redeemAmount, ZERO_BYTE)
+          );
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+        });
+      });
+      describe('operatorRedeemByPartition', function () {
+        it('redeems the requested amount when sender is allowlisted', async function () {
+          await token
+            .connect(tokenHolderSigner)
+            .authorizeOperatorByPartition(partition1, operator);
+          await token
+            .connect(operatorSigner)
+            .operatorRedeemByPartition(
               partition1,
-              2 * issuanceAmount
-            );
-          });
-          it('fails issuing when recipient is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, tokenHolder);
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(controller))
-                .issueByPartition(
-                  partition1,
-                  tokenHolder,
-                  issuanceAmount,
-                  ZERO_BYTE
-                )
-            );
-          });
-        });
-        describe('redeem', function () {
-          it('redeeems the requested amount when sender is not blocklisted', async function () {
-            await assertTotalSupply(token, issuanceAmount);
-            await assertBalance(token, tokenHolder, issuanceAmount);
-
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .redeem(issuanceAmount, ZERO_BYTE);
-
-            await assertTotalSupply(token, 0);
-            await assertBalance(token, tokenHolder, 0);
-          });
-          it('fails redeeming when sender is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, tokenHolder);
-            await assertTotalSupply(token, issuanceAmount);
-            await assertBalance(token, tokenHolder, issuanceAmount);
-
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(tokenHolder))
-                .redeem(issuanceAmount, ZERO_BYTE)
-            );
-
-            await assertTotalSupply(token, issuanceAmount);
-            await assertBalance(token, tokenHolder, issuanceAmount);
-          });
-        });
-        describe('redeemFrom', function () {
-          it('redeems the requested amount when sender is not blocklisted', async function () {
-            await assertTotalSupply(token, issuanceAmount);
-            await assertBalance(token, tokenHolder, issuanceAmount);
-
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperator(operator);
-            await token
-              .connect(await ethers.getSigner(operator))
-              .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE);
-
-            await assertTotalSupply(token, 0);
-            await assertBalance(token, tokenHolder, 0);
-          });
-          it('fails redeeming the requested amount when sender is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, tokenHolder);
-            await assertTotalSupply(token, issuanceAmount);
-            await assertBalance(token, tokenHolder, issuanceAmount);
-
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperator(operator);
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(operator))
-                .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE)
-            );
-
-            await assertTotalSupply(token, issuanceAmount);
-            await assertBalance(token, tokenHolder, issuanceAmount);
-          });
-        });
-        describe('redeemByPartition', function () {
-          it('redeems the requested amount when sender is not blocklisted', async function () {
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .redeemByPartition(partition1, redeemAmount, ZERO_BYTE);
-            await assertTotalSupply(token, issuanceAmount - redeemAmount);
-            await assertBalanceOfSecurityToken(
-              token,
               tokenHolder,
-              partition1,
-              issuanceAmount - redeemAmount
+              redeemAmount,
+              ZERO_BYTE
             );
-          });
-          it('fails redeems when sender is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, tokenHolder);
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(tokenHolder))
-                .redeemByPartition(partition1, redeemAmount, ZERO_BYTE)
-            );
-            await assertTotalSupply(token, issuanceAmount);
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount
-            );
-          });
+
+          await assertTotalSupply(token, issuanceAmount - redeemAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount - redeemAmount
+          );
         });
-        describe('operatorRedeemByPartition', function () {
-          it('redeems the requested amount when sender is not blocklisted', async function () {
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperatorByPartition(partition1, operator);
-            await token
-              .connect(await ethers.getSigner(operator))
+        it('fails redeeming when sender is not allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .removeAllowlisted(token.address, tokenHolder);
+          await token
+            .connect(tokenHolderSigner)
+            .authorizeOperatorByPartition(partition1, operator);
+          await expectRevert.unspecified(
+            token
+              .connect(operatorSigner)
               .operatorRedeemByPartition(
                 partition1,
                 tokenHolder,
                 redeemAmount,
                 ZERO_BYTE
-              );
+              )
+          );
 
-            await assertTotalSupply(token, issuanceAmount - redeemAmount);
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount - redeemAmount
-            );
-          });
-          it('fails redeeming when sender is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, tokenHolder);
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperatorByPartition(partition1, operator);
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(operator))
-                .operatorRedeemByPartition(
-                  partition1,
-                  tokenHolder,
-                  redeemAmount,
-                  ZERO_BYTE
-                )
-            );
-
-            await assertTotalSupply(token, issuanceAmount);
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount
-            );
-          });
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
         });
-        describe('transferWithData', function () {
-          it('transfers the requested amount when sender and recipient are not blocklisted', async function () {
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
+      });
+      describe('transferWithData', function () {
+        it('transfers the requested amount when sender and recipient are allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addAllowlisted(token.address, recipient);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
 
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .transferWithData(recipient, transferAmount, ZERO_BYTE);
+          await token
+            .connect(tokenHolderSigner)
+            .transferWithData(recipient, transferAmount, ZERO_BYTE);
 
-            await assertBalance(
-              token,
-              tokenHolder,
-              issuanceAmount - transferAmount
-            );
-            await assertBalance(token, recipient, transferAmount);
-          });
-          it('fails transferring when sender is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, tokenHolder);
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(tokenHolder))
-                .transferWithData(recipient, transferAmount, ZERO_BYTE)
-            );
-
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-          });
-          it('fails transferring when recipient is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, recipient);
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(tokenHolder))
-                .transferWithData(recipient, transferAmount, ZERO_BYTE)
-            );
-
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-          });
+          await assertBalance(
+            token,
+            tokenHolder,
+            issuanceAmount - transferAmount
+          );
+          await assertBalance(token, recipient, transferAmount);
         });
-        describe('transferFromWithData', function () {
-          it('transfers the requested amount when sender and recipient are not blocklisted', async function () {
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
+        it('fails transferring when sender is not allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addAllowlisted(token.address, recipient);
+          await extension
+            .connect(controllerSigner)
+            .removeAllowlisted(token.address, tokenHolder);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
 
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperator(operator);
-            await token
-              .connect(await ethers.getSigner(operator))
-              .transferFromWithData(
-                tokenHolder,
-                recipient,
-                transferAmount,
-                ZERO_BYTE
-              );
+          await expectRevert.unspecified(
+            token
+              .connect(tokenHolderSigner)
+              .transferWithData(recipient, transferAmount, ZERO_BYTE)
+          );
 
-            await assertBalance(
-              token,
-              tokenHolder,
-              issuanceAmount - transferAmount
-            );
-            await assertBalance(token, recipient, transferAmount);
-          });
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
         });
-        describe('transferByPartition', function () {
-          it('transfers the requested amount when sender and recipient are not blocklisted', async function () {
-            await assertBalanceOfSecurityToken(
-              token,
+        it('fails transferring when recipient is not allowlisted', async function () {
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await expectRevert.unspecified(
+            token
+              .connect(tokenHolderSigner)
+              .transferWithData(recipient, transferAmount, ZERO_BYTE)
+          );
+
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+        });
+      });
+      describe('transferFromWithData', function () {
+        it('transfers the requested amount when sender and recipient are allowliste', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addAllowlisted(token.address, recipient);
+
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await token.connect(tokenHolderSigner).authorizeOperator(operator);
+          await token
+            .connect(operatorSigner)
+            .transferFromWithData(
               tokenHolder,
+              recipient,
+              transferAmount,
+              ZERO_BYTE
+            );
+
+          await assertBalance(
+            token,
+            tokenHolder,
+            issuanceAmount - transferAmount
+          );
+          await assertBalance(token, recipient, transferAmount);
+        });
+      });
+      describe('transferByPartition', function () {
+        it('transfers the requested amount when sender and recipient are allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addAllowlisted(token.address, recipient);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
+
+          await token
+            .connect(tokenHolderSigner)
+            .transferByPartition(
               partition1,
-              issuanceAmount
+              recipient,
+              transferAmount,
+              ZERO_BYTE
             );
-            await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
 
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount - transferAmount
+          );
+          await assertBalanceOfSecurityToken(
+            token,
+            recipient,
+            partition1,
+            transferAmount
+          );
+        });
+        it('fails transferring when sender is not allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addAllowlisted(token.address, recipient);
+          await extension
+            .connect(controllerSigner)
+            .removeAllowlisted(token.address, tokenHolder);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
+
+          await expectRevert.unspecified(
+            token
+              .connect(tokenHolderSigner)
               .transferByPartition(
                 partition1,
                 recipient,
                 transferAmount,
                 ZERO_BYTE
-              );
+              )
+          );
 
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount - transferAmount
-            );
-            await assertBalanceOfSecurityToken(
-              token,
-              recipient,
-              partition1,
-              transferAmount
-            );
-          });
-          it('fails transferring when sender is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, tokenHolder);
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount
-            );
-            await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
-
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(tokenHolder))
-                .transferByPartition(
-                  partition1,
-                  recipient,
-                  transferAmount,
-                  ZERO_BYTE
-                )
-            );
-
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount
-            );
-            await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
-          });
-          it('fails transferring when recipient is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, recipient);
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount
-            );
-            await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
-
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(tokenHolder))
-                .transferByPartition(
-                  partition1,
-                  recipient,
-                  transferAmount,
-                  ZERO_BYTE
-                )
-            );
-
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount
-            );
-            await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
-          });
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
         });
-        describe('operatorTransferByPartition', function () {
-          it('transfers the requested amount when sender and recipient are not blocklisted', async function () {
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount
-            );
-            await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
-            assert.equal(
-              (
-                await token.allowanceByPartition(
-                  partition1,
-                  tokenHolder,
-                  operator
-                )
-              ).toNumber(),
-              0
-            );
+        it('fails transferring when recipient is not allowlisted', async function () {
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
 
-            const approvedAmount = 400;
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .approveByPartition(partition1, operator, approvedAmount);
-            assert.equal(
-              (
-                await token.allowanceByPartition(
-                  partition1,
-                  tokenHolder,
-                  operator
-                )
-              ).toNumber(),
-              approvedAmount
-            );
-            await token
-              .connect(await ethers.getSigner(operator))
-              .operatorTransferByPartition(
+          await expectRevert.unspecified(
+            token
+              .connect(tokenHolderSigner)
+              .transferByPartition(
                 partition1,
-                tokenHolder,
                 recipient,
                 transferAmount,
-                ZERO_BYTE,
                 ZERO_BYTE
-              );
+              )
+          );
 
-            await assertBalanceOfSecurityToken(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount - transferAmount
-            );
-            await assertBalanceOfSecurityToken(
-              token,
-              recipient,
-              partition1,
-              transferAmount
-            );
-            assert.equal(
-              (
-                await token.allowanceByPartition(
-                  partition1,
-                  tokenHolder,
-                  operator
-                )
-              ).toNumber(),
-              approvedAmount - transferAmount
-            );
-          });
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
         });
       });
-      describe('ERC20 functions', function () {
-        describe('transfer', function () {
-          it('transfers the requested amount when sender and recipient are not blocklisted', async function () {
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
+      describe('operatorTransferByPartition', function () {
+        it('transfers the requested amount when sender and recipient are allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addAllowlisted(token.address, recipient);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
+          assert.equal(
+            (
+              await token.allowanceByPartition(
+                partition1,
+                tokenHolder,
+                operator
+              )
+            ).toNumber(),
+            0
+          );
 
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .transfer(recipient, transferAmount);
-
-            await assertBalance(
-              token,
+          const approvedAmount = 400;
+          await token
+            .connect(tokenHolderSigner)
+            .approveByPartition(partition1, operator, approvedAmount);
+          assert.equal(
+            (
+              await token.allowanceByPartition(
+                partition1,
+                tokenHolder,
+                operator
+              )
+            ).toNumber(),
+            approvedAmount
+          );
+          await token
+            .connect(operatorSigner)
+            .operatorTransferByPartition(
+              partition1,
               tokenHolder,
-              issuanceAmount - transferAmount
-            );
-            await assertBalance(token, recipient, transferAmount);
-          });
-          it('fails transferring when sender and is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, tokenHolder);
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(tokenHolder))
-                .transfer(recipient, transferAmount)
+              recipient,
+              transferAmount,
+              ZERO_BYTE,
+              ZERO_BYTE
             );
 
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-          });
-          it('fails transferring when recipient is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, recipient);
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(tokenHolder))
-                .transfer(recipient, transferAmount)
-            );
-
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-          });
-        });
-        describe('transferFrom', function () {
-          it('transfers the requested amount when sender and recipient are not blocklisted', async function () {
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperator(operator);
-            await token
-              .connect(await ethers.getSigner(operator))
-              .transferFrom(tokenHolder, recipient, transferAmount);
-
-            await assertBalance(
-              token,
-              tokenHolder,
-              issuanceAmount - transferAmount
-            );
-            await assertBalance(token, recipient, transferAmount);
-          });
-          it('fails transferring when sender is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, tokenHolder);
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperator(operator);
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(operator))
-                .transferFrom(tokenHolder, recipient, transferAmount)
-            );
-
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-          });
-          it('fails transferring when recipient is blocklisted', async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addBlocklisted(token.address, recipient);
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .authorizeOperator(operator);
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(operator))
-                .transferFrom(tokenHolder, recipient, transferAmount)
-            );
-
-            await assertBalance(token, tokenHolder, issuanceAmount);
-            await assertBalance(token, recipient, 0);
-          });
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount - transferAmount
+          );
+          await assertBalanceOfSecurityToken(
+            token,
+            recipient,
+            partition1,
+            transferAmount
+          );
+          assert.equal(
+            (
+              await token.allowanceByPartition(
+                partition1,
+                tokenHolder,
+                operator
+              )
+            ).toNumber(),
+            approvedAmount - transferAmount
+          );
         });
       });
     });
+    describe('ERC20 functions', function () {
+      describe('transfer', function () {
+        it('transfers the requested amount when sender and recipient are allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addAllowlisted(token.address, recipient);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
 
-    // GRANULARITY EXTENSION
-    describe('partition granularity', function () {
-      const localGranularity = 10;
-      const amount = 10 * localGranularity;
+          await token
+            .connect(tokenHolderSigner)
+            .transfer(recipient, transferAmount);
 
-      beforeEach(async function () {
-        await setCertificateActivated(
-          extension,
-          token,
-          controller,
-          CERTIFICATE_VALIDATION_NONE
-        );
-        await assertCertificateActivated(
-          extension,
-          token,
-          CERTIFICATE_VALIDATION_NONE
-        );
-
-        await setAllowListActivated(extension, token, controller, false);
-        await assertAllowListActivated(extension, token, false);
-
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(partition1, tokenHolder, issuanceAmount, ZERO_BYTE);
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(partition2, tokenHolder, issuanceAmount, ZERO_BYTE);
-      });
-
-      describe('when partition granularity is activated', function () {
-        beforeEach(async function () {
-          await assertGranularityByPartitionActivated(extension, token, true);
-        });
-        describe('when partition granularity is updated by a token controller', function () {
-          it('updates the partition granularity', async function () {
-            assert.equal(
-              0,
-              (
-                await extension.granularityByPartition(
-                  token.address,
-                  partition1
-                )
-              ).toNumber()
-            );
-            assert.equal(
-              0,
-              (
-                await extension.granularityByPartition(
-                  token.address,
-                  partition2
-                )
-              ).toNumber()
-            );
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .setGranularityByPartition(
-                token.address,
-                partition2,
-                localGranularity
-              );
-            assert.equal(
-              0,
-              (
-                await extension.granularityByPartition(
-                  token.address,
-                  partition1
-                )
-              ).toNumber()
-            );
-            assert.equal(
-              localGranularity,
-              (
-                await extension.granularityByPartition(
-                  token.address,
-                  partition2
-                )
-              ).toNumber()
-            );
-          });
-        });
-        describe('when partition granularity is not updated by a token controller', function () {
-          it('reverts', async function () {
-            await expectRevert.unspecified(
-              extension
-                .connect(await ethers.getSigner(unknown))
-                .setGranularityByPartition(
-                  token.address,
-                  partition2,
-                  localGranularity
-                )
-            );
-          });
-        });
-        describe('when partition granularity is defined', function () {
-          beforeEach(async function () {
-            assert.equal(
-              0,
-              (
-                await extension.granularityByPartition(
-                  token.address,
-                  partition1
-                )
-              ).toNumber()
-            );
-            assert.equal(
-              0,
-              (
-                await extension.granularityByPartition(
-                  token.address,
-                  partition2
-                )
-              ).toNumber()
-            );
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .setGranularityByPartition(
-                token.address,
-                partition2,
-                localGranularity
-              );
-            assert.equal(
-              0,
-              (
-                await extension.granularityByPartition(
-                  token.address,
-                  partition1
-                )
-              ).toNumber()
-            );
-            assert.equal(
-              localGranularity,
-              (
-                await extension.granularityByPartition(
-                  token.address,
-                  partition2
-                )
-              ).toNumber()
-            );
-          });
-          it('transfers the requested amount when higher than the granularity', async function () {
-            await assertBalanceOfByPartition(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount
-            );
-            await assertBalanceOfByPartition(token, recipient, partition1, 0);
-            await assertBalanceOfByPartition(
-              token,
-              tokenHolder,
-              partition2,
-              issuanceAmount
-            );
-            await assertBalanceOfByPartition(token, recipient, partition2, 0);
-
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .transferByPartition(partition1, recipient, amount, ZERO_BYTE);
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .transferByPartition(partition2, recipient, amount, ZERO_BYTE);
-
-            await assertBalanceOfByPartition(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount - amount
-            );
-            await assertBalanceOfByPartition(
-              token,
-              recipient,
-              partition1,
-              amount
-            );
-            await assertBalanceOfByPartition(
-              token,
-              tokenHolder,
-              partition2,
-              issuanceAmount - amount
-            );
-            await assertBalanceOfByPartition(
-              token,
-              recipient,
-              partition2,
-              amount
-            );
-          });
-          it('reverts when the requested amount when lower than the granularity', async function () {
-            await assertBalanceOfByPartition(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount
-            );
-            await assertBalanceOfByPartition(token, recipient, partition1, 0);
-            await assertBalanceOfByPartition(
-              token,
-              tokenHolder,
-              partition2,
-              issuanceAmount
-            );
-            await assertBalanceOfByPartition(token, recipient, partition2, 0);
-
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .transferByPartition(partition1, recipient, 1, ZERO_BYTE);
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(tokenHolder))
-                .transferByPartition(partition2, recipient, 1, ZERO_BYTE)
-            );
-
-            await assertBalanceOfByPartition(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount - 1
-            );
-            await assertBalanceOfByPartition(token, recipient, partition1, 1);
-            await assertBalanceOfByPartition(
-              token,
-              tokenHolder,
-              partition2,
-              issuanceAmount
-            );
-            await assertBalanceOfByPartition(token, recipient, partition2, 0);
-          });
-        });
-        describe('when partition granularity is not defined', function () {
-          beforeEach(async function () {
-            assert.equal(
-              0,
-              (
-                await extension.granularityByPartition(
-                  token.address,
-                  partition1
-                )
-              ).toNumber()
-            );
-            assert.equal(
-              0,
-              (
-                await extension.granularityByPartition(
-                  token.address,
-                  partition2
-                )
-              ).toNumber()
-            );
-          });
-          it('transfers the requested amount', async function () {
-            await assertBalanceOfByPartition(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount
-            );
-            await assertBalanceOfByPartition(token, recipient, partition1, 0);
-            await assertBalanceOfByPartition(
-              token,
-              tokenHolder,
-              partition2,
-              issuanceAmount
-            );
-            await assertBalanceOfByPartition(token, recipient, partition2, 0);
-
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .transferByPartition(partition1, recipient, 1, ZERO_BYTE);
-            await token
-              .connect(await ethers.getSigner(tokenHolder))
-              .transferByPartition(partition2, recipient, 1, ZERO_BYTE);
-
-            await assertBalanceOfByPartition(
-              token,
-              tokenHolder,
-              partition1,
-              issuanceAmount - 1
-            );
-            await assertBalanceOfByPartition(token, recipient, partition1, 1);
-            await assertBalanceOfByPartition(
-              token,
-              tokenHolder,
-              partition2,
-              issuanceAmount - 1
-            );
-            await assertBalanceOfByPartition(token, recipient, partition2, 1);
-          });
-        });
-      });
-      describe('when partition granularity is not activated', function () {
-        beforeEach(async function () {
-          await setGranularityByPartitionActivated(
-            extension,
+          await assertBalance(
             token,
-            controller,
-            false
+            tokenHolder,
+            issuanceAmount - transferAmount
+          );
+          await assertBalance(token, recipient, transferAmount);
+        });
+        it('fails transferring when sender and is not allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addAllowlisted(token.address, recipient);
+          await extension
+            .connect(controllerSigner)
+            .removeAllowlisted(token.address, tokenHolder);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await expectRevert.unspecified(
+            token.connect(tokenHolderSigner).transfer(recipient, transferAmount)
           );
 
-          await assertGranularityByPartitionActivated(extension, token, false);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+        });
+        it('fails transferring when recipient and is not allowlisted', async function () {
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await expectRevert.unspecified(
+            token.connect(tokenHolderSigner).transfer(recipient, transferAmount)
+          );
+
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+        });
+      });
+      describe('transferFrom', function () {
+        it('transfers the requested amount when sender and recipient are allowlisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addAllowlisted(token.address, recipient);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await token.connect(tokenHolderSigner).authorizeOperator(operator);
+          await token
+            .connect(operatorSigner)
+            .transferFrom(tokenHolder, recipient, transferAmount);
+
+          await assertBalance(
+            token,
+            tokenHolder,
+            issuanceAmount - transferAmount
+          );
+          await assertBalance(token, recipient, transferAmount);
+        });
+        it('fails transferring when sender is not allowlisted', async function () {
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await token.connect(tokenHolderSigner).authorizeOperator(operator);
+          await expectRevert.unspecified(
+            token
+              .connect(operatorSigner)
+              .transferFrom(tokenHolder, recipient, transferAmount)
+          );
+
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+        });
+        it('fails transferring when recipient is not allowlisted', async function () {
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await token.connect(tokenHolderSigner).authorizeOperator(operator);
+          await expectRevert.unspecified(
+            token
+              .connect(operatorSigner)
+              .transferFrom(tokenHolder, recipient, transferAmount)
+          );
+
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+        });
+      });
+    });
+  });
+
+  // BLOCKLIST EXTENSION
+  describe('blocklist', function () {
+    const redeemAmount = 50;
+    const transferAmount = 300;
+    beforeEach(async function () {
+      await assertTokenHasExtension(registry, extension, token);
+
+      await setCertificateActivated(
+        extension,
+        token,
+        controller,
+        CERTIFICATE_VALIDATION_NONE
+      );
+
+      await assertCertificateActivated(
+        extension,
+        token,
+        CERTIFICATE_VALIDATION_NONE
+      );
+
+      await assertBlockListActivated(extension, token, true);
+
+      await extension
+        .connect(controllerSigner)
+        .addAllowlisted(token.address, tokenHolder);
+
+      await extension
+        .connect(controllerSigner)
+        .addAllowlisted(token.address, recipient);
+
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, ZERO_BYTE);
+    });
+    describe('ERC1400 functions', function () {
+      describe('issue', function () {
+        it('issues new tokens when recipient is not  blocklisted', async function () {
+          await token
+            .connect(controllerSigner)
+            .issue(tokenHolder, issuanceAmount, ZERO_BYTE);
+          await assertTotalSupply(token, 2 * issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            2 * issuanceAmount
+          );
+        });
+        it('issues new tokens when recipient is blocklisted, but blocklist is not activated', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, tokenHolder);
+          await setBlockListActivated(extension, token, controller, false);
+
+          await assertBlockListActivated(extension, token, false);
+          await token
+            .connect(controllerSigner)
+            .issue(tokenHolder, issuanceAmount, ZERO_BYTE);
+          await assertTotalSupply(token, 2 * issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            2 * issuanceAmount
+          );
+        });
+        it('fails issuing when recipient is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, tokenHolder);
+          await extension
+            .connect(controllerSigner)
+            .removeBlocklisted(token.address, tokenHolder); // for coverage
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, tokenHolder);
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issue(tokenHolder, issuanceAmount, ZERO_BYTE)
+          );
+        });
+      });
+      describe('issueByPartition', function () {
+        it('issues new tokens when recipient is not blocklisted', async function () {
+          await token
+            .connect(controllerSigner)
+            .issueByPartition(
+              partition1,
+              tokenHolder,
+              issuanceAmount,
+              ZERO_BYTE
+            );
+          await assertTotalSupply(token, 2 * issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            2 * issuanceAmount
+          );
+        });
+        it('fails issuing when recipient is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, tokenHolder);
+          await expectRevert.unspecified(
+            token
+              .connect(controllerSigner)
+              .issueByPartition(
+                partition1,
+                tokenHolder,
+                issuanceAmount,
+                ZERO_BYTE
+              )
+          );
+        });
+      });
+      describe('redeem', function () {
+        it('redeeems the requested amount when sender is not blocklisted', async function () {
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+
+          await token
+            .connect(tokenHolderSigner)
+            .redeem(issuanceAmount, ZERO_BYTE);
+
+          await assertTotalSupply(token, 0);
+          await assertBalance(token, tokenHolder, 0);
+        });
+        it('fails redeeming when sender is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, tokenHolder);
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+
+          await expectRevert.unspecified(
+            token.connect(tokenHolderSigner).redeem(issuanceAmount, ZERO_BYTE)
+          );
+
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+        });
+      });
+      describe('redeemFrom', function () {
+        it('redeems the requested amount when sender is not blocklisted', async function () {
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+
+          await token.connect(tokenHolderSigner).authorizeOperator(operator);
+          await token
+            .connect(operatorSigner)
+            .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE);
+
+          await assertTotalSupply(token, 0);
+          await assertBalance(token, tokenHolder, 0);
+        });
+        it('fails redeeming the requested amount when sender is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, tokenHolder);
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+
+          await token.connect(tokenHolderSigner).authorizeOperator(operator);
+          await expectRevert.unspecified(
+            token
+              .connect(operatorSigner)
+              .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE)
+          );
+
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+        });
+      });
+      describe('redeemByPartition', function () {
+        it('redeems the requested amount when sender is not blocklisted', async function () {
+          await token
+            .connect(tokenHolderSigner)
+            .redeemByPartition(partition1, redeemAmount, ZERO_BYTE);
+          await assertTotalSupply(token, issuanceAmount - redeemAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount - redeemAmount
+          );
+        });
+        it('fails redeems when sender is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, tokenHolder);
+          await expectRevert.unspecified(
+            token
+              .connect(tokenHolderSigner)
+              .redeemByPartition(partition1, redeemAmount, ZERO_BYTE)
+          );
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+        });
+      });
+      describe('operatorRedeemByPartition', function () {
+        it('redeems the requested amount when sender is not blocklisted', async function () {
+          await token
+            .connect(tokenHolderSigner)
+            .authorizeOperatorByPartition(partition1, operator);
+          await token
+            .connect(operatorSigner)
+            .operatorRedeemByPartition(
+              partition1,
+              tokenHolder,
+              redeemAmount,
+              ZERO_BYTE
+            );
+
+          await assertTotalSupply(token, issuanceAmount - redeemAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount - redeemAmount
+          );
+        });
+        it('fails redeeming when sender is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, tokenHolder);
+          await token
+            .connect(tokenHolderSigner)
+            .authorizeOperatorByPartition(partition1, operator);
+          await expectRevert.unspecified(
+            token
+              .connect(operatorSigner)
+              .operatorRedeemByPartition(
+                partition1,
+                tokenHolder,
+                redeemAmount,
+                ZERO_BYTE
+              )
+          );
+
+          await assertTotalSupply(token, issuanceAmount);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+        });
+      });
+      describe('transferWithData', function () {
+        it('transfers the requested amount when sender and recipient are not blocklisted', async function () {
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await token
+            .connect(tokenHolderSigner)
+            .transferWithData(recipient, transferAmount, ZERO_BYTE);
+
+          await assertBalance(
+            token,
+            tokenHolder,
+            issuanceAmount - transferAmount
+          );
+          await assertBalance(token, recipient, transferAmount);
+        });
+        it('fails transferring when sender is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, tokenHolder);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await expectRevert.unspecified(
+            token
+              .connect(tokenHolderSigner)
+              .transferWithData(recipient, transferAmount, ZERO_BYTE)
+          );
+
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+        });
+        it('fails transferring when recipient is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, recipient);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await expectRevert.unspecified(
+            token
+              .connect(tokenHolderSigner)
+              .transferWithData(recipient, transferAmount, ZERO_BYTE)
+          );
+
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+        });
+      });
+      describe('transferFromWithData', function () {
+        it('transfers the requested amount when sender and recipient are not blocklisted', async function () {
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await token.connect(tokenHolderSigner).authorizeOperator(operator);
+          await token
+            .connect(operatorSigner)
+            .transferFromWithData(
+              tokenHolder,
+              recipient,
+              transferAmount,
+              ZERO_BYTE
+            );
+
+          await assertBalance(
+            token,
+            tokenHolder,
+            issuanceAmount - transferAmount
+          );
+          await assertBalance(token, recipient, transferAmount);
+        });
+      });
+      describe('transferByPartition', function () {
+        it('transfers the requested amount when sender and recipient are not blocklisted', async function () {
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
+
+          await token
+            .connect(tokenHolderSigner)
+            .transferByPartition(
+              partition1,
+              recipient,
+              transferAmount,
+              ZERO_BYTE
+            );
+
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount - transferAmount
+          );
+          await assertBalanceOfSecurityToken(
+            token,
+            recipient,
+            partition1,
+            transferAmount
+          );
+        });
+        it('fails transferring when sender is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, tokenHolder);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
+
+          await expectRevert.unspecified(
+            token
+              .connect(tokenHolderSigner)
+              .transferByPartition(
+                partition1,
+                recipient,
+                transferAmount,
+                ZERO_BYTE
+              )
+          );
+
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
+        });
+        it('fails transferring when recipient is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, recipient);
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
+
+          await expectRevert.unspecified(
+            token
+              .connect(tokenHolderSigner)
+              .transferByPartition(
+                partition1,
+                recipient,
+                transferAmount,
+                ZERO_BYTE
+              )
+          );
+
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
+        });
+      });
+      describe('operatorTransferByPartition', function () {
+        it('transfers the requested amount when sender and recipient are not blocklisted', async function () {
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
+          assert.equal(
+            (
+              await token.allowanceByPartition(
+                partition1,
+                tokenHolder,
+                operator
+              )
+            ).toNumber(),
+            0
+          );
+
+          const approvedAmount = 400;
+          await token
+            .connect(tokenHolderSigner)
+            .approveByPartition(partition1, operator, approvedAmount);
+          assert.equal(
+            (
+              await token.allowanceByPartition(
+                partition1,
+                tokenHolder,
+                operator
+              )
+            ).toNumber(),
+            approvedAmount
+          );
+          await token
+            .connect(operatorSigner)
+            .operatorTransferByPartition(
+              partition1,
+              tokenHolder,
+              recipient,
+              transferAmount,
+              ZERO_BYTE,
+              ZERO_BYTE
+            );
+
+          await assertBalanceOfSecurityToken(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount - transferAmount
+          );
+          await assertBalanceOfSecurityToken(
+            token,
+            recipient,
+            partition1,
+            transferAmount
+          );
+          assert.equal(
+            (
+              await token.allowanceByPartition(
+                partition1,
+                tokenHolder,
+                operator
+              )
+            ).toNumber(),
+            approvedAmount - transferAmount
+          );
+        });
+      });
+    });
+    describe('ERC20 functions', function () {
+      describe('transfer', function () {
+        it('transfers the requested amount when sender and recipient are not blocklisted', async function () {
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await token
+            .connect(tokenHolderSigner)
+            .transfer(recipient, transferAmount);
+
+          await assertBalance(
+            token,
+            tokenHolder,
+            issuanceAmount - transferAmount
+          );
+          await assertBalance(token, recipient, transferAmount);
+        });
+        it('fails transferring when sender and is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, tokenHolder);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await expectRevert.unspecified(
+            token.connect(tokenHolderSigner).transfer(recipient, transferAmount)
+          );
+
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+        });
+        it('fails transferring when recipient is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, recipient);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await expectRevert.unspecified(
+            token.connect(tokenHolderSigner).transfer(recipient, transferAmount)
+          );
+
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+        });
+      });
+      describe('transferFrom', function () {
+        it('transfers the requested amount when sender and recipient are not blocklisted', async function () {
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await token.connect(tokenHolderSigner).authorizeOperator(operator);
+          await token
+            .connect(operatorSigner)
+            .transferFrom(tokenHolder, recipient, transferAmount);
+
+          await assertBalance(
+            token,
+            tokenHolder,
+            issuanceAmount - transferAmount
+          );
+          await assertBalance(token, recipient, transferAmount);
+        });
+        it('fails transferring when sender is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, tokenHolder);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await token.connect(tokenHolderSigner).authorizeOperator(operator);
+          await expectRevert.unspecified(
+            token
+              .connect(operatorSigner)
+              .transferFrom(tokenHolder, recipient, transferAmount)
+          );
+
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+        });
+        it('fails transferring when recipient is blocklisted', async function () {
+          await extension
+            .connect(controllerSigner)
+            .addBlocklisted(token.address, recipient);
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+
+          await token.connect(tokenHolderSigner).authorizeOperator(operator);
+          await expectRevert.unspecified(
+            token
+              .connect(operatorSigner)
+              .transferFrom(tokenHolder, recipient, transferAmount)
+          );
+
+          await assertBalance(token, tokenHolder, issuanceAmount);
+          await assertBalance(token, recipient, 0);
+        });
+      });
+    });
+  });
+
+  // GRANULARITY EXTENSION
+  describe('partition granularity', function () {
+    const localGranularity = 10;
+    const amount = 10 * localGranularity;
+
+    beforeEach(async function () {
+      await setCertificateActivated(
+        extension,
+        token,
+        controller,
+        CERTIFICATE_VALIDATION_NONE
+      );
+      await assertCertificateActivated(
+        extension,
+        token,
+        CERTIFICATE_VALIDATION_NONE
+      );
+
+      await setAllowListActivated(extension, token, controller, false);
+      await assertAllowListActivated(extension, token, false);
+
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, ZERO_BYTE);
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition2, tokenHolder, issuanceAmount, ZERO_BYTE);
+    });
+
+    describe('when partition granularity is activated', function () {
+      beforeEach(async function () {
+        await assertGranularityByPartitionActivated(extension, token, true);
+      });
+      describe('when partition granularity is updated by a token controller', function () {
+        it('updates the partition granularity', async function () {
+          assert.equal(
+            0,
+            (
+              await extension.granularityByPartition(token.address, partition1)
+            ).toNumber()
+          );
+          assert.equal(
+            0,
+            (
+              await extension.granularityByPartition(token.address, partition2)
+            ).toNumber()
+          );
+          await extension
+            .connect(controllerSigner)
+            .setGranularityByPartition(
+              token.address,
+              partition2,
+              localGranularity
+            );
+          assert.equal(
+            0,
+            (
+              await extension.granularityByPartition(token.address, partition1)
+            ).toNumber()
+          );
+          assert.equal(
+            localGranularity,
+            (
+              await extension.granularityByPartition(token.address, partition2)
+            ).toNumber()
+          );
+        });
+      });
+      describe('when partition granularity is not updated by a token controller', function () {
+        it('reverts', async function () {
+          await expectRevert.unspecified(
+            extension
+              .connect(unknownSigner)
+              .setGranularityByPartition(
+                token.address,
+                partition2,
+                localGranularity
+              )
+          );
+        });
+      });
+      describe('when partition granularity is defined', function () {
+        beforeEach(async function () {
+          assert.equal(
+            0,
+            (
+              await extension.granularityByPartition(token.address, partition1)
+            ).toNumber()
+          );
+          assert.equal(
+            0,
+            (
+              await extension.granularityByPartition(token.address, partition2)
+            ).toNumber()
+          );
+          await extension
+            .connect(controllerSigner)
+            .setGranularityByPartition(
+              token.address,
+              partition2,
+              localGranularity
+            );
+          assert.equal(
+            0,
+            (
+              await extension.granularityByPartition(token.address, partition1)
+            ).toNumber()
+          );
+          assert.equal(
+            localGranularity,
+            (
+              await extension.granularityByPartition(token.address, partition2)
+            ).toNumber()
+          );
+        });
+        it('transfers the requested amount when higher than the granularity', async function () {
+          await assertBalanceOfByPartition(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfByPartition(token, recipient, partition1, 0);
+          await assertBalanceOfByPartition(
+            token,
+            tokenHolder,
+            partition2,
+            issuanceAmount
+          );
+          await assertBalanceOfByPartition(token, recipient, partition2, 0);
+
+          await token
+            .connect(tokenHolderSigner)
+            .transferByPartition(partition1, recipient, amount, ZERO_BYTE);
+          await token
+            .connect(tokenHolderSigner)
+            .transferByPartition(partition2, recipient, amount, ZERO_BYTE);
+
+          await assertBalanceOfByPartition(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount - amount
+          );
+          await assertBalanceOfByPartition(
+            token,
+            recipient,
+            partition1,
+            amount
+          );
+          await assertBalanceOfByPartition(
+            token,
+            tokenHolder,
+            partition2,
+            issuanceAmount - amount
+          );
+          await assertBalanceOfByPartition(
+            token,
+            recipient,
+            partition2,
+            amount
+          );
+        });
+        it('reverts when the requested amount when lower than the granularity', async function () {
+          await assertBalanceOfByPartition(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount
+          );
+          await assertBalanceOfByPartition(token, recipient, partition1, 0);
+          await assertBalanceOfByPartition(
+            token,
+            tokenHolder,
+            partition2,
+            issuanceAmount
+          );
+          await assertBalanceOfByPartition(token, recipient, partition2, 0);
+
+          await token
+            .connect(tokenHolderSigner)
+            .transferByPartition(partition1, recipient, 1, ZERO_BYTE);
+          await expectRevert.unspecified(
+            token
+              .connect(tokenHolderSigner)
+              .transferByPartition(partition2, recipient, 1, ZERO_BYTE)
+          );
+
+          await assertBalanceOfByPartition(
+            token,
+            tokenHolder,
+            partition1,
+            issuanceAmount - 1
+          );
+          await assertBalanceOfByPartition(token, recipient, partition1, 1);
+          await assertBalanceOfByPartition(
+            token,
+            tokenHolder,
+            partition2,
+            issuanceAmount
+          );
+          await assertBalanceOfByPartition(token, recipient, partition2, 0);
+        });
+      });
+      describe('when partition granularity is not defined', function () {
+        beforeEach(async function () {
+          assert.equal(
+            0,
+            (
+              await extension.granularityByPartition(token.address, partition1)
+            ).toNumber()
+          );
+          assert.equal(
+            0,
+            (
+              await extension.granularityByPartition(token.address, partition2)
+            ).toNumber()
+          );
         });
         it('transfers the requested amount', async function () {
           await assertBalanceOfByPartition(
@@ -5288,10 +5111,10 @@ contract(
           await assertBalanceOfByPartition(token, recipient, partition2, 0);
 
           await token
-            .connect(await ethers.getSigner(tokenHolder))
+            .connect(tokenHolderSigner)
             .transferByPartition(partition1, recipient, 1, ZERO_BYTE);
           await token
-            .connect(await ethers.getSigner(tokenHolder))
+            .connect(tokenHolderSigner)
             .transferByPartition(partition2, recipient, 1, ZERO_BYTE);
 
           await assertBalanceOfByPartition(
@@ -5311,490 +5134,529 @@ contract(
         });
       });
     });
+    describe('when partition granularity is not activated', function () {
+      beforeEach(async function () {
+        await setGranularityByPartitionActivated(
+          extension,
+          token,
+          controller,
+          false
+        );
 
-    // TRANSFERFROM
-    describe('transferFrom', function () {
-      const approvedAmount = 10000;
+        await assertGranularityByPartitionActivated(extension, token, false);
+      });
+      it('transfers the requested amount', async function () {
+        await assertBalanceOfByPartition(
+          token,
+          tokenHolder,
+          partition1,
+          issuanceAmount
+        );
+        await assertBalanceOfByPartition(token, recipient, partition1, 0);
+        await assertBalanceOfByPartition(
+          token,
+          tokenHolder,
+          partition2,
+          issuanceAmount
+        );
+        await assertBalanceOfByPartition(token, recipient, partition2, 0);
+
+        await token
+          .connect(tokenHolderSigner)
+          .transferByPartition(partition1, recipient, 1, ZERO_BYTE);
+        await token
+          .connect(tokenHolderSigner)
+          .transferByPartition(partition2, recipient, 1, ZERO_BYTE);
+
+        await assertBalanceOfByPartition(
+          token,
+          tokenHolder,
+          partition1,
+          issuanceAmount - 1
+        );
+        await assertBalanceOfByPartition(token, recipient, partition1, 1);
+        await assertBalanceOfByPartition(
+          token,
+          tokenHolder,
+          partition2,
+          issuanceAmount - 1
+        );
+        await assertBalanceOfByPartition(token, recipient, partition2, 1);
+      });
+    });
+  });
+
+  // TRANSFERFROM
+  describe('transferFrom', function () {
+    const approvedAmount = 10000;
+    beforeEach(async function () {
+      await assertHoldsActivated(extension, token, true);
+
+      const certificate = await craftCertificate(
+        token.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        controller
+      );
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+
+      await extension
+        .connect(controllerSigner)
+        .addAllowlisted(token.address, tokenHolder);
+      await extension
+        .connect(controllerSigner)
+        .addAllowlisted(token.address, recipient);
+    });
+
+    describe('when token allowlist is activated', function () {
+      beforeEach(async function () {
+        await assertAllowListActivated(extension, token, true);
+      });
+      describe('when the sender and the recipient are allowlisted', function () {
+        beforeEach(async function () {
+          assert.equal(
+            await extension.isAllowlisted(token.address, tokenHolder),
+            true
+          );
+          assert.equal(
+            await extension.isAllowlisted(token.address, recipient),
+            true
+          );
+        });
+        describe('when the operator is approved', function () {
+          beforeEach(async function () {
+            await token
+              .connect(tokenHolderSigner)
+              .approve(operator, approvedAmount);
+          });
+          describe('when the amount is a multiple of the granularity', function () {
+            describe('when the recipient is not the zero address', function () {
+              describe('when the sender has enough balance', function () {
+                const amount = 500;
+
+                it('transfers the requested amount', async function () {
+                  await token
+                    .connect(operatorSigner)
+                    .transferFrom(tokenHolder, recipient, amount);
+                  await assertBalance(
+                    token,
+                    tokenHolder,
+                    issuanceAmount - amount
+                  );
+                  await assertBalance(token, recipient, amount);
+
+                  assert.equal(
+                    (await token.allowance(tokenHolder, operator)).toNumber(),
+                    approvedAmount - amount
+                  );
+                });
+
+                it('emits a sent + a transfer event', async function () {
+                  const { events } = await token
+                    .connect(operatorSigner)
+                    .transferFrom(tokenHolder, recipient, amount)
+                    .then((res) => res.wait());
+
+                  assert.lengthOf(events!, 2);
+
+                  assert.equal(events![0].event, 'Transfer');
+                  assert.equal(events![0].args?.from, tokenHolder);
+                  assert.equal(events![0].args?.to, recipient);
+                  assert.equal(events![0].args?.value, amount);
+
+                  assert.equal(events![1].event, 'TransferByPartition');
+                  assert.equal(events![1].args?.fromPartition, partition1);
+                  assert.equal(events![1].args?.operator, operator);
+                  assert.equal(events![1].args?.from, tokenHolder);
+                  assert.equal(events![1].args?.to, recipient);
+                  assert.equal(events![1].args?.value, amount);
+                  assert.equal(events![1].args?.data, ZERO_BYTE);
+                  assert.equal(events![1].args?.operatorData, ZERO_BYTE);
+                });
+              });
+              describe('when the sender does not have enough balance', function () {
+                const amount = approvedAmount + 1;
+
+                it('reverts', async function () {
+                  await expectRevert.unspecified(
+                    token
+                      .connect(operatorSigner)
+                      .transferFrom(tokenHolder, recipient, amount)
+                  );
+                });
+              });
+            });
+
+            describe('when the recipient is the zero address', function () {
+              const amount = issuanceAmount;
+
+              it('reverts', async function () {
+                await expectRevert.unspecified(
+                  token
+                    .connect(operatorSigner)
+                    .transferFrom(tokenHolder, ZERO_ADDRESS, amount)
+                );
+              });
+            });
+          });
+          describe('when the amount is not a multiple of the granularity', function () {
+            it('reverts', async function () {
+              const token2 = await new ERC1400HoldableCertificateToken__factory(
+                controllerSigner
+              ).deploy(
+                'ERC1400Token',
+                'DAU',
+                2,
+                [controller],
+                partitions,
+                extension.address,
+                owner,
+                CERTIFICATE_SIGNER,
+                CERTIFICATE_VALIDATION_DEFAULT
+              );
+              const certificate = await craftCertificate(
+                token2.interface.encodeFunctionData('issueByPartition', [
+                  partition1,
+                  tokenHolder,
+                  issuanceAmount,
+                  ZERO_BYTE
+                ]),
+                token2,
+                extension,
+                clock, // clock
+                controller
+              );
+              await token2
+                .connect(controllerSigner)
+                .issueByPartition(
+                  partition1,
+                  tokenHolder,
+                  issuanceAmount,
+                  certificate
+                );
+
+              await assertTokenHasExtension(registry, extension, token2);
+              await assertAllowListActivated(extension, token2, true);
+
+              await extension
+                .connect(controllerSigner)
+                .addAllowlisted(token2.address, tokenHolder);
+              await extension
+                .connect(controllerSigner)
+                .addAllowlisted(token2.address, recipient);
+
+              await token2
+                .connect(tokenHolderSigner)
+                .approve(operator, approvedAmount);
+
+              await expectRevert.unspecified(
+                token2
+                  .connect(operatorSigner)
+                  .transferFrom(tokenHolder, recipient, 3)
+              );
+            });
+          });
+        });
+        describe('when the operator is not approved', function () {
+          const amount = 100;
+          describe('when the operator is not approved but authorized', function () {
+            it('transfers the requested amount', async function () {
+              await token
+                .connect(tokenHolderSigner)
+                .authorizeOperator(operator);
+              assert.equal(
+                (await token.allowance(tokenHolder, operator)).toNumber(),
+                0
+              );
+
+              await token
+                .connect(operatorSigner)
+                .transferFrom(tokenHolder, recipient, amount);
+
+              await assertBalance(token, tokenHolder, issuanceAmount - amount);
+              await assertBalance(token, recipient, amount);
+            });
+          });
+          describe('when the operator is not approved and not authorized', function () {
+            it('reverts', async function () {
+              await expectRevert.unspecified(
+                token
+                  .connect(operatorSigner)
+                  .transferFrom(tokenHolder, recipient, amount)
+              );
+            });
+          });
+        });
+      });
+      describe('when the sender is not allowlisted', function () {
+        const amount = approvedAmount;
+        beforeEach(async function () {
+          await extension
+            .connect(controllerSigner)
+            .removeAllowlisted(token.address, tokenHolder);
+
+          assert.equal(
+            await extension.isAllowlisted(token.address, tokenHolder),
+            false
+          );
+          assert.equal(
+            await extension.isAllowlisted(token.address, recipient),
+            true
+          );
+        });
+        it('reverts', async function () {
+          await expectRevert.unspecified(
+            token
+              .connect(operatorSigner)
+              .transferFrom(tokenHolder, recipient, amount)
+          );
+        });
+      });
+      describe('when the recipient is not allowlisted', function () {
+        const amount = approvedAmount;
+        beforeEach(async function () {
+          await extension
+            .connect(controllerSigner)
+            .removeAllowlisted(token.address, recipient);
+
+          assert.equal(
+            await extension.isAllowlisted(token.address, tokenHolder),
+            true
+          );
+          assert.equal(
+            await extension.isAllowlisted(token.address, recipient),
+            false
+          );
+        });
+        it('reverts', async function () {
+          await expectRevert.unspecified(
+            token
+              .connect(operatorSigner)
+              .transferFrom(tokenHolder, recipient, amount)
+          );
+        });
+      });
+    });
+    // describe("when token has no allowlist", function () {});
+    describe('when token holds are activated', function () {
+      let secretHashPair: { hash: string; secret: string };
+      let holdId: string;
+      let time: BigNumber;
       beforeEach(async function () {
         await assertHoldsActivated(extension, token, true);
 
-        const certificate = await craftCertificate(
-          token.interface.encodeFunctionData('issueByPartition', [
+        // Add notary as controller
+        const readonlyControllers = await token.controllers();
+        const controllers = Object.assign([], readonlyControllers);
+        assert.equal(controllers.length, 1);
+        controllers.push(notary);
+        await token.connect(signer).setControllers(controllers);
+
+        // Create hold in state Ordered
+        time = await clock.getTime();
+        holdId = newHoldId();
+        secretHashPair = newSecretHashPair();
+        const certificate2 = await craftCertificate(
+          extension.interface.encodeFunctionData('hold', [
+            token.address,
+            holdId,
+            recipient,
+            notary,
             partition1,
-            tokenHolder,
-            issuanceAmount,
+            smallHoldAmount,
+            SECONDS_IN_AN_HOUR,
+            secretHashPair.hash,
             ZERO_BYTE
           ]),
           token,
           extension,
           clock, // clock
-          controller
+          tokenHolder
         );
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
+        await extension
+          .connect(tokenHolderSigner)
+          .hold(
+            token.address,
+            holdId,
+            recipient,
+            notary,
             partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
+            smallHoldAmount,
+            SECONDS_IN_AN_HOUR,
+            secretHashPair.hash,
+            certificate2
           );
-
-        await extension
-          .connect(await ethers.getSigner(controller))
-          .addAllowlisted(token.address, tokenHolder);
-        await extension
-          .connect(await ethers.getSigner(controller))
-          .addAllowlisted(token.address, recipient);
       });
-
-      describe('when token allowlist is activated', function () {
-        beforeEach(async function () {
-          await assertAllowListActivated(extension, token, true);
-        });
-        describe('when the sender and the recipient are allowlisted', function () {
-          beforeEach(async function () {
-            assert.equal(
-              await extension.isAllowlisted(token.address, tokenHolder),
-              true
-            );
-            assert.equal(
-              await extension.isAllowlisted(token.address, recipient),
-              true
-            );
-          });
-          describe('when the operator is approved', function () {
-            beforeEach(async function () {
-              await token
-                .connect(await ethers.getSigner(tokenHolder))
-                .approve(operator, approvedAmount);
-            });
-            describe('when the amount is a multiple of the granularity', function () {
-              describe('when the recipient is not the zero address', function () {
-                describe('when the sender has enough balance', function () {
-                  const amount = 500;
-
-                  it('transfers the requested amount', async function () {
-                    await token
-                      .connect(await ethers.getSigner(operator))
-                      .transferFrom(tokenHolder, recipient, amount);
-                    await assertBalance(
-                      token,
-                      tokenHolder,
-                      issuanceAmount - amount
-                    );
-                    await assertBalance(token, recipient, amount);
-
-                    assert.equal(
-                      (await token.allowance(tokenHolder, operator)).toNumber(),
-                      approvedAmount - amount
-                    );
-                  });
-
-                  it('emits a sent + a transfer event', async function () {
-                    const { events } = await token
-                      .connect(await ethers.getSigner(operator))
-                      .transferFrom(tokenHolder, recipient, amount)
-                      .then((res) => res.wait());
-
-                    assert.lengthOf(events!, 2);
-
-                    assert.equal(events![0].event, 'Transfer');
-                    assert.equal(events![0].args?.from, tokenHolder);
-                    assert.equal(events![0].args?.to, recipient);
-                    assert.equal(events![0].args?.value, amount);
-
-                    assert.equal(events![1].event, 'TransferByPartition');
-                    assert.equal(events![1].args?.fromPartition, partition1);
-                    assert.equal(events![1].args?.operator, operator);
-                    assert.equal(events![1].args?.from, tokenHolder);
-                    assert.equal(events![1].args?.to, recipient);
-                    assert.equal(events![1].args?.value, amount);
-                    assert.equal(events![1].args?.data, ZERO_BYTE);
-                    assert.equal(events![1].args?.operatorData, ZERO_BYTE);
-                  });
-                });
-                describe('when the sender does not have enough balance', function () {
-                  const amount = approvedAmount + 1;
-
-                  it('reverts', async function () {
-                    await expectRevert.unspecified(
-                      token
-                        .connect(await ethers.getSigner(operator))
-                        .transferFrom(tokenHolder, recipient, amount)
-                    );
-                  });
-                });
-              });
-
-              describe('when the recipient is the zero address', function () {
-                const amount = issuanceAmount;
-
-                it('reverts', async function () {
-                  await expectRevert.unspecified(
-                    token
-                      .connect(await ethers.getSigner(operator))
-                      .transferFrom(tokenHolder, ZERO_ADDRESS, amount)
-                  );
-                });
-              });
-            });
-            describe('when the amount is not a multiple of the granularity', function () {
-              it('reverts', async function () {
-                const token2 =
-                  await new ERC1400HoldableCertificateToken__factory(
-                    await ethers.getSigner(controller)
-                  ).deploy(
-                    'ERC1400Token',
-                    'DAU',
-                    2,
-                    [controller],
-                    partitions,
-                    extension.address,
-                    owner,
-                    CERTIFICATE_SIGNER,
-                    CERTIFICATE_VALIDATION_DEFAULT
-                  );
-                const certificate = await craftCertificate(
-                  token2.interface.encodeFunctionData('issueByPartition', [
-                    partition1,
-                    tokenHolder,
-                    issuanceAmount,
-                    ZERO_BYTE
-                  ]),
-                  token2,
-                  extension,
-                  clock, // clock
-                  controller
-                );
-                await token2
-                  .connect(await ethers.getSigner(controller))
-                  .issueByPartition(
-                    partition1,
-                    tokenHolder,
-                    issuanceAmount,
-                    certificate
-                  );
-
-                await assertTokenHasExtension(registry, extension, token2);
-                await assertAllowListActivated(extension, token2, true);
-
-                await extension
-                  .connect(await ethers.getSigner(controller))
-                  .addAllowlisted(token2.address, tokenHolder);
-                await extension
-                  .connect(await ethers.getSigner(controller))
-                  .addAllowlisted(token2.address, recipient);
-
-                await token2
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .approve(operator, approvedAmount);
-
-                await expectRevert.unspecified(
-                  token2
-                    .connect(await ethers.getSigner(operator))
-                    .transferFrom(tokenHolder, recipient, 3)
-                );
-              });
-            });
-          });
-          describe('when the operator is not approved', function () {
-            const amount = 100;
-            describe('when the operator is not approved but authorized', function () {
-              it('transfers the requested amount', async function () {
-                await token
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .authorizeOperator(operator);
-                assert.equal(
-                  (await token.allowance(tokenHolder, operator)).toNumber(),
-                  0
-                );
-
-                await token
-                  .connect(await ethers.getSigner(operator))
-                  .transferFrom(tokenHolder, recipient, amount);
-
-                await assertBalance(
-                  token,
-                  tokenHolder,
-                  issuanceAmount - amount
-                );
-                await assertBalance(token, recipient, amount);
-              });
-            });
-            describe('when the operator is not approved and not authorized', function () {
-              it('reverts', async function () {
-                await expectRevert.unspecified(
-                  token
-                    .connect(await ethers.getSigner(operator))
-                    .transferFrom(tokenHolder, recipient, amount)
-                );
-              });
-            });
-          });
-        });
-        describe('when the sender is not allowlisted', function () {
-          const amount = approvedAmount;
-          beforeEach(async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeAllowlisted(token.address, tokenHolder);
-
-            assert.equal(
-              await extension.isAllowlisted(token.address, tokenHolder),
-              false
-            );
-            assert.equal(
-              await extension.isAllowlisted(token.address, recipient),
-              true
-            );
-          });
-          it('reverts', async function () {
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(operator))
-                .transferFrom(tokenHolder, recipient, amount)
-            );
-          });
-        });
-        describe('when the recipient is not allowlisted', function () {
-          const amount = approvedAmount;
-          beforeEach(async function () {
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .removeAllowlisted(token.address, recipient);
-
-            assert.equal(
-              await extension.isAllowlisted(token.address, tokenHolder),
-              true
-            );
-            assert.equal(
-              await extension.isAllowlisted(token.address, recipient),
-              false
-            );
-          });
-          it('reverts', async function () {
-            await expectRevert.unspecified(
-              token
-                .connect(await ethers.getSigner(operator))
-                .transferFrom(tokenHolder, recipient, amount)
-            );
-          });
-        });
-      });
-      // describe("when token has no allowlist", function () {});
-      describe('when token holds are activated', function () {
-        let secretHashPair: { hash: string; secret: string };
-        let holdId: string;
-        let time: BigNumber;
-        beforeEach(async function () {
-          await assertHoldsActivated(extension, token, true);
-
-          // Add notary as controller
-          const readonlyControllers = await token.controllers();
-          const controllers = Object.assign([], readonlyControllers);
-          assert.equal(controllers.length, 1);
-          controllers.push(notary);
-          await token
-            .connect(await ethers.getSigner(owner))
-            .setControllers(controllers);
-
-          // Create hold in state Ordered
-          time = await clock.getTime();
-          holdId = newHoldId();
-          secretHashPair = newSecretHashPair();
-          const certificate2 = await craftCertificate(
-            extension.interface.encodeFunctionData('hold', [
-              token.address,
-              holdId,
-              recipient,
-              notary,
-              partition1,
-              smallHoldAmount,
-              SECONDS_IN_AN_HOUR,
-              secretHashPair.hash,
-              ZERO_BYTE
-            ]),
-            token,
-            extension,
-            clock, // clock
+      describe('when a hold is executed', function () {
+        it('executes the hold', async function () {
+          const initialBalance = await token.balanceOf(tokenHolder);
+          const initialPartitionBalance = await token.balanceOfByPartition(
+            partition1,
             tokenHolder
           );
-          await extension
-            .connect(await ethers.getSigner(tokenHolder))
-            .hold(
+
+          const initialBalanceOnHold = await extension.balanceOnHold(
+            token.address,
+            tokenHolder
+          );
+          const initialBalanceOnHoldByPartition =
+            await extension.balanceOnHoldByPartition(
               token.address,
-              holdId,
-              recipient,
-              notary,
               partition1,
-              smallHoldAmount,
-              SECONDS_IN_AN_HOUR,
-              secretHashPair.hash,
-              certificate2
+              tokenHolder
             );
+
+          const initialSpendableBalance = await extension.spendableBalanceOf(
+            token.address,
+            tokenHolder
+          );
+          const initialSpendableBalanceByPartition =
+            await extension.spendableBalanceOfByPartition(
+              token.address,
+              partition1,
+              tokenHolder
+            );
+
+          const initialTotalSupplyOnHold = await extension.totalSupplyOnHold(
+            token.address
+          );
+          const initialTotalSupplyOnHoldByPartition =
+            await extension.totalSupplyOnHoldByPartition(
+              token.address,
+              partition1
+            );
+
+          const initialRecipientBalance = await token.balanceOf(recipient);
+          const initialRecipientPartitionBalance =
+            await token.balanceOfByPartition(partition1, recipient);
+
+          await token
+            .connect(notarySigner)
+            .transferFrom(tokenHolder, recipient, smallHoldAmount);
+
+          const finalBalance = await token.balanceOf(tokenHolder);
+          const finalPartitionBalance = await token.balanceOfByPartition(
+            partition1,
+            tokenHolder
+          );
+
+          const finalBalanceOnHold = await extension.balanceOnHold(
+            token.address,
+            tokenHolder
+          );
+          const finalBalanceOnHoldByPartition =
+            await extension.balanceOnHoldByPartition(
+              token.address,
+              partition1,
+              tokenHolder
+            );
+
+          const finalSpendableBalance = await extension.spendableBalanceOf(
+            token.address,
+            tokenHolder
+          );
+          const finalSpendableBalanceByPartition =
+            await extension.spendableBalanceOfByPartition(
+              token.address,
+              partition1,
+              tokenHolder
+            );
+
+          const finalTotalSupplyOnHold = await extension.totalSupplyOnHold(
+            token.address
+          );
+          const finalTotalSupplyOnHoldByPartition =
+            await extension.totalSupplyOnHoldByPartition(
+              token.address,
+              partition1
+            );
+
+          const finalRecipientBalance = await token.balanceOf(recipient);
+          const finalRecipientPartitionBalance =
+            await token.balanceOfByPartition(partition1, recipient);
+
+          assert.equal(initialBalance.toNumber(), issuanceAmount);
+          assert.equal(
+            finalBalance.toNumber(),
+            issuanceAmount - smallHoldAmount
+          );
+          assert.equal(initialPartitionBalance.toNumber(), issuanceAmount);
+          assert.equal(
+            finalPartitionBalance.toNumber(),
+            issuanceAmount - smallHoldAmount
+          );
+
+          assert.equal(initialBalanceOnHold.toNumber(), smallHoldAmount);
+          assert.equal(
+            initialBalanceOnHoldByPartition.toNumber(),
+            smallHoldAmount
+          );
+          assert.equal(finalBalanceOnHold.toNumber(), 0);
+          assert.equal(finalBalanceOnHoldByPartition.toNumber(), 0);
+
+          assert.equal(
+            initialSpendableBalance.toNumber(),
+            issuanceAmount - smallHoldAmount
+          );
+          assert.equal(
+            initialSpendableBalanceByPartition.toNumber(),
+            issuanceAmount - smallHoldAmount
+          );
+          assert.equal(
+            finalSpendableBalance.toNumber(),
+            issuanceAmount - smallHoldAmount
+          );
+          assert.equal(
+            finalSpendableBalanceByPartition.toNumber(),
+            issuanceAmount - smallHoldAmount
+          );
+
+          assert.equal(initialTotalSupplyOnHold.toNumber(), smallHoldAmount);
+          assert.equal(
+            initialTotalSupplyOnHoldByPartition.toNumber(),
+            smallHoldAmount
+          );
+          assert.equal(finalTotalSupplyOnHold.toNumber(), 0);
+          assert.equal(finalTotalSupplyOnHoldByPartition.toNumber(), 0);
+
+          assert.equal(initialRecipientBalance.toNumber(), 0);
+          assert.equal(initialRecipientPartitionBalance.toNumber(), 0);
+          assert.equal(finalRecipientBalance.toNumber(), smallHoldAmount);
+          assert.equal(
+            finalRecipientPartitionBalance.toNumber(),
+            smallHoldAmount
+          );
+
+          const holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
+          );
+          assert.equal(holdData[0], partition1);
+          assert.equal(holdData[1], tokenHolder);
+          assert.equal(holdData[2], recipient);
+          assert.equal(holdData[3], notary);
+          assert.equal(holdData[4].toNumber(), smallHoldAmount);
+          assert.isAtLeast(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR
+          );
+          assert.isBelow(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR + 100
+          );
+          assert.equal(holdData[6], secretHashPair.hash);
+          assert.equal(holdData[7], EMPTY_BYTE32);
+          assert.equal(holdData[8], HOLD_STATUS_EXECUTED);
         });
-        describe('when a hold is executed', function () {
-          it('executes the hold', async function () {
-            const initialBalance = await token.balanceOf(tokenHolder);
-            const initialPartitionBalance = await token.balanceOfByPartition(
-              partition1,
-              tokenHolder
-            );
-
-            const initialBalanceOnHold = await extension.balanceOnHold(
-              token.address,
-              tokenHolder
-            );
-            const initialBalanceOnHoldByPartition =
-              await extension.balanceOnHoldByPartition(
-                token.address,
-                partition1,
-                tokenHolder
-              );
-
-            const initialSpendableBalance = await extension.spendableBalanceOf(
-              token.address,
-              tokenHolder
-            );
-            const initialSpendableBalanceByPartition =
-              await extension.spendableBalanceOfByPartition(
-                token.address,
-                partition1,
-                tokenHolder
-              );
-
-            const initialTotalSupplyOnHold = await extension.totalSupplyOnHold(
-              token.address
-            );
-            const initialTotalSupplyOnHoldByPartition =
-              await extension.totalSupplyOnHoldByPartition(
-                token.address,
-                partition1
-              );
-
-            const initialRecipientBalance = await token.balanceOf(recipient);
-            const initialRecipientPartitionBalance =
-              await token.balanceOfByPartition(partition1, recipient);
-
-            await token
-              .connect(await ethers.getSigner(notary))
-              .transferFrom(tokenHolder, recipient, smallHoldAmount);
-
-            const finalBalance = await token.balanceOf(tokenHolder);
-            const finalPartitionBalance = await token.balanceOfByPartition(
-              partition1,
-              tokenHolder
-            );
-
-            const finalBalanceOnHold = await extension.balanceOnHold(
-              token.address,
-              tokenHolder
-            );
-            const finalBalanceOnHoldByPartition =
-              await extension.balanceOnHoldByPartition(
-                token.address,
-                partition1,
-                tokenHolder
-              );
-
-            const finalSpendableBalance = await extension.spendableBalanceOf(
-              token.address,
-              tokenHolder
-            );
-            const finalSpendableBalanceByPartition =
-              await extension.spendableBalanceOfByPartition(
-                token.address,
-                partition1,
-                tokenHolder
-              );
-
-            const finalTotalSupplyOnHold = await extension.totalSupplyOnHold(
-              token.address
-            );
-            const finalTotalSupplyOnHoldByPartition =
-              await extension.totalSupplyOnHoldByPartition(
-                token.address,
-                partition1
-              );
-
-            const finalRecipientBalance = await token.balanceOf(recipient);
-            const finalRecipientPartitionBalance =
-              await token.balanceOfByPartition(partition1, recipient);
-
-            assert.equal(initialBalance.toNumber(), issuanceAmount);
-            assert.equal(
-              finalBalance.toNumber(),
-              issuanceAmount - smallHoldAmount
-            );
-            assert.equal(initialPartitionBalance.toNumber(), issuanceAmount);
-            assert.equal(
-              finalPartitionBalance.toNumber(),
-              issuanceAmount - smallHoldAmount
-            );
-
-            assert.equal(initialBalanceOnHold.toNumber(), smallHoldAmount);
-            assert.equal(
-              initialBalanceOnHoldByPartition.toNumber(),
-              smallHoldAmount
-            );
-            assert.equal(finalBalanceOnHold.toNumber(), 0);
-            assert.equal(finalBalanceOnHoldByPartition.toNumber(), 0);
-
-            assert.equal(
-              initialSpendableBalance.toNumber(),
-              issuanceAmount - smallHoldAmount
-            );
-            assert.equal(
-              initialSpendableBalanceByPartition.toNumber(),
-              issuanceAmount - smallHoldAmount
-            );
-            assert.equal(
-              finalSpendableBalance.toNumber(),
-              issuanceAmount - smallHoldAmount
-            );
-            assert.equal(
-              finalSpendableBalanceByPartition.toNumber(),
-              issuanceAmount - smallHoldAmount
-            );
-
-            assert.equal(initialTotalSupplyOnHold.toNumber(), smallHoldAmount);
-            assert.equal(
-              initialTotalSupplyOnHoldByPartition.toNumber(),
-              smallHoldAmount
-            );
-            assert.equal(finalTotalSupplyOnHold.toNumber(), 0);
-            assert.equal(finalTotalSupplyOnHoldByPartition.toNumber(), 0);
-
-            assert.equal(initialRecipientBalance.toNumber(), 0);
-            assert.equal(initialRecipientPartitionBalance.toNumber(), 0);
-            assert.equal(finalRecipientBalance.toNumber(), smallHoldAmount);
-            assert.equal(
-              finalRecipientPartitionBalance.toNumber(),
-              smallHoldAmount
-            );
-
-            const holdData = await extension.retrieveHoldData(
-              token.address,
-              holdId
-            );
-            assert.equal(holdData[0], partition1);
-            assert.equal(holdData[1], tokenHolder);
-            assert.equal(holdData[2], recipient);
-            assert.equal(holdData[3], notary);
-            assert.equal(holdData[4].toNumber(), smallHoldAmount);
-            assert.isAtLeast(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR
-            );
-            assert.isBelow(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR + 100
-            );
-            assert.equal(holdData[6], secretHashPair.hash);
-            assert.equal(holdData[7], EMPTY_BYTE32);
-            assert.equal(holdData[8], HOLD_STATUS_EXECUTED);
-          });
-          /* it("executes 2 holds", async function() {
+        /* it("executes 2 holds", async function() {
           // Create a second hold in state Ordered
           time2 = await clock.getTime();
           holdId2 = newHoldId();
@@ -5816,7 +5678,7 @@ contract(
             clock, // clock
             tokenHolder
           )
-          await extension.connect(await ethers.getSigner(tokenHolder)).hold(
+          await extension.connect(tokenHolderSigner).hold(
             token.address,
             holdId2,
             recipient,
@@ -5832,7 +5694,7 @@ contract(
           const initialPartitionBalance = await token.balanceOfByPartition(partition1, tokenHolder)
           const initialRecipientPartitionBalance = await token.balanceOfByPartition(partition1, recipient)
   
-          await token.connect(await ethers.getSigner(notary)).transferFrom(
+          await token.connect(notarySigner).transferFrom(
             tokenHolder,
             recipient,
             smallHoldAmount,
@@ -5860,7 +5722,7 @@ contract(
           assert.equal(holdData2[7], EMPTY_BYTE32);
           assert.equal((holdData2[8]).toNumber(), HOLD_STATUS_EXECUTED);
   
-          await token.connect(await ethers.getSigner(notary)).transferFrom(
+          await token.connect(notarySigner).transferFrom(
             tokenHolder,
             recipient,
             smallHoldAmount,
@@ -5888,818 +5750,339 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
           assert.equal(holdData[7], EMPTY_BYTE32);
           assert.equal((holdData[8]).toNumber(), HOLD_STATUS_EXECUTED);
         }); */
-        });
-        // describe("when a hold is not executed", function () {
-        //   beforeEach(async function () {
-        //     validatorContract2 = await new ERC1400TokensValidator__factory(await ethers.getSigner(controller)).deploy();
-
-        //     await setNewExtensionForToken(
-        //       validatorContract2,
-        //       token,
-        //       owner,
-        //     );
-
-        //     await setAllowListActivated(
-        //       validatorContract2,
-        //       token,
-        //       controller,
-        //       false
-        //     )
-        //     await assertAllowListActivated(
-        //       validatorContract2,
-        //       token,
-        //       false
-        //     );
-
-        //     await token.connect(await ethers.getSigner(notary)).transferFrom(
-        //       tokenHolder,
-        //       recipient,
-        //       smallHoldAmount,
-        //
-        //     );
-        //     await setNewExtensionForToken(
-        //       extension,
-        //       token,
-        //       owner,
-        //     );
-        //   });
-        //   it("reverts", async function() {
-        //     await expectRevert.unspecified(
-        //       token.connect(await ethers.getSigner(notary)).transferFrom(
-        //         tokenHolder,
-        //         recipient,
-        //         smallHoldAmount,
-        //
-        //       )
-        //     )
-        //   });
-
-        // });
       });
+      // describe("when a hold is not executed", function () {
+      //   beforeEach(async function () {
+      //     validatorContract2 = await new ERC1400TokensValidator__factory(controllerSigner).deploy();
+
+      //     await setNewExtensionForToken(
+      //       validatorContract2,
+      //       token,
+      //       owner,
+      //     );
+
+      //     await setAllowListActivated(
+      //       validatorContract2,
+      //       token,
+      //       controller,
+      //       false
+      //     )
+      //     await assertAllowListActivated(
+      //       validatorContract2,
+      //       token,
+      //       false
+      //     );
+
+      //     await token.connect(notarySigner).transferFrom(
+      //       tokenHolder,
+      //       recipient,
+      //       smallHoldAmount,
+      //
+      //     );
+      //     await setNewExtensionForToken(
+      //       extension,
+      //       token,
+      //       owner,
+      //     );
+      //   });
+      //   it("reverts", async function() {
+      //     await expectRevert.unspecified(
+      //       token.connect(notarySigner).transferFrom(
+      //         tokenHolder,
+      //         recipient,
+      //         smallHoldAmount,
+      //
+      //       )
+      //     )
+      //   });
+
+      // });
+    });
+  });
+
+  // PAUSABLE EXTENSION
+  describe('pausable', function () {
+    const transferAmount = 300;
+
+    beforeEach(async function () {
+      const certificate = await craftCertificate(
+        token.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        controller
+      );
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+
+      await setAllowListActivated(extension, token, controller, false);
+      await assertAllowListActivated(extension, token, false);
+
+      await setCertificateActivated(
+        extension,
+        token,
+        controller,
+        CERTIFICATE_VALIDATION_NONE
+      );
+      await assertCertificateActivated(
+        extension,
+        token,
+        CERTIFICATE_VALIDATION_NONE
+      );
     });
 
-    // PAUSABLE EXTENSION
-    describe('pausable', function () {
-      const transferAmount = 300;
-
+    describe('when contract is not paused', function () {
       beforeEach(async function () {
-        const certificate = await craftCertificate(
-          token.interface.encodeFunctionData('issueByPartition', [
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            ZERO_BYTE
-          ]),
-          token,
-          extension,
-          clock, // clock
-          controller
-        );
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
-          );
+        await assertTokenHasExtension(registry, extension, token);
 
-        await setAllowListActivated(extension, token, controller, false);
-        await assertAllowListActivated(extension, token, false);
-
-        await setCertificateActivated(
-          extension,
-          token,
-          controller,
-          CERTIFICATE_VALIDATION_NONE
-        );
-        await assertCertificateActivated(
-          extension,
-          token,
-          CERTIFICATE_VALIDATION_NONE
-        );
+        assert.equal(false, await extension.paused(token.address));
       });
+      it('transfers the requested amount', async function () {
+        await token
+          .connect(tokenHolderSigner)
+          .transfer(recipient, transferAmount);
+        await assertBalance(
+          token,
+          tokenHolder,
+          issuanceAmount - transferAmount
+        );
+        await assertBalance(token, recipient, transferAmount);
+      });
+      it('transfers the requested amount (after pause/unpause)', async function () {
+        assert.equal(false, await extension.paused(token.address));
+        await extension.connect(controllerSigner).pause(token.address);
+        await expectRevert.unspecified(
+          extension.connect(controllerSigner).pause(token.address)
+        );
 
-      describe('when contract is not paused', function () {
-        beforeEach(async function () {
-          await assertTokenHasExtension(registry, extension, token);
+        assert.equal(true, await extension.paused(token.address));
+        await extension.connect(controllerSigner).unpause(token.address);
+        await expectRevert.unspecified(
+          extension.connect(controllerSigner).unpause(token.address)
+        );
 
-          assert.equal(false, await extension.paused(token.address));
-        });
-        it('transfers the requested amount', async function () {
-          await token
-            .connect(await ethers.getSigner(tokenHolder))
-            .transfer(recipient, transferAmount);
-          await assertBalance(
-            token,
-            tokenHolder,
-            issuanceAmount - transferAmount
-          );
-          await assertBalance(token, recipient, transferAmount);
-        });
-        it('transfers the requested amount (after pause/unpause)', async function () {
-          assert.equal(false, await extension.paused(token.address));
-          await extension
-            .connect(await ethers.getSigner(controller))
-            .pause(token.address);
-          await expectRevert.unspecified(
-            extension
-              .connect(await ethers.getSigner(controller))
-              .pause(token.address)
-          );
+        assert.equal(false, await extension.paused(token.address));
+        await token
+          .connect(tokenHolderSigner)
+          .transfer(recipient, transferAmount);
+        await assertBalance(
+          token,
+          tokenHolder,
+          issuanceAmount - transferAmount
+        );
+        await assertBalance(token, recipient, transferAmount);
+      });
+      it('transfers the requested amount', async function () {
+        await assertBalanceOfSecurityToken(
+          token,
+          tokenHolder,
+          partition1,
+          issuanceAmount
+        );
+        await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
 
-          assert.equal(true, await extension.paused(token.address));
-          await extension
-            .connect(await ethers.getSigner(controller))
-            .unpause(token.address);
-          await expectRevert.unspecified(
-            extension
-              .connect(await ethers.getSigner(controller))
-              .unpause(token.address)
-          );
-
-          assert.equal(false, await extension.paused(token.address));
-          await token
-            .connect(await ethers.getSigner(tokenHolder))
-            .transfer(recipient, transferAmount);
-          await assertBalance(
-            token,
-            tokenHolder,
-            issuanceAmount - transferAmount
-          );
-          await assertBalance(token, recipient, transferAmount);
-        });
-        it('transfers the requested amount', async function () {
-          await assertBalanceOfSecurityToken(
-            token,
-            tokenHolder,
+        await token
+          .connect(tokenHolderSigner)
+          .transferByPartition(
             partition1,
-            issuanceAmount
-          );
-          await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
-
-          await token
-            .connect(await ethers.getSigner(tokenHolder))
-            .transferByPartition(
-              partition1,
-              recipient,
-              transferAmount,
-              ZERO_BYTE
-            );
-          await token
-            .connect(await ethers.getSigner(tokenHolder))
-            .transferByPartition(partition1, recipient, 0, ZERO_BYTE);
-
-          await assertBalanceOfSecurityToken(
-            token,
-            tokenHolder,
-            partition1,
-            issuanceAmount - transferAmount
-          );
-          await assertBalanceOfSecurityToken(
-            token,
             recipient,
-            partition1,
-            transferAmount
+            transferAmount,
+            ZERO_BYTE
           );
-        });
-      });
-      describe('when contract is paused', function () {
-        beforeEach(async function () {
-          await assertTokenHasExtension(registry, extension, token);
+        await token
+          .connect(tokenHolderSigner)
+          .transferByPartition(partition1, recipient, 0, ZERO_BYTE);
 
-          await extension
-            .connect(await ethers.getSigner(controller))
-            .pause(token.address);
-
-          assert.equal(true, await extension.paused(token.address));
-        });
-        it('reverts', async function () {
-          await assertBalance(token, tokenHolder, issuanceAmount);
-          await expectRevert.unspecified(
-            token
-              .connect(await ethers.getSigner(tokenHolder))
-              .transfer(recipient, issuanceAmount)
-          );
-        });
-        it('reverts', async function () {
-          await assertBalanceOfSecurityToken(
-            token,
-            tokenHolder,
-            partition1,
-            issuanceAmount
-          );
-
-          await expectRevert.unspecified(
-            token
-              .connect(await ethers.getSigner(tokenHolder))
-              .transferByPartition(
-                partition1,
-                recipient,
-                transferAmount,
-                ZERO_BYTE
-              )
-          );
-        });
+        await assertBalanceOfSecurityToken(
+          token,
+          tokenHolder,
+          partition1,
+          issuanceAmount - transferAmount
+        );
+        await assertBalanceOfSecurityToken(
+          token,
+          recipient,
+          partition1,
+          transferAmount
+        );
       });
     });
-
-    // IS HOLDS ACTIVATED
-    describe('isHoldsActivated', function () {
+    describe('when contract is paused', function () {
       beforeEach(async function () {
-        await assertHoldsActivated(extension, token, true);
+        await assertTokenHasExtension(registry, extension, token);
 
-        await setCertificateActivated(
-          extension,
-          token,
-          controller,
-          CERTIFICATE_VALIDATION_NONE
-        );
-        await assertCertificateActivated(
-          extension,
-          token,
-          CERTIFICATE_VALIDATION_NONE
-        );
+        await extension.connect(controllerSigner).pause(token.address);
 
-        await setAllowListActivated(extension, token, controller, false);
-        await assertAllowListActivated(extension, token, false);
-
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(partition1, tokenHolder, issuanceAmount, ZERO_BYTE);
+        assert.equal(true, await extension.paused(token.address));
       });
+      it('reverts', async function () {
+        await assertBalance(token, tokenHolder, issuanceAmount);
+        await expectRevert.unspecified(
+          token.connect(tokenHolderSigner).transfer(recipient, issuanceAmount)
+        );
+      });
+      it('reverts', async function () {
+        await assertBalanceOfSecurityToken(
+          token,
+          tokenHolder,
+          partition1,
+          issuanceAmount
+        );
 
-      describe('when holds are activated by the owner', function () {
-        it('activates the holds', async function () {
-          await setHoldsActivated(extension, token, controller, false);
-          await assertHoldsActivated(extension, token, false);
-          await setHoldsActivated(extension, token, controller, true);
-          await assertHoldsActivated(extension, token, true);
-
-          const holdId = newHoldId();
-          const secretHashPair = newSecretHashPair();
-          await extension
-            .connect(await ethers.getSigner(controller))
-            .holdFrom(
-              token.address,
-              holdId,
-              tokenHolder,
-              recipient,
-              notary,
-              partition1,
-              holdAmount,
-              SECONDS_IN_AN_HOUR,
-              secretHashPair.hash,
-              ZERO_BYTE
-            );
-          const spendableBalance = (
-            await extension.spendableBalanceOf(token.address, tokenHolder)
-          ).toNumber();
-
-          const transferAmount = spendableBalance + 1;
-          await expectRevert.unspecified(
-            token
-              .connect(await ethers.getSigner(tokenHolder))
-              .transferByPartition(
-                partition1,
-                recipient,
-                transferAmount,
-                ZERO_BYTE
-              )
-          );
-
-          await setHoldsActivated(extension, token, controller, false);
-          await assertHoldsActivated(extension, token, false);
-
-          assert.equal(
-            (
-              await token.balanceOfByPartition(partition1, recipient)
-            ).toNumber(),
-            0
-          );
-          await token
-            .connect(await ethers.getSigner(tokenHolder))
+        await expectRevert.unspecified(
+          token
+            .connect(tokenHolderSigner)
             .transferByPartition(
               partition1,
               recipient,
               transferAmount,
               ZERO_BYTE
-            );
-          assert.equal(
-            (
-              await token.balanceOfByPartition(partition1, recipient)
-            ).toNumber(),
-            transferAmount
-          );
-        });
-      });
-      describe('when holds are not activated by the owner', function () {
-        it('reverts', async function () {
-          await setHoldsActivated(extension, token, controller, false);
-          await assertHoldsActivated(extension, token, false);
-
-          await expectRevert.unspecified(
-            setHoldsActivated(extension, token, tokenHolder, true)
-          );
-        });
+            )
+        );
       });
     });
+  });
 
-    // HOLD
-    describe('hold', function () {
-      beforeEach(async function () {
+  // IS HOLDS ACTIVATED
+  describe('isHoldsActivated', function () {
+    beforeEach(async function () {
+      await assertHoldsActivated(extension, token, true);
+
+      await setCertificateActivated(
+        extension,
+        token,
+        controller,
+        CERTIFICATE_VALIDATION_NONE
+      );
+      await assertCertificateActivated(
+        extension,
+        token,
+        CERTIFICATE_VALIDATION_NONE
+      );
+
+      await setAllowListActivated(extension, token, controller, false);
+      await assertAllowListActivated(extension, token, false);
+
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, ZERO_BYTE);
+    });
+
+    describe('when holds are activated by the owner', function () {
+      it('activates the holds', async function () {
+        await setHoldsActivated(extension, token, controller, false);
+        await assertHoldsActivated(extension, token, false);
+        await setHoldsActivated(extension, token, controller, true);
         await assertHoldsActivated(extension, token, true);
 
-        const certificate = await craftCertificate(
-          token.interface.encodeFunctionData('issueByPartition', [
-            partition1,
+        const holdId = newHoldId();
+        const secretHashPair = newSecretHashPair();
+        await extension
+          .connect(controllerSigner)
+          .holdFrom(
+            token.address,
+            holdId,
             tokenHolder,
-            issuanceAmount,
+            recipient,
+            notary,
+            partition1,
+            holdAmount,
+            SECONDS_IN_AN_HOUR,
+            secretHashPair.hash,
             ZERO_BYTE
-          ]),
-          token,
-          extension,
-          clock, // clock
-          controller
+          );
+        const spendableBalance = (
+          await extension.spendableBalanceOf(token.address, tokenHolder)
+        ).toNumber();
+
+        const transferAmount = spendableBalance + 1;
+        await expectRevert.unspecified(
+          token
+            .connect(tokenHolderSigner)
+            .transferByPartition(
+              partition1,
+              recipient,
+              transferAmount,
+              ZERO_BYTE
+            )
+        );
+
+        await setHoldsActivated(extension, token, controller, false);
+        await assertHoldsActivated(extension, token, false);
+
+        assert.equal(
+          (await token.balanceOfByPartition(partition1, recipient)).toNumber(),
+          0
         );
         await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
+          .connect(tokenHolderSigner)
+          .transferByPartition(
             partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
+            recipient,
+            transferAmount,
+            ZERO_BYTE
           );
+        assert.equal(
+          (await token.balanceOfByPartition(partition1, recipient)).toNumber(),
+          transferAmount
+        );
       });
+    });
+    describe('when holds are not activated by the owner', function () {
+      it('reverts', async function () {
+        await setHoldsActivated(extension, token, controller, false);
+        await assertHoldsActivated(extension, token, false);
 
-      describe('when certificate is activated', function () {
-        beforeEach(async function () {
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_SALT
-          );
-        });
-        describe('when certificate is valid', function () {
-          describe('when hold recipient is not the zero address', function () {
-            describe('when hold value is greater than 0', function () {
-              describe("when hold ID doesn't already exist", function () {
-                describe('when notary is not the zero address', function () {
-                  describe('when hold value is not greater than spendable balance', function () {
-                    it('creates a hold', async function () {
-                      const initialBalance = await token.balanceOf(tokenHolder);
-                      const initialPartitionBalance =
-                        await token.balanceOfByPartition(
-                          partition1,
-                          tokenHolder
-                        );
+        await expectRevert.unspecified(
+          setHoldsActivated(extension, token, tokenHolder, true)
+        );
+      });
+    });
+  });
 
-                      const initialBalanceOnHold =
-                        await extension.balanceOnHold(
-                          token.address,
-                          tokenHolder
-                        );
-                      const initialBalanceOnHoldByPartition =
-                        await extension.balanceOnHoldByPartition(
-                          token.address,
-                          partition1,
-                          tokenHolder
-                        );
+  // HOLD
+  describe('hold', function () {
+    beforeEach(async function () {
+      await assertHoldsActivated(extension, token, true);
 
-                      const initialSpendableBalance =
-                        await extension.spendableBalanceOf(
-                          token.address,
-                          tokenHolder
-                        );
-                      const initialSpendableBalanceByPartition =
-                        await extension.spendableBalanceOfByPartition(
-                          token.address,
-                          partition1,
-                          tokenHolder
-                        );
+      const certificate = await craftCertificate(
+        token.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        controller
+      );
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+    });
 
-                      const initialTotalSupplyOnHold =
-                        await extension.totalSupplyOnHold(token.address);
-                      const initialTotalSupplyOnHoldByPartition =
-                        await extension.totalSupplyOnHoldByPartition(
-                          token.address,
-                          partition1
-                        );
-
-                      const time = await clock.getTime();
-                      const holdId = newHoldId();
-                      const secretHashPair = newSecretHashPair();
-                      const certificate = await craftCertificate(
-                        extension.interface.encodeFunctionData('hold', [
-                          token.address,
-                          holdId,
-                          recipient,
-                          notary,
-                          partition1,
-                          holdAmount,
-                          SECONDS_IN_AN_HOUR,
-                          secretHashPair.hash,
-                          ZERO_BYTE
-                        ]),
-                        token,
-                        extension,
-                        clock, // clock
-                        tokenHolder
-                      );
-                      await extension
-                        .connect(await ethers.getSigner(tokenHolder))
-                        .hold(
-                          token.address,
-                          holdId,
-                          recipient,
-                          notary,
-                          partition1,
-                          holdAmount,
-                          SECONDS_IN_AN_HOUR,
-                          secretHashPair.hash,
-                          certificate
-                        );
-
-                      const finalBalance = await token.balanceOf(tokenHolder);
-                      const finalPartitionBalance =
-                        await token.balanceOfByPartition(
-                          partition1,
-                          tokenHolder
-                        );
-
-                      const finalBalanceOnHold = await extension.balanceOnHold(
-                        token.address,
-                        tokenHolder
-                      );
-                      const finalBalanceOnHoldByPartition =
-                        await extension.balanceOnHoldByPartition(
-                          token.address,
-                          partition1,
-                          tokenHolder
-                        );
-
-                      const finalSpendableBalance =
-                        await extension.spendableBalanceOf(
-                          token.address,
-                          tokenHolder
-                        );
-                      const finalSpendableBalanceByPartition =
-                        await extension.spendableBalanceOfByPartition(
-                          token.address,
-                          partition1,
-                          tokenHolder
-                        );
-
-                      const finalTotalSupplyOnHold =
-                        await extension.totalSupplyOnHold(token.address);
-                      const finalTotalSupplyOnHoldByPartition =
-                        await extension.totalSupplyOnHoldByPartition(
-                          token.address,
-                          partition1
-                        );
-
-                      assert.equal(initialBalance.toNumber(), issuanceAmount);
-                      assert.equal(finalBalance.toNumber(), issuanceAmount);
-                      assert.equal(
-                        initialPartitionBalance.toNumber(),
-                        issuanceAmount
-                      );
-                      assert.equal(
-                        finalPartitionBalance.toNumber(),
-                        issuanceAmount
-                      );
-
-                      assert.equal(initialBalanceOnHold.toNumber(), 0);
-                      assert.equal(
-                        initialBalanceOnHoldByPartition.toNumber(),
-                        0
-                      );
-                      assert.equal(finalBalanceOnHold.toNumber(), holdAmount);
-                      assert.equal(
-                        finalBalanceOnHoldByPartition.toNumber(),
-                        holdAmount
-                      );
-
-                      assert.equal(
-                        initialSpendableBalance.toNumber(),
-                        issuanceAmount
-                      );
-                      assert.equal(
-                        initialSpendableBalanceByPartition.toNumber(),
-                        issuanceAmount
-                      );
-                      assert.equal(
-                        finalSpendableBalance.toNumber(),
-                        issuanceAmount - holdAmount
-                      );
-                      assert.equal(
-                        finalSpendableBalanceByPartition.toNumber(),
-                        issuanceAmount - holdAmount
-                      );
-
-                      assert.equal(initialTotalSupplyOnHold.toNumber(), 0);
-                      assert.equal(
-                        initialTotalSupplyOnHoldByPartition.toNumber(),
-                        0
-                      );
-                      assert.equal(
-                        finalTotalSupplyOnHold.toNumber(),
-                        holdAmount
-                      );
-                      assert.equal(
-                        finalTotalSupplyOnHoldByPartition.toNumber(),
-                        holdAmount
-                      );
-
-                      const holdData = await extension.retrieveHoldData(
-                        token.address,
-                        holdId
-                      );
-                      assert.equal(holdData[0], partition1);
-                      assert.equal(holdData[1], tokenHolder);
-                      assert.equal(holdData[2], recipient);
-                      assert.equal(holdData[3], notary);
-                      assert.equal(holdData[4].toNumber(), holdAmount);
-                      assert.isAtLeast(
-                        holdData[5].toNumber(),
-                        time.toNumber() + SECONDS_IN_AN_HOUR
-                      );
-                      assert.isBelow(
-                        holdData[5].toNumber(),
-                        time.toNumber() + SECONDS_IN_AN_HOUR + 100
-                      );
-                      assert.equal(holdData[6], secretHashPair.hash);
-                      assert.equal(holdData[7], EMPTY_BYTE32);
-                      assert.equal(holdData[8], HOLD_STATUS_ORDERED);
-                    });
-                    it('can transfer less than spendable balance', async function () {
-                      const holdId = newHoldId();
-                      const secretHashPair = newSecretHashPair();
-                      const certificate = await craftCertificate(
-                        extension.interface.encodeFunctionData('hold', [
-                          token.address,
-                          holdId,
-                          recipient,
-                          notary,
-                          partition1,
-                          holdAmount,
-                          SECONDS_IN_AN_HOUR,
-                          secretHashPair.hash,
-                          ZERO_BYTE
-                        ]),
-                        token,
-                        extension,
-                        clock, // clock
-                        tokenHolder
-                      );
-                      await extension
-                        .connect(await ethers.getSigner(tokenHolder))
-                        .hold(
-                          token.address,
-                          holdId,
-                          recipient,
-                          notary,
-                          partition1,
-                          holdAmount,
-                          SECONDS_IN_AN_HOUR,
-                          secretHashPair.hash,
-                          certificate
-                        );
-                      const initialSpendableBalance = (
-                        await extension.spendableBalanceOf(
-                          token.address,
-                          tokenHolder
-                        )
-                      ).toNumber();
-                      const initialSenderBalance = (
-                        await token.balanceOfByPartition(
-                          partition1,
-                          tokenHolder
-                        )
-                      ).toNumber();
-                      const initialRecipientBalance = (
-                        await token.balanceOfByPartition(partition1, recipient)
-                      ).toNumber();
-
-                      const transferAmount = initialSpendableBalance;
-                      const certificate2 = await craftCertificate(
-                        token.interface.encodeFunctionData(
-                          'transferByPartition',
-                          [partition1, recipient, transferAmount, ZERO_BYTE]
-                        ),
-                        token,
-                        extension,
-                        clock, // clock
-                        tokenHolder
-                      );
-                      await token
-                        .connect(await ethers.getSigner(tokenHolder))
-                        .transferByPartition(
-                          partition1,
-                          recipient,
-                          transferAmount,
-                          certificate2
-                        );
-
-                      const finalSpendableBalance = (
-                        await extension.spendableBalanceOf(
-                          token.address,
-                          tokenHolder
-                        )
-                      ).toNumber();
-                      const finalSenderBalance = (
-                        await token.balanceOfByPartition(
-                          partition1,
-                          tokenHolder
-                        )
-                      ).toNumber();
-                      const finalRecipientBalance = (
-                        await token.balanceOfByPartition(partition1, recipient)
-                      ).toNumber();
-
-                      assert.equal(
-                        initialSpendableBalance,
-                        issuanceAmount - holdAmount
-                      );
-                      assert.equal(finalSpendableBalance, 0);
-
-                      assert.equal(initialSenderBalance, issuanceAmount);
-                      assert.equal(initialRecipientBalance, 0);
-
-                      assert.equal(
-                        finalSenderBalance,
-                        issuanceAmount - transferAmount
-                      );
-                      assert.equal(finalRecipientBalance, transferAmount);
-                    });
-                    it('can not transfer more than spendable balance', async function () {
-                      const holdId = newHoldId();
-                      const secretHashPair = newSecretHashPair();
-                      const certificate = await craftCertificate(
-                        extension.interface.encodeFunctionData('hold', [
-                          token.address,
-                          holdId,
-                          recipient,
-                          notary,
-                          partition1,
-                          holdAmount,
-                          SECONDS_IN_AN_HOUR,
-                          secretHashPair.hash,
-                          ZERO_BYTE
-                        ]),
-                        token,
-                        extension,
-                        clock, // clock
-                        tokenHolder
-                      );
-                      await extension
-                        .connect(await ethers.getSigner(tokenHolder))
-                        .hold(
-                          token.address,
-                          holdId,
-                          recipient,
-                          notary,
-                          partition1,
-                          holdAmount,
-                          SECONDS_IN_AN_HOUR,
-                          secretHashPair.hash,
-                          certificate
-                        );
-                      const initialSpendableBalance =
-                        await extension.spendableBalanceOf(
-                          token.address,
-                          tokenHolder
-                        );
-
-                      const transferAmount =
-                        initialSpendableBalance.toNumber() + 1;
-                      const certificate2 = await craftCertificate(
-                        token.interface.encodeFunctionData(
-                          'transferByPartition',
-                          [partition1, recipient, transferAmount, ZERO_BYTE]
-                        ),
-                        token,
-                        extension,
-                        clock, // clock
-                        tokenHolder
-                      );
-                      await expectRevert.unspecified(
-                        token
-                          .connect(await ethers.getSigner(tokenHolder))
-                          .transferByPartition(
-                            partition1,
-                            recipient,
-                            transferAmount,
-                            certificate2
-                          )
-                      );
-                    });
-                    it('emits an event', async function () {
-                      const holdId = newHoldId();
-                      const secretHashPair = newSecretHashPair();
-                      const time = await clock.getTime();
-                      const certificate = await craftCertificate(
-                        extension.interface.encodeFunctionData('hold', [
-                          token.address,
-                          holdId,
-                          recipient,
-                          notary,
-                          partition1,
-                          holdAmount,
-                          SECONDS_IN_AN_HOUR,
-                          secretHashPair.hash,
-                          ZERO_BYTE
-                        ]),
-                        token,
-                        extension,
-                        clock, // clock
-                        tokenHolder
-                      );
-                      const { events } = await extension
-                        .connect(await ethers.getSigner(tokenHolder))
-                        .hold(
-                          token.address,
-                          holdId,
-                          recipient,
-                          notary,
-                          partition1,
-                          holdAmount,
-                          SECONDS_IN_AN_HOUR,
-                          secretHashPair.hash,
-                          certificate
-                        )
-                        .then((res) => res.wait());
-
-                      assert.equal(events![0].event, 'HoldCreated');
-                      assert.equal(events![0].args?.token, token.address);
-                      assert.equal(events![0].args?.holdId, holdId);
-                      assert.equal(events![0].args?.partition, partition1);
-                      assert.equal(events![0].args?.sender, tokenHolder);
-                      assert.equal(events![0].args?.recipient, recipient);
-                      assert.equal(events![0].args?.notary, notary);
-                      assert.equal(events![0].args?.value, holdAmount);
-                      assert.isAtLeast(
-                        parseInt(events![0].args?.expiration),
-                        time.toNumber() + SECONDS_IN_AN_HOUR
-                      );
-                      assert.isBelow(
-                        parseInt(events![0].args?.expiration),
-                        time.toNumber() + SECONDS_IN_AN_HOUR + 100
-                      );
-                      assert.equal(
-                        events![0].args?.secretHash,
-                        secretHashPair.hash
-                      );
-                    });
-                  });
-                  describe('when hold value is greater than spendable balance', function () {
-                    it('reverts', async function () {
-                      const initialSpendableBalance = (
-                        await extension.spendableBalanceOf(
-                          token.address,
-                          tokenHolder
-                        )
-                      ).toNumber();
-
-                      const holdId = newHoldId();
-                      const secretHashPair = newSecretHashPair();
-                      const certificate = await craftCertificate(
-                        extension.interface.encodeFunctionData('hold', [
-                          token.address,
-                          holdId,
-                          recipient,
-                          notary,
-                          partition1,
-                          initialSpendableBalance + 1,
-                          SECONDS_IN_AN_HOUR,
-                          secretHashPair.hash,
-                          ZERO_BYTE
-                        ]),
-                        token,
-                        extension,
-                        clock, // clock
-                        tokenHolder
-                      );
-                      await expectRevert.unspecified(
-                        extension
-                          .connect(await ethers.getSigner(tokenHolder))
-                          .hold(
-                            token.address,
-                            holdId,
-                            recipient,
-                            notary,
-                            partition1,
-                            initialSpendableBalance + 1,
-                            SECONDS_IN_AN_HOUR,
-                            secretHashPair.hash,
-                            certificate
-                          )
-                      );
-                    });
-                  });
-                });
-                describe('when notary is the zero address', function () {
-                  it('reverts', async function () {
+    describe('when certificate is activated', function () {
+      beforeEach(async function () {
+        await assertCertificateActivated(
+          extension,
+          token,
+          CERTIFICATE_VALIDATION_SALT
+        );
+      });
+      describe('when certificate is valid', function () {
+        describe('when hold recipient is not the zero address', function () {
+          describe('when hold value is greater than 0', function () {
+            describe("when hold ID doesn't already exist", function () {
+              describe('when notary is not the zero address', function () {
+                describe('when hold value is not greater than spendable balance', function () {
+                  it('creates a hold', async function () {
                     const initialBalance = await token.balanceOf(tokenHolder);
                     const initialPartitionBalance =
                       await token.balanceOfByPartition(partition1, tokenHolder);
@@ -6743,7 +6126,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                         token.address,
                         holdId,
                         recipient,
-                        ZERO_ADDRESS,
+                        notary,
                         partition1,
                         holdAmount,
                         SECONDS_IN_AN_HOUR,
@@ -6756,12 +6139,12 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                       tokenHolder
                     );
                     await extension
-                      .connect(await ethers.getSigner(tokenHolder))
+                      .connect(tokenHolderSigner)
                       .hold(
                         token.address,
                         holdId,
                         recipient,
-                        ZERO_ADDRESS,
+                        notary,
                         partition1,
                         holdAmount,
                         SECONDS_IN_AN_HOUR,
@@ -6858,7 +6241,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                     assert.equal(holdData[0], partition1);
                     assert.equal(holdData[1], tokenHolder);
                     assert.equal(holdData[2], recipient);
-                    assert.equal(holdData[3], ZERO_ADDRESS);
+                    assert.equal(holdData[3], notary);
                     assert.equal(holdData[4].toNumber(), holdAmount);
                     assert.isAtLeast(
                       holdData[5].toNumber(),
@@ -6872,10 +6255,304 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                     assert.equal(holdData[7], EMPTY_BYTE32);
                     assert.equal(holdData[8], HOLD_STATUS_ORDERED);
                   });
+                  it('can transfer less than spendable balance', async function () {
+                    const holdId = newHoldId();
+                    const secretHashPair = newSecretHashPair();
+                    const certificate = await craftCertificate(
+                      extension.interface.encodeFunctionData('hold', [
+                        token.address,
+                        holdId,
+                        recipient,
+                        notary,
+                        partition1,
+                        holdAmount,
+                        SECONDS_IN_AN_HOUR,
+                        secretHashPair.hash,
+                        ZERO_BYTE
+                      ]),
+                      token,
+                      extension,
+                      clock, // clock
+                      tokenHolder
+                    );
+                    await extension
+                      .connect(tokenHolderSigner)
+                      .hold(
+                        token.address,
+                        holdId,
+                        recipient,
+                        notary,
+                        partition1,
+                        holdAmount,
+                        SECONDS_IN_AN_HOUR,
+                        secretHashPair.hash,
+                        certificate
+                      );
+                    const initialSpendableBalance = (
+                      await extension.spendableBalanceOf(
+                        token.address,
+                        tokenHolder
+                      )
+                    ).toNumber();
+                    const initialSenderBalance = (
+                      await token.balanceOfByPartition(partition1, tokenHolder)
+                    ).toNumber();
+                    const initialRecipientBalance = (
+                      await token.balanceOfByPartition(partition1, recipient)
+                    ).toNumber();
+
+                    const transferAmount = initialSpendableBalance;
+                    const certificate2 = await craftCertificate(
+                      token.interface.encodeFunctionData(
+                        'transferByPartition',
+                        [partition1, recipient, transferAmount, ZERO_BYTE]
+                      ),
+                      token,
+                      extension,
+                      clock, // clock
+                      tokenHolder
+                    );
+                    await token
+                      .connect(tokenHolderSigner)
+                      .transferByPartition(
+                        partition1,
+                        recipient,
+                        transferAmount,
+                        certificate2
+                      );
+
+                    const finalSpendableBalance = (
+                      await extension.spendableBalanceOf(
+                        token.address,
+                        tokenHolder
+                      )
+                    ).toNumber();
+                    const finalSenderBalance = (
+                      await token.balanceOfByPartition(partition1, tokenHolder)
+                    ).toNumber();
+                    const finalRecipientBalance = (
+                      await token.balanceOfByPartition(partition1, recipient)
+                    ).toNumber();
+
+                    assert.equal(
+                      initialSpendableBalance,
+                      issuanceAmount - holdAmount
+                    );
+                    assert.equal(finalSpendableBalance, 0);
+
+                    assert.equal(initialSenderBalance, issuanceAmount);
+                    assert.equal(initialRecipientBalance, 0);
+
+                    assert.equal(
+                      finalSenderBalance,
+                      issuanceAmount - transferAmount
+                    );
+                    assert.equal(finalRecipientBalance, transferAmount);
+                  });
+                  it('can not transfer more than spendable balance', async function () {
+                    const holdId = newHoldId();
+                    const secretHashPair = newSecretHashPair();
+                    const certificate = await craftCertificate(
+                      extension.interface.encodeFunctionData('hold', [
+                        token.address,
+                        holdId,
+                        recipient,
+                        notary,
+                        partition1,
+                        holdAmount,
+                        SECONDS_IN_AN_HOUR,
+                        secretHashPair.hash,
+                        ZERO_BYTE
+                      ]),
+                      token,
+                      extension,
+                      clock, // clock
+                      tokenHolder
+                    );
+                    await extension
+                      .connect(tokenHolderSigner)
+                      .hold(
+                        token.address,
+                        holdId,
+                        recipient,
+                        notary,
+                        partition1,
+                        holdAmount,
+                        SECONDS_IN_AN_HOUR,
+                        secretHashPair.hash,
+                        certificate
+                      );
+                    const initialSpendableBalance =
+                      await extension.spendableBalanceOf(
+                        token.address,
+                        tokenHolder
+                      );
+
+                    const transferAmount =
+                      initialSpendableBalance.toNumber() + 1;
+                    const certificate2 = await craftCertificate(
+                      token.interface.encodeFunctionData(
+                        'transferByPartition',
+                        [partition1, recipient, transferAmount, ZERO_BYTE]
+                      ),
+                      token,
+                      extension,
+                      clock, // clock
+                      tokenHolder
+                    );
+                    await expectRevert.unspecified(
+                      token
+                        .connect(tokenHolderSigner)
+                        .transferByPartition(
+                          partition1,
+                          recipient,
+                          transferAmount,
+                          certificate2
+                        )
+                    );
+                  });
+                  it('emits an event', async function () {
+                    const holdId = newHoldId();
+                    const secretHashPair = newSecretHashPair();
+                    const time = await clock.getTime();
+                    const certificate = await craftCertificate(
+                      extension.interface.encodeFunctionData('hold', [
+                        token.address,
+                        holdId,
+                        recipient,
+                        notary,
+                        partition1,
+                        holdAmount,
+                        SECONDS_IN_AN_HOUR,
+                        secretHashPair.hash,
+                        ZERO_BYTE
+                      ]),
+                      token,
+                      extension,
+                      clock, // clock
+                      tokenHolder
+                    );
+                    const { events } = await extension
+                      .connect(tokenHolderSigner)
+                      .hold(
+                        token.address,
+                        holdId,
+                        recipient,
+                        notary,
+                        partition1,
+                        holdAmount,
+                        SECONDS_IN_AN_HOUR,
+                        secretHashPair.hash,
+                        certificate
+                      )
+                      .then((res) => res.wait());
+
+                    assert.equal(events![0].event, 'HoldCreated');
+                    assert.equal(events![0].args?.token, token.address);
+                    assert.equal(events![0].args?.holdId, holdId);
+                    assert.equal(events![0].args?.partition, partition1);
+                    assert.equal(events![0].args?.sender, tokenHolder);
+                    assert.equal(events![0].args?.recipient, recipient);
+                    assert.equal(events![0].args?.notary, notary);
+                    assert.equal(events![0].args?.value, holdAmount);
+                    assert.isAtLeast(
+                      parseInt(events![0].args?.expiration),
+                      time.toNumber() + SECONDS_IN_AN_HOUR
+                    );
+                    assert.isBelow(
+                      parseInt(events![0].args?.expiration),
+                      time.toNumber() + SECONDS_IN_AN_HOUR + 100
+                    );
+                    assert.equal(
+                      events![0].args?.secretHash,
+                      secretHashPair.hash
+                    );
+                  });
+                });
+                describe('when hold value is greater than spendable balance', function () {
+                  it('reverts', async function () {
+                    const initialSpendableBalance = (
+                      await extension.spendableBalanceOf(
+                        token.address,
+                        tokenHolder
+                      )
+                    ).toNumber();
+
+                    const holdId = newHoldId();
+                    const secretHashPair = newSecretHashPair();
+                    const certificate = await craftCertificate(
+                      extension.interface.encodeFunctionData('hold', [
+                        token.address,
+                        holdId,
+                        recipient,
+                        notary,
+                        partition1,
+                        initialSpendableBalance + 1,
+                        SECONDS_IN_AN_HOUR,
+                        secretHashPair.hash,
+                        ZERO_BYTE
+                      ]),
+                      token,
+                      extension,
+                      clock, // clock
+                      tokenHolder
+                    );
+                    await expectRevert.unspecified(
+                      extension
+                        .connect(tokenHolderSigner)
+                        .hold(
+                          token.address,
+                          holdId,
+                          recipient,
+                          notary,
+                          partition1,
+                          initialSpendableBalance + 1,
+                          SECONDS_IN_AN_HOUR,
+                          secretHashPair.hash,
+                          certificate
+                        )
+                    );
+                  });
                 });
               });
-              describe('when hold ID already exists', function () {
+              describe('when notary is the zero address', function () {
                 it('reverts', async function () {
+                  const initialBalance = await token.balanceOf(tokenHolder);
+                  const initialPartitionBalance =
+                    await token.balanceOfByPartition(partition1, tokenHolder);
+
+                  const initialBalanceOnHold = await extension.balanceOnHold(
+                    token.address,
+                    tokenHolder
+                  );
+                  const initialBalanceOnHoldByPartition =
+                    await extension.balanceOnHoldByPartition(
+                      token.address,
+                      partition1,
+                      tokenHolder
+                    );
+
+                  const initialSpendableBalance =
+                    await extension.spendableBalanceOf(
+                      token.address,
+                      tokenHolder
+                    );
+                  const initialSpendableBalanceByPartition =
+                    await extension.spendableBalanceOfByPartition(
+                      token.address,
+                      partition1,
+                      tokenHolder
+                    );
+
+                  const initialTotalSupplyOnHold =
+                    await extension.totalSupplyOnHold(token.address);
+                  const initialTotalSupplyOnHoldByPartition =
+                    await extension.totalSupplyOnHoldByPartition(
+                      token.address,
+                      partition1
+                    );
+
+                  const time = await clock.getTime();
                   const holdId = newHoldId();
                   const secretHashPair = newSecretHashPair();
                   const certificate = await craftCertificate(
@@ -6883,9 +6560,9 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                       token.address,
                       holdId,
                       recipient,
-                      notary,
+                      ZERO_ADDRESS,
                       partition1,
-                      1,
+                      holdAmount,
                       SECONDS_IN_AN_HOUR,
                       secretHashPair.hash,
                       ZERO_BYTE
@@ -6896,55 +6573,125 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                     tokenHolder
                   );
                   await extension
-                    .connect(await ethers.getSigner(tokenHolder))
+                    .connect(tokenHolderSigner)
                     .hold(
                       token.address,
                       holdId,
                       recipient,
-                      notary,
+                      ZERO_ADDRESS,
                       partition1,
-                      1,
+                      holdAmount,
                       SECONDS_IN_AN_HOUR,
                       secretHashPair.hash,
                       certificate
                     );
 
-                  const certificate2 = await craftCertificate(
-                    extension.interface.encodeFunctionData('hold', [
-                      token.address,
-                      holdId,
-                      recipient,
-                      notary,
-                      partition1,
-                      1,
-                      SECONDS_IN_AN_HOUR,
-                      secretHashPair.hash,
-                      ZERO_BYTE
-                    ]),
-                    token,
-                    extension,
-                    clock, // clock
+                  const finalBalance = await token.balanceOf(tokenHolder);
+                  const finalPartitionBalance =
+                    await token.balanceOfByPartition(partition1, tokenHolder);
+
+                  const finalBalanceOnHold = await extension.balanceOnHold(
+                    token.address,
                     tokenHolder
                   );
-                  await expectRevert.unspecified(
-                    extension
-                      .connect(await ethers.getSigner(tokenHolder))
-                      .hold(
-                        token.address,
-                        holdId,
-                        recipient,
-                        notary,
-                        partition1,
-                        1,
-                        SECONDS_IN_AN_HOUR,
-                        secretHashPair.hash,
-                        certificate2
-                      )
+                  const finalBalanceOnHoldByPartition =
+                    await extension.balanceOnHoldByPartition(
+                      token.address,
+                      partition1,
+                      tokenHolder
+                    );
+
+                  const finalSpendableBalance =
+                    await extension.spendableBalanceOf(
+                      token.address,
+                      tokenHolder
+                    );
+                  const finalSpendableBalanceByPartition =
+                    await extension.spendableBalanceOfByPartition(
+                      token.address,
+                      partition1,
+                      tokenHolder
+                    );
+
+                  const finalTotalSupplyOnHold =
+                    await extension.totalSupplyOnHold(token.address);
+                  const finalTotalSupplyOnHoldByPartition =
+                    await extension.totalSupplyOnHoldByPartition(
+                      token.address,
+                      partition1
+                    );
+
+                  assert.equal(initialBalance.toNumber(), issuanceAmount);
+                  assert.equal(finalBalance.toNumber(), issuanceAmount);
+                  assert.equal(
+                    initialPartitionBalance.toNumber(),
+                    issuanceAmount
                   );
+                  assert.equal(
+                    finalPartitionBalance.toNumber(),
+                    issuanceAmount
+                  );
+
+                  assert.equal(initialBalanceOnHold.toNumber(), 0);
+                  assert.equal(initialBalanceOnHoldByPartition.toNumber(), 0);
+                  assert.equal(finalBalanceOnHold.toNumber(), holdAmount);
+                  assert.equal(
+                    finalBalanceOnHoldByPartition.toNumber(),
+                    holdAmount
+                  );
+
+                  assert.equal(
+                    initialSpendableBalance.toNumber(),
+                    issuanceAmount
+                  );
+                  assert.equal(
+                    initialSpendableBalanceByPartition.toNumber(),
+                    issuanceAmount
+                  );
+                  assert.equal(
+                    finalSpendableBalance.toNumber(),
+                    issuanceAmount - holdAmount
+                  );
+                  assert.equal(
+                    finalSpendableBalanceByPartition.toNumber(),
+                    issuanceAmount - holdAmount
+                  );
+
+                  assert.equal(initialTotalSupplyOnHold.toNumber(), 0);
+                  assert.equal(
+                    initialTotalSupplyOnHoldByPartition.toNumber(),
+                    0
+                  );
+                  assert.equal(finalTotalSupplyOnHold.toNumber(), holdAmount);
+                  assert.equal(
+                    finalTotalSupplyOnHoldByPartition.toNumber(),
+                    holdAmount
+                  );
+
+                  const holdData = await extension.retrieveHoldData(
+                    token.address,
+                    holdId
+                  );
+                  assert.equal(holdData[0], partition1);
+                  assert.equal(holdData[1], tokenHolder);
+                  assert.equal(holdData[2], recipient);
+                  assert.equal(holdData[3], ZERO_ADDRESS);
+                  assert.equal(holdData[4].toNumber(), holdAmount);
+                  assert.isAtLeast(
+                    holdData[5].toNumber(),
+                    time.toNumber() + SECONDS_IN_AN_HOUR
+                  );
+                  assert.isBelow(
+                    holdData[5].toNumber(),
+                    time.toNumber() + SECONDS_IN_AN_HOUR + 100
+                  );
+                  assert.equal(holdData[6], secretHashPair.hash);
+                  assert.equal(holdData[7], EMPTY_BYTE32);
+                  assert.equal(holdData[8], HOLD_STATUS_ORDERED);
                 });
               });
             });
-            describe('when hold value is not greater than 0', function () {
+            describe('when hold ID already exists', function () {
               it('reverts', async function () {
                 const holdId = newHoldId();
                 const secretHashPair = newSecretHashPair();
@@ -6955,7 +6702,38 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                     recipient,
                     notary,
                     partition1,
-                    0,
+                    1,
+                    SECONDS_IN_AN_HOUR,
+                    secretHashPair.hash,
+                    ZERO_BYTE
+                  ]),
+                  token,
+                  extension,
+                  clock, // clock
+                  tokenHolder
+                );
+                await extension
+                  .connect(tokenHolderSigner)
+                  .hold(
+                    token.address,
+                    holdId,
+                    recipient,
+                    notary,
+                    partition1,
+                    1,
+                    SECONDS_IN_AN_HOUR,
+                    secretHashPair.hash,
+                    certificate
+                  );
+
+                const certificate2 = await craftCertificate(
+                  extension.interface.encodeFunctionData('hold', [
+                    token.address,
+                    holdId,
+                    recipient,
+                    notary,
+                    partition1,
+                    1,
                     SECONDS_IN_AN_HOUR,
                     secretHashPair.hash,
                     ZERO_BYTE
@@ -6967,23 +6745,23 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                 );
                 await expectRevert.unspecified(
                   extension
-                    .connect(await ethers.getSigner(tokenHolder))
+                    .connect(tokenHolderSigner)
                     .hold(
                       token.address,
                       holdId,
                       recipient,
                       notary,
                       partition1,
-                      0,
+                      1,
                       SECONDS_IN_AN_HOUR,
                       secretHashPair.hash,
-                      certificate
+                      certificate2
                     )
                 );
               });
             });
           });
-          describe('when hold recipient is the zero address', function () {
+          describe('when hold value is not greater than 0', function () {
             it('reverts', async function () {
               const holdId = newHoldId();
               const secretHashPair = newSecretHashPair();
@@ -6991,10 +6769,10 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                 extension.interface.encodeFunctionData('hold', [
                   token.address,
                   holdId,
-                  ZERO_ADDRESS,
+                  recipient,
                   notary,
                   partition1,
-                  holdAmount,
+                  0,
                   SECONDS_IN_AN_HOUR,
                   secretHashPair.hash,
                   ZERO_BYTE
@@ -7006,14 +6784,14 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
               );
               await expectRevert.unspecified(
                 extension
-                  .connect(await ethers.getSigner(tokenHolder))
+                  .connect(tokenHolderSigner)
                   .hold(
                     token.address,
                     holdId,
-                    ZERO_ADDRESS,
+                    recipient,
                     notary,
                     partition1,
-                    holdAmount,
+                    0,
                     SECONDS_IN_AN_HOUR,
                     secretHashPair.hash,
                     certificate
@@ -7022,335 +6800,19 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
             });
           });
         });
-        describe('when certificate is not valid', function () {
-          it('creates a hold', async function () {
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            await expectRevert.unspecified(
-              extension
-                .connect(await ethers.getSigner(tokenHolder))
-                .hold(
-                  token.address,
-                  holdId,
-                  recipient,
-                  notary,
-                  partition1,
-                  holdAmount,
-                  SECONDS_IN_AN_HOUR,
-                  secretHashPair.hash,
-                  ZERO_BYTE
-                )
-            );
-          });
-        });
-      });
-      describe('when certificate is not activated', function () {
-        beforeEach(async function () {
-          await setCertificateActivated(
-            extension,
-            token,
-            controller,
-            CERTIFICATE_VALIDATION_NONE
-          );
-
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_NONE
-          );
-        });
-        it('creates a hold', async function () {
-          const initialBalance = await token.balanceOf(tokenHolder);
-          const initialPartitionBalance = await token.balanceOfByPartition(
-            partition1,
-            tokenHolder
-          );
-
-          const initialBalanceOnHold = await extension.balanceOnHold(
-            token.address,
-            tokenHolder
-          );
-          const initialBalanceOnHoldByPartition =
-            await extension.balanceOnHoldByPartition(
-              token.address,
-              partition1,
-              tokenHolder
-            );
-
-          const initialSpendableBalance = await extension.spendableBalanceOf(
-            token.address,
-            tokenHolder
-          );
-          const initialSpendableBalanceByPartition =
-            await extension.spendableBalanceOfByPartition(
-              token.address,
-              partition1,
-              tokenHolder
-            );
-
-          const initialTotalSupplyOnHold = await extension.totalSupplyOnHold(
-            token.address
-          );
-          const initialTotalSupplyOnHoldByPartition =
-            await extension.totalSupplyOnHoldByPartition(
-              token.address,
-              partition1
-            );
-
-          const time = await clock.getTime();
-          const holdId = newHoldId();
-          const secretHashPair = newSecretHashPair();
-          await extension
-            .connect(await ethers.getSigner(tokenHolder))
-            .hold(
-              token.address,
-              holdId,
-              recipient,
-              notary,
-              partition1,
-              holdAmount,
-              SECONDS_IN_AN_HOUR,
-              secretHashPair.hash,
-              ZERO_BYTE
-            );
-
-          const finalBalance = await token.balanceOf(tokenHolder);
-          const finalPartitionBalance = await token.balanceOfByPartition(
-            partition1,
-            tokenHolder
-          );
-
-          const finalBalanceOnHold = await extension.balanceOnHold(
-            token.address,
-            tokenHolder
-          );
-          const finalBalanceOnHoldByPartition =
-            await extension.balanceOnHoldByPartition(
-              token.address,
-              partition1,
-              tokenHolder
-            );
-
-          const finalSpendableBalance = await extension.spendableBalanceOf(
-            token.address,
-            tokenHolder
-          );
-          const finalSpendableBalanceByPartition =
-            await extension.spendableBalanceOfByPartition(
-              token.address,
-              partition1,
-              tokenHolder
-            );
-
-          const finalTotalSupplyOnHold = await extension.totalSupplyOnHold(
-            token.address
-          );
-          const finalTotalSupplyOnHoldByPartition =
-            await extension.totalSupplyOnHoldByPartition(
-              token.address,
-              partition1
-            );
-
-          assert.equal(initialBalance.toNumber(), issuanceAmount);
-          assert.equal(finalBalance.toNumber(), issuanceAmount);
-          assert.equal(initialPartitionBalance.toNumber(), issuanceAmount);
-          assert.equal(finalPartitionBalance.toNumber(), issuanceAmount);
-
-          assert.equal(initialBalanceOnHold.toNumber(), 0);
-          assert.equal(initialBalanceOnHoldByPartition.toNumber(), 0);
-          assert.equal(finalBalanceOnHold.toNumber(), holdAmount);
-          assert.equal(finalBalanceOnHoldByPartition.toNumber(), holdAmount);
-
-          assert.equal(initialSpendableBalance.toNumber(), issuanceAmount);
-          assert.equal(
-            initialSpendableBalanceByPartition.toNumber(),
-            issuanceAmount
-          );
-          assert.equal(
-            finalSpendableBalance.toNumber(),
-            issuanceAmount - holdAmount
-          );
-          assert.equal(
-            finalSpendableBalanceByPartition.toNumber(),
-            issuanceAmount - holdAmount
-          );
-
-          assert.equal(initialTotalSupplyOnHold.toNumber(), 0);
-          assert.equal(initialTotalSupplyOnHoldByPartition.toNumber(), 0);
-          assert.equal(finalTotalSupplyOnHold.toNumber(), holdAmount);
-          assert.equal(
-            finalTotalSupplyOnHoldByPartition.toNumber(),
-            holdAmount
-          );
-
-          const holdData = await extension.retrieveHoldData(
-            token.address,
-            holdId
-          );
-          assert.equal(holdData[0], partition1);
-          assert.equal(holdData[1], tokenHolder);
-          assert.equal(holdData[2], recipient);
-          assert.equal(holdData[3], notary);
-          assert.equal(holdData[4].toNumber(), holdAmount);
-          assert.isAtLeast(
-            holdData[5].toNumber(),
-            time.toNumber() + SECONDS_IN_AN_HOUR
-          );
-          assert.isBelow(
-            holdData[5].toNumber(),
-            time.toNumber() + SECONDS_IN_AN_HOUR + 100
-          );
-          assert.equal(holdData[6], secretHashPair.hash);
-          assert.equal(holdData[7], EMPTY_BYTE32);
-          assert.equal(holdData[8], HOLD_STATUS_ORDERED);
-        });
-      });
-    });
-
-    // HOLD WITH EXPIRATION DATE
-    describe('holdWithExpirationDate', function () {
-      beforeEach(async function () {
-        await assertHoldsActivated(extension, token, true);
-
-        const certificate = await craftCertificate(
-          token.interface.encodeFunctionData('issueByPartition', [
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            ZERO_BYTE
-          ]),
-          token,
-          extension,
-          clock, // clock
-          controller
-        );
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
-          );
-      });
-
-      describe('when certificate is not activated', function () {
-        beforeEach(async function () {
-          await setCertificateActivated(
-            extension,
-            token,
-            controller,
-            CERTIFICATE_VALIDATION_NONE
-          );
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_NONE
-          );
-        });
-        describe('when expiration date is valid', function () {
-          describe('when expiration date is in the future', function () {
-            it('creates a hold', async function () {
-              const time = (await clock.getTime()).toNumber();
-              const holdId = newHoldId();
-              const secretHashPair = newSecretHashPair();
-              const { events } = await extension
-                .connect(await ethers.getSigner(tokenHolder))
-                .holdWithExpirationDate(
-                  token.address,
-                  holdId,
-                  recipient,
-                  notary,
-                  partition1,
-                  holdAmount,
-                  time + SECONDS_IN_AN_HOUR,
-                  secretHashPair.hash,
-                  ZERO_BYTE
-                )
-                .then((res) => res.wait());
-              assert.equal(
-                parseInt(events![0].args?.expiration),
-                time + SECONDS_IN_AN_HOUR
-              );
-              const holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.equal(holdData[5].toNumber(), time + SECONDS_IN_AN_HOUR);
-            });
-          });
-          describe('when there is no expiration date', function () {
-            it('creates a hold', async function () {
-              const holdId = newHoldId();
-              const secretHashPair = newSecretHashPair();
-              const { events } = await extension
-                .connect(await ethers.getSigner(tokenHolder))
-                .holdWithExpirationDate(
-                  token.address,
-                  holdId,
-                  recipient,
-                  notary,
-                  partition1,
-                  holdAmount,
-                  0,
-                  secretHashPair.hash,
-                  ZERO_BYTE
-                )
-                .then((res) => res.wait());
-              assert.equal(parseInt(events![0].args?.expiration), 0);
-              const holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.equal(holdData[5].toNumber(), 0);
-            });
-          });
-        });
-        describe('when expiration date is not valid', function () {
+        describe('when hold recipient is the zero address', function () {
           it('reverts', async function () {
-            const time = (await clock.getTime()).toNumber();
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            await expectRevert.unspecified(
-              extension
-                .connect(await ethers.getSigner(tokenHolder))
-                .holdWithExpirationDate(
-                  token.address,
-                  holdId,
-                  recipient,
-                  notary,
-                  partition1,
-                  holdAmount,
-                  time - 1,
-                  secretHashPair.hash,
-                  ZERO_BYTE
-                )
-            );
-          });
-        });
-      });
-      describe('when certificate is activated', function () {
-        beforeEach(async function () {
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_SALT
-          );
-        });
-        describe('when certificate is valid', function () {
-          it('creates a hold', async function () {
-            const time = (await clock.getTime()).toNumber();
             const holdId = newHoldId();
             const secretHashPair = newSecretHashPair();
             const certificate = await craftCertificate(
-              extension.interface.encodeFunctionData('holdWithExpirationDate', [
+              extension.interface.encodeFunctionData('hold', [
                 token.address,
                 holdId,
-                recipient,
+                ZERO_ADDRESS,
                 notary,
                 partition1,
                 holdAmount,
-                time + SECONDS_IN_AN_HOUR,
+                SECONDS_IN_AN_HOUR,
                 secretHashPair.hash,
                 ZERO_BYTE
               ]),
@@ -7359,8 +6821,250 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
               clock, // clock
               tokenHolder
             );
+            await expectRevert.unspecified(
+              extension
+                .connect(tokenHolderSigner)
+                .hold(
+                  token.address,
+                  holdId,
+                  ZERO_ADDRESS,
+                  notary,
+                  partition1,
+                  holdAmount,
+                  SECONDS_IN_AN_HOUR,
+                  secretHashPair.hash,
+                  certificate
+                )
+            );
+          });
+        });
+      });
+      describe('when certificate is not valid', function () {
+        it('creates a hold', async function () {
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await expectRevert.unspecified(
+            extension
+              .connect(tokenHolderSigner)
+              .hold(
+                token.address,
+                holdId,
+                recipient,
+                notary,
+                partition1,
+                holdAmount,
+                SECONDS_IN_AN_HOUR,
+                secretHashPair.hash,
+                ZERO_BYTE
+              )
+          );
+        });
+      });
+    });
+    describe('when certificate is not activated', function () {
+      beforeEach(async function () {
+        await setCertificateActivated(
+          extension,
+          token,
+          controller,
+          CERTIFICATE_VALIDATION_NONE
+        );
+
+        await assertCertificateActivated(
+          extension,
+          token,
+          CERTIFICATE_VALIDATION_NONE
+        );
+      });
+      it('creates a hold', async function () {
+        const initialBalance = await token.balanceOf(tokenHolder);
+        const initialPartitionBalance = await token.balanceOfByPartition(
+          partition1,
+          tokenHolder
+        );
+
+        const initialBalanceOnHold = await extension.balanceOnHold(
+          token.address,
+          tokenHolder
+        );
+        const initialBalanceOnHoldByPartition =
+          await extension.balanceOnHoldByPartition(
+            token.address,
+            partition1,
+            tokenHolder
+          );
+
+        const initialSpendableBalance = await extension.spendableBalanceOf(
+          token.address,
+          tokenHolder
+        );
+        const initialSpendableBalanceByPartition =
+          await extension.spendableBalanceOfByPartition(
+            token.address,
+            partition1,
+            tokenHolder
+          );
+
+        const initialTotalSupplyOnHold = await extension.totalSupplyOnHold(
+          token.address
+        );
+        const initialTotalSupplyOnHoldByPartition =
+          await extension.totalSupplyOnHoldByPartition(
+            token.address,
+            partition1
+          );
+
+        const time = await clock.getTime();
+        const holdId = newHoldId();
+        const secretHashPair = newSecretHashPair();
+        await extension
+          .connect(tokenHolderSigner)
+          .hold(
+            token.address,
+            holdId,
+            recipient,
+            notary,
+            partition1,
+            holdAmount,
+            SECONDS_IN_AN_HOUR,
+            secretHashPair.hash,
+            ZERO_BYTE
+          );
+
+        const finalBalance = await token.balanceOf(tokenHolder);
+        const finalPartitionBalance = await token.balanceOfByPartition(
+          partition1,
+          tokenHolder
+        );
+
+        const finalBalanceOnHold = await extension.balanceOnHold(
+          token.address,
+          tokenHolder
+        );
+        const finalBalanceOnHoldByPartition =
+          await extension.balanceOnHoldByPartition(
+            token.address,
+            partition1,
+            tokenHolder
+          );
+
+        const finalSpendableBalance = await extension.spendableBalanceOf(
+          token.address,
+          tokenHolder
+        );
+        const finalSpendableBalanceByPartition =
+          await extension.spendableBalanceOfByPartition(
+            token.address,
+            partition1,
+            tokenHolder
+          );
+
+        const finalTotalSupplyOnHold = await extension.totalSupplyOnHold(
+          token.address
+        );
+        const finalTotalSupplyOnHoldByPartition =
+          await extension.totalSupplyOnHoldByPartition(
+            token.address,
+            partition1
+          );
+
+        assert.equal(initialBalance.toNumber(), issuanceAmount);
+        assert.equal(finalBalance.toNumber(), issuanceAmount);
+        assert.equal(initialPartitionBalance.toNumber(), issuanceAmount);
+        assert.equal(finalPartitionBalance.toNumber(), issuanceAmount);
+
+        assert.equal(initialBalanceOnHold.toNumber(), 0);
+        assert.equal(initialBalanceOnHoldByPartition.toNumber(), 0);
+        assert.equal(finalBalanceOnHold.toNumber(), holdAmount);
+        assert.equal(finalBalanceOnHoldByPartition.toNumber(), holdAmount);
+
+        assert.equal(initialSpendableBalance.toNumber(), issuanceAmount);
+        assert.equal(
+          initialSpendableBalanceByPartition.toNumber(),
+          issuanceAmount
+        );
+        assert.equal(
+          finalSpendableBalance.toNumber(),
+          issuanceAmount - holdAmount
+        );
+        assert.equal(
+          finalSpendableBalanceByPartition.toNumber(),
+          issuanceAmount - holdAmount
+        );
+
+        assert.equal(initialTotalSupplyOnHold.toNumber(), 0);
+        assert.equal(initialTotalSupplyOnHoldByPartition.toNumber(), 0);
+        assert.equal(finalTotalSupplyOnHold.toNumber(), holdAmount);
+        assert.equal(finalTotalSupplyOnHoldByPartition.toNumber(), holdAmount);
+
+        const holdData = await extension.retrieveHoldData(
+          token.address,
+          holdId
+        );
+        assert.equal(holdData[0], partition1);
+        assert.equal(holdData[1], tokenHolder);
+        assert.equal(holdData[2], recipient);
+        assert.equal(holdData[3], notary);
+        assert.equal(holdData[4].toNumber(), holdAmount);
+        assert.isAtLeast(
+          holdData[5].toNumber(),
+          time.toNumber() + SECONDS_IN_AN_HOUR
+        );
+        assert.isBelow(
+          holdData[5].toNumber(),
+          time.toNumber() + SECONDS_IN_AN_HOUR + 100
+        );
+        assert.equal(holdData[6], secretHashPair.hash);
+        assert.equal(holdData[7], EMPTY_BYTE32);
+        assert.equal(holdData[8], HOLD_STATUS_ORDERED);
+      });
+    });
+  });
+
+  // HOLD WITH EXPIRATION DATE
+  describe('holdWithExpirationDate', function () {
+    beforeEach(async function () {
+      await assertHoldsActivated(extension, token, true);
+
+      const certificate = await craftCertificate(
+        token.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        controller
+      );
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+    });
+
+    describe('when certificate is not activated', function () {
+      beforeEach(async function () {
+        await setCertificateActivated(
+          extension,
+          token,
+          controller,
+          CERTIFICATE_VALIDATION_NONE
+        );
+        await assertCertificateActivated(
+          extension,
+          token,
+          CERTIFICATE_VALIDATION_NONE
+        );
+      });
+      describe('when expiration date is valid', function () {
+        describe('when expiration date is in the future', function () {
+          it('creates a hold', async function () {
+            const time = (await clock.getTime()).toNumber();
+            const holdId = newHoldId();
+            const secretHashPair = newSecretHashPair();
             const { events } = await extension
-              .connect(await ethers.getSigner(tokenHolder))
+              .connect(tokenHolderSigner)
               .holdWithExpirationDate(
                 token.address,
                 holdId,
@@ -7370,7 +7074,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                 holdAmount,
                 time + SECONDS_IN_AN_HOUR,
                 secretHashPair.hash,
-                certificate
+                ZERO_BYTE
               )
               .then((res) => res.wait());
             assert.equal(
@@ -7384,168 +7088,174 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
             assert.equal(holdData[5].toNumber(), time + SECONDS_IN_AN_HOUR);
           });
         });
-        describe('when certificate is not valid', function () {
-          it('reverts', async function () {
-            const time = (await clock.getTime()).toNumber();
+        describe('when there is no expiration date', function () {
+          it('creates a hold', async function () {
             const holdId = newHoldId();
             const secretHashPair = newSecretHashPair();
-            await expectRevert.unspecified(
-              extension
-                .connect(await ethers.getSigner(tokenHolder))
-                .holdWithExpirationDate(
-                  token.address,
-                  holdId,
-                  recipient,
-                  notary,
-                  partition1,
-                  holdAmount,
-                  time + SECONDS_IN_AN_HOUR,
-                  secretHashPair.hash,
-                  ZERO_BYTE
-                )
+            const { events } = await extension
+              .connect(tokenHolderSigner)
+              .holdWithExpirationDate(
+                token.address,
+                holdId,
+                recipient,
+                notary,
+                partition1,
+                holdAmount,
+                0,
+                secretHashPair.hash,
+                ZERO_BYTE
+              )
+              .then((res) => res.wait());
+            assert.equal(parseInt(events![0].args?.expiration), 0);
+            const holdData = await extension.retrieveHoldData(
+              token.address,
+              holdId
             );
+            assert.equal(holdData[5].toNumber(), 0);
           });
+        });
+      });
+      describe('when expiration date is not valid', function () {
+        it('reverts', async function () {
+          const time = (await clock.getTime()).toNumber();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await expectRevert.unspecified(
+            extension
+              .connect(tokenHolderSigner)
+              .holdWithExpirationDate(
+                token.address,
+                holdId,
+                recipient,
+                notary,
+                partition1,
+                holdAmount,
+                time - 1,
+                secretHashPair.hash,
+                ZERO_BYTE
+              )
+          );
         });
       });
     });
-
-    // HOLD FROM
-    describe('holdFrom', function () {
+    describe('when certificate is activated', function () {
       beforeEach(async function () {
-        await assertHoldsActivated(extension, token, true);
-
-        const certificate = await craftCertificate(
-          token.interface.encodeFunctionData('issueByPartition', [
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            ZERO_BYTE
-          ]),
-          token,
+        await assertCertificateActivated(
           extension,
-          clock, // clock
-          controller
+          token,
+          CERTIFICATE_VALIDATION_SALT
         );
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
-          );
       });
+      describe('when certificate is valid', function () {
+        it('creates a hold', async function () {
+          const time = (await clock.getTime()).toNumber();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          const certificate = await craftCertificate(
+            extension.interface.encodeFunctionData('holdWithExpirationDate', [
+              token.address,
+              holdId,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              time + SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            tokenHolder
+          );
+          const { events } = await extension
+            .connect(tokenHolderSigner)
+            .holdWithExpirationDate(
+              token.address,
+              holdId,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              time + SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              certificate
+            )
+            .then((res) => res.wait());
+          assert.equal(
+            parseInt(events![0].args?.expiration),
+            time + SECONDS_IN_AN_HOUR
+          );
+          const holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
+          );
+          assert.equal(holdData[5].toNumber(), time + SECONDS_IN_AN_HOUR);
+        });
+      });
+      describe('when certificate is not valid', function () {
+        it('reverts', async function () {
+          const time = (await clock.getTime()).toNumber();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await expectRevert.unspecified(
+            extension
+              .connect(tokenHolderSigner)
+              .holdWithExpirationDate(
+                token.address,
+                holdId,
+                recipient,
+                notary,
+                partition1,
+                holdAmount,
+                time + SECONDS_IN_AN_HOUR,
+                secretHashPair.hash,
+                ZERO_BYTE
+              )
+          );
+        });
+      });
+    });
+  });
 
-      describe('when certificate is not activated', function () {
-        beforeEach(async function () {
-          await setCertificateActivated(
-            extension,
-            token,
-            controller,
-            CERTIFICATE_VALIDATION_NONE
-          );
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_NONE
-          );
-        });
-        describe('when hold sender is not the zero address', function () {
-          describe('when hold is created by a token controller', function () {
-            it('creates a hold', async function () {
-              assert.equal(
-                (
-                  await extension.balanceOnHoldByPartition(
-                    token.address,
-                    partition1,
-                    tokenHolder
-                  )
-                ).toNumber(),
-                0
-              );
-              const holdId = newHoldId();
-              const secretHashPair = newSecretHashPair();
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .holdFrom(
-                  token.address,
-                  holdId,
-                  tokenHolder,
-                  recipient,
-                  notary,
-                  partition1,
-                  holdAmount,
-                  SECONDS_IN_AN_HOUR,
-                  secretHashPair.hash,
-                  ZERO_BYTE
-                );
-              assert.equal(
-                (
-                  await extension.balanceOnHoldByPartition(
-                    token.address,
-                    partition1,
-                    tokenHolder
-                  )
-                ).toNumber(),
-                holdAmount
-              );
-            });
-          });
-          describe('when hold is not created by a token controller', function () {
-            it('reverts', async function () {
-              const holdId = newHoldId();
-              const secretHashPair = newSecretHashPair();
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(recipient))
-                  .holdFrom(
-                    token.address,
-                    holdId,
-                    tokenHolder,
-                    recipient,
-                    notary,
-                    partition1,
-                    holdAmount,
-                    SECONDS_IN_AN_HOUR,
-                    secretHashPair.hash,
-                    ZERO_BYTE
-                  )
-              );
-            });
-          });
-        });
-        describe('when hold sender is the zero address', function () {
-          it('reverts', async function () {
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            await expectRevert.unspecified(
-              extension
-                .connect(await ethers.getSigner(controller))
-                .holdFrom(
-                  token.address,
-                  holdId,
-                  ZERO_ADDRESS,
-                  recipient,
-                  notary,
-                  partition1,
-                  holdAmount,
-                  SECONDS_IN_AN_HOUR,
-                  secretHashPair.hash,
-                  ZERO_BYTE
-                )
-            );
-          });
-        });
+  // HOLD FROM
+  describe('holdFrom', function () {
+    beforeEach(async function () {
+      await assertHoldsActivated(extension, token, true);
+
+      const certificate = await craftCertificate(
+        token.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        controller
+      );
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+    });
+
+    describe('when certificate is not activated', function () {
+      beforeEach(async function () {
+        await setCertificateActivated(
+          extension,
+          token,
+          controller,
+          CERTIFICATE_VALIDATION_NONE
+        );
+        await assertCertificateActivated(
+          extension,
+          token,
+          CERTIFICATE_VALIDATION_NONE
+        );
       });
-      describe('when certificate is activated', function () {
-        beforeEach(async function () {
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_SALT
-          );
-        });
-        describe('when certificate is valid', function () {
+      describe('when hold sender is not the zero address', function () {
+        describe('when hold is created by a token controller', function () {
           it('creates a hold', async function () {
             assert.equal(
               (
@@ -7559,26 +7269,8 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
             );
             const holdId = newHoldId();
             const secretHashPair = newSecretHashPair();
-            const certificate = await craftCertificate(
-              extension.interface.encodeFunctionData('holdFrom', [
-                token.address,
-                holdId,
-                tokenHolder,
-                recipient,
-                notary,
-                partition1,
-                holdAmount,
-                SECONDS_IN_AN_HOUR,
-                secretHashPair.hash,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
             await extension
-              .connect(await ethers.getSigner(controller))
+              .connect(controllerSigner)
               .holdFrom(
                 token.address,
                 holdId,
@@ -7589,7 +7281,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                 holdAmount,
                 SECONDS_IN_AN_HOUR,
                 secretHashPair.hash,
-                certificate
+                ZERO_BYTE
               );
             assert.equal(
               (
@@ -7603,23 +7295,13 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
             );
           });
         });
-        describe('when certificate is not valid', function () {
-          it('creates a hold', async function () {
-            assert.equal(
-              (
-                await extension.balanceOnHoldByPartition(
-                  token.address,
-                  partition1,
-                  tokenHolder
-                )
-              ).toNumber(),
-              0
-            );
+        describe('when hold is not created by a token controller', function () {
+          it('reverts', async function () {
             const holdId = newHoldId();
             const secretHashPair = newSecretHashPair();
             await expectRevert.unspecified(
               extension
-                .connect(await ethers.getSigner(controller))
+                .connect(recipientSigner)
                 .holdFrom(
                   token.address,
                   holdId,
@@ -7636,69 +7318,229 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
           });
         });
       });
-    });
-
-    // HOLD FROM WITH EXPIRATION DATE
-    describe('holdFromWithExpirationDate', function () {
-      beforeEach(async function () {
-        await assertHoldsActivated(extension, token, true);
-
-        const certificate = await craftCertificate(
-          token.interface.encodeFunctionData('issueByPartition', [
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            ZERO_BYTE
-          ]),
-          token,
-          extension,
-          clock, // clock
-          controller
-        );
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
-          );
-      });
-
-      describe('when certificate is not activated', function () {
-        beforeEach(async function () {
-          await setCertificateActivated(
-            extension,
-            token,
-            controller,
-            CERTIFICATE_VALIDATION_NONE
-          );
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_NONE
+      describe('when hold sender is the zero address', function () {
+        it('reverts', async function () {
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await expectRevert.unspecified(
+            extension
+              .connect(controllerSigner)
+              .holdFrom(
+                token.address,
+                holdId,
+                ZERO_ADDRESS,
+                recipient,
+                notary,
+                partition1,
+                holdAmount,
+                SECONDS_IN_AN_HOUR,
+                secretHashPair.hash,
+                ZERO_BYTE
+              )
           );
         });
-        describe('when expiration date is valid', function () {
-          describe('when expiration date is in the future', function () {
-            describe('when hold sender is not the zero address', function () {
-              describe('when hold is created by a token controller', function () {
-                it('creates a hold', async function () {
-                  assert.equal(
-                    (
-                      await extension.balanceOnHoldByPartition(
-                        token.address,
-                        partition1,
-                        tokenHolder
-                      )
-                    ).toNumber(),
-                    0
-                  );
-                  const time = (await clock.getTime()).toNumber();
-                  const holdId = newHoldId();
-                  const secretHashPair = newSecretHashPair();
-                  const { events } = await extension
-                    .connect(await ethers.getSigner(controller))
+      });
+    });
+    describe('when certificate is activated', function () {
+      beforeEach(async function () {
+        await assertCertificateActivated(
+          extension,
+          token,
+          CERTIFICATE_VALIDATION_SALT
+        );
+      });
+      describe('when certificate is valid', function () {
+        it('creates a hold', async function () {
+          assert.equal(
+            (
+              await extension.balanceOnHoldByPartition(
+                token.address,
+                partition1,
+                tokenHolder
+              )
+            ).toNumber(),
+            0
+          );
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          const certificate = await craftCertificate(
+            extension.interface.encodeFunctionData('holdFrom', [
+              token.address,
+              holdId,
+              tokenHolder,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          await extension
+            .connect(controllerSigner)
+            .holdFrom(
+              token.address,
+              holdId,
+              tokenHolder,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              certificate
+            );
+          assert.equal(
+            (
+              await extension.balanceOnHoldByPartition(
+                token.address,
+                partition1,
+                tokenHolder
+              )
+            ).toNumber(),
+            holdAmount
+          );
+        });
+      });
+      describe('when certificate is not valid', function () {
+        it('creates a hold', async function () {
+          assert.equal(
+            (
+              await extension.balanceOnHoldByPartition(
+                token.address,
+                partition1,
+                tokenHolder
+              )
+            ).toNumber(),
+            0
+          );
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await expectRevert.unspecified(
+            extension
+              .connect(controllerSigner)
+              .holdFrom(
+                token.address,
+                holdId,
+                tokenHolder,
+                recipient,
+                notary,
+                partition1,
+                holdAmount,
+                SECONDS_IN_AN_HOUR,
+                secretHashPair.hash,
+                ZERO_BYTE
+              )
+          );
+        });
+      });
+    });
+  });
+
+  // HOLD FROM WITH EXPIRATION DATE
+  describe('holdFromWithExpirationDate', function () {
+    beforeEach(async function () {
+      await assertHoldsActivated(extension, token, true);
+
+      const certificate = await craftCertificate(
+        token.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        controller
+      );
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+    });
+
+    describe('when certificate is not activated', function () {
+      beforeEach(async function () {
+        await setCertificateActivated(
+          extension,
+          token,
+          controller,
+          CERTIFICATE_VALIDATION_NONE
+        );
+        await assertCertificateActivated(
+          extension,
+          token,
+          CERTIFICATE_VALIDATION_NONE
+        );
+      });
+      describe('when expiration date is valid', function () {
+        describe('when expiration date is in the future', function () {
+          describe('when hold sender is not the zero address', function () {
+            describe('when hold is created by a token controller', function () {
+              it('creates a hold', async function () {
+                assert.equal(
+                  (
+                    await extension.balanceOnHoldByPartition(
+                      token.address,
+                      partition1,
+                      tokenHolder
+                    )
+                  ).toNumber(),
+                  0
+                );
+                const time = (await clock.getTime()).toNumber();
+                const holdId = newHoldId();
+                const secretHashPair = newSecretHashPair();
+                const { events } = await extension
+                  .connect(controllerSigner)
+                  .holdFromWithExpirationDate(
+                    token.address,
+                    holdId,
+                    tokenHolder,
+                    recipient,
+                    notary,
+                    partition1,
+                    holdAmount,
+                    time + SECONDS_IN_AN_HOUR,
+                    secretHashPair.hash,
+                    ZERO_BYTE
+                  )
+                  .then((res) => res.wait());
+                assert.equal(
+                  (
+                    await extension.balanceOnHoldByPartition(
+                      token.address,
+                      partition1,
+                      tokenHolder
+                    )
+                  ).toNumber(),
+                  holdAmount
+                );
+
+                assert.equal(
+                  events![0].args?.expiration.toNumber(),
+                  time + SECONDS_IN_AN_HOUR
+                );
+                const holdData = await extension.retrieveHoldData(
+                  token.address,
+                  holdId
+                );
+                assert.equal(holdData[5].toNumber(), time + SECONDS_IN_AN_HOUR);
+              });
+            });
+            describe('when hold is not created by a token controller', function () {
+              it('reverts', async function () {
+                const time = (await clock.getTime()).toNumber();
+                const holdId = newHoldId();
+                const secretHashPair = newSecretHashPair();
+                await expectRevert.unspecified(
+                  extension
+                    .connect(recipientSigner)
                     .holdFromWithExpirationDate(
                       token.address,
                       holdId,
@@ -7711,163 +7553,35 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                       secretHashPair.hash,
                       ZERO_BYTE
                     )
-                    .then((res) => res.wait());
-                  assert.equal(
-                    (
-                      await extension.balanceOnHoldByPartition(
-                        token.address,
-                        partition1,
-                        tokenHolder
-                      )
-                    ).toNumber(),
-                    holdAmount
-                  );
-
-                  assert.equal(
-                    events![0].args?.expiration.toNumber(),
-                    time + SECONDS_IN_AN_HOUR
-                  );
-                  const holdData = await extension.retrieveHoldData(
-                    token.address,
-                    holdId
-                  );
-                  assert.equal(
-                    holdData[5].toNumber(),
-                    time + SECONDS_IN_AN_HOUR
-                  );
-                });
-              });
-              describe('when hold is not created by a token controller', function () {
-                it('reverts', async function () {
-                  const time = (await clock.getTime()).toNumber();
-                  const holdId = newHoldId();
-                  const secretHashPair = newSecretHashPair();
-                  await expectRevert.unspecified(
-                    extension
-                      .connect(await ethers.getSigner(recipient))
-                      .holdFromWithExpirationDate(
-                        token.address,
-                        holdId,
-                        tokenHolder,
-                        recipient,
-                        notary,
-                        partition1,
-                        holdAmount,
-                        time + SECONDS_IN_AN_HOUR,
-                        secretHashPair.hash,
-                        ZERO_BYTE
-                      )
-                  );
-                });
-              });
-            });
-            describe('when hold sender is the zero address', function () {
-              it('reverts', async function () {
-                const time = (await clock.getTime()).toNumber();
-                const holdId = newHoldId();
-                const secretHashPair = newSecretHashPair();
-                await expectRevert.unspecified(
-                  extension
-                    .connect(await ethers.getSigner(controller))
-                    .holdFromWithExpirationDate(
-                      token.address,
-                      holdId,
-                      ZERO_ADDRESS,
-                      recipient,
-                      notary,
-                      partition1,
-                      holdAmount,
-                      time + SECONDS_IN_AN_HOUR,
-                      secretHashPair.hash,
-                      ZERO_BYTE
-                    )
                 );
               });
             });
           });
-          describe('when there is no expiration date', function () {
-            it('creates a hold', async function () {
-              assert.equal(
-                (
-                  await extension.balanceOnHoldByPartition(
-                    token.address,
-                    partition1,
-                    tokenHolder
-                  )
-                ).toNumber(),
-                0
-              );
-              // const time = (await clock.getTime()).toNumber();
+          describe('when hold sender is the zero address', function () {
+            it('reverts', async function () {
+              const time = (await clock.getTime()).toNumber();
               const holdId = newHoldId();
               const secretHashPair = newSecretHashPair();
-              const { events } = await extension
-                .connect(await ethers.getSigner(controller))
-                .holdFromWithExpirationDate(
-                  token.address,
-                  holdId,
-                  tokenHolder,
-                  recipient,
-                  notary,
-                  partition1,
-                  holdAmount,
-                  0,
-                  secretHashPair.hash,
-                  ZERO_BYTE
-                )
-                .then((res) => res.wait());
-              assert.equal(
-                (
-                  await extension.balanceOnHoldByPartition(
+              await expectRevert.unspecified(
+                extension
+                  .connect(controllerSigner)
+                  .holdFromWithExpirationDate(
                     token.address,
+                    holdId,
+                    ZERO_ADDRESS,
+                    recipient,
+                    notary,
                     partition1,
-                    tokenHolder
+                    holdAmount,
+                    time + SECONDS_IN_AN_HOUR,
+                    secretHashPair.hash,
+                    ZERO_BYTE
                   )
-                ).toNumber(),
-                holdAmount
               );
-
-              assert.equal(events![0].args?.expiration.toNumber(), 0);
-              const holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.equal(holdData[5].toNumber(), 0);
             });
           });
         });
-        describe('when expiration date is not valid', function () {
-          it('reverts', async function () {
-            const time = (await clock.getTime()).toNumber();
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            await expectRevert.unspecified(
-              extension
-                .connect(await ethers.getSigner(controller))
-                .holdFromWithExpirationDate(
-                  token.address,
-                  holdId,
-                  tokenHolder,
-                  recipient,
-                  notary,
-                  partition1,
-                  holdAmount,
-                  time - 1,
-                  secretHashPair.hash,
-                  ZERO_BYTE
-                )
-            );
-          });
-        });
-      });
-      describe('when certificate is activated', function () {
-        beforeEach(async function () {
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_SALT
-          );
-        });
-        describe('when certificate is valid', function () {
+        describe('when there is no expiration date', function () {
           it('creates a hold', async function () {
             assert.equal(
               (
@@ -7879,32 +7593,11 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
               ).toNumber(),
               0
             );
-            const time = (await clock.getTime()).toNumber();
+            // const time = (await clock.getTime()).toNumber();
             const holdId = newHoldId();
             const secretHashPair = newSecretHashPair();
-            const certificate = await craftCertificate(
-              extension.interface.encodeFunctionData(
-                'holdFromWithExpirationDate',
-                [
-                  token.address,
-                  holdId,
-                  tokenHolder,
-                  recipient,
-                  notary,
-                  partition1,
-                  holdAmount,
-                  time + SECONDS_IN_AN_HOUR,
-                  secretHashPair.hash,
-                  ZERO_BYTE
-                ]
-              ),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
             const { events } = await extension
-              .connect(await ethers.getSigner(controller))
+              .connect(controllerSigner)
               .holdFromWithExpirationDate(
                 token.address,
                 holdId,
@@ -7913,9 +7606,9 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                 notary,
                 partition1,
                 holdAmount,
-                time + SECONDS_IN_AN_HOUR,
+                0,
                 secretHashPair.hash,
-                certificate
+                ZERO_BYTE
               )
               .then((res) => res.wait());
             assert.equal(
@@ -7929,643 +7622,579 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
               holdAmount
             );
 
-            assert.equal(
-              events![0].args?.expiration.toNumber(),
-              time + SECONDS_IN_AN_HOUR
-            );
+            assert.equal(events![0].args?.expiration.toNumber(), 0);
             const holdData = await extension.retrieveHoldData(
               token.address,
               holdId
             );
-            assert.equal(holdData[5].toNumber(), time + SECONDS_IN_AN_HOUR);
+            assert.equal(holdData[5].toNumber(), 0);
           });
         });
-        describe('when certificate is not valid', function () {
-          it('reverts', async function () {
-            assert.equal(
-              (
-                await extension.balanceOnHoldByPartition(
-                  token.address,
-                  partition1,
-                  tokenHolder
-                )
-              ).toNumber(),
-              0
-            );
-            const time = (await clock.getTime()).toNumber();
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            await expectRevert.unspecified(
-              extension
-                .connect(await ethers.getSigner(controller))
-                .holdFromWithExpirationDate(
-                  token.address,
-                  holdId,
-                  tokenHolder,
-                  recipient,
-                  notary,
-                  partition1,
-                  holdAmount,
-                  time + SECONDS_IN_AN_HOUR,
-                  secretHashPair.hash,
-                  ZERO_BYTE
-                )
-            );
-          });
+      });
+      describe('when expiration date is not valid', function () {
+        it('reverts', async function () {
+          const time = (await clock.getTime()).toNumber();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await expectRevert.unspecified(
+            extension
+              .connect(controllerSigner)
+              .holdFromWithExpirationDate(
+                token.address,
+                holdId,
+                tokenHolder,
+                recipient,
+                notary,
+                partition1,
+                holdAmount,
+                time - 1,
+                secretHashPair.hash,
+                ZERO_BYTE
+              )
+          );
         });
       });
     });
-
-    // RELEASE HOLD
-    describe('releaseHold', function () {
-      let holdId: string;
-      let time: BigNumber;
-      let secretHashPair: { hash: string; secret: string };
+    describe('when certificate is activated', function () {
       beforeEach(async function () {
-        await assertHoldsActivated(extension, token, true);
-
-        const certificate = await craftCertificate(
-          token.interface.encodeFunctionData('issueByPartition', [
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            ZERO_BYTE
-          ]),
-          token,
+        await assertCertificateActivated(
           extension,
-          clock, // clock
-          controller
-        );
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
-          );
-
-        // Create hold in state Ordered
-        time = await clock.getTime();
-        holdId = newHoldId();
-        secretHashPair = newSecretHashPair();
-        const certificate2 = await craftCertificate(
-          extension.interface.encodeFunctionData('hold', [
-            token.address,
-            holdId,
-            recipient,
-            notary,
-            partition1,
-            holdAmount,
-            SECONDS_IN_AN_HOUR,
-            secretHashPair.hash,
-            ZERO_BYTE
-          ]),
           token,
-          extension,
-          clock, // clock
-          tokenHolder
+          CERTIFICATE_VALIDATION_SALT
         );
-        await extension
-          .connect(await ethers.getSigner(tokenHolder))
-          .hold(
-            token.address,
-            holdId,
-            recipient,
-            notary,
-            partition1,
-            holdAmount,
-            SECONDS_IN_AN_HOUR,
-            secretHashPair.hash,
-            certificate2
-          );
       });
-
-      describe('when hold is in status Ordered', function () {
-        describe('when hold can be released', function () {
-          describe('when hold expiration date is past', function () {
-            it('releases the hold', async function () {
-              const initialBalance = await token.balanceOf(tokenHolder);
-              const initialPartitionBalance = await token.balanceOfByPartition(
+      describe('when certificate is valid', function () {
+        it('creates a hold', async function () {
+          assert.equal(
+            (
+              await extension.balanceOnHoldByPartition(
+                token.address,
                 partition1,
                 tokenHolder
-              );
-
-              const initialBalanceOnHold = await extension.balanceOnHold(
-                token.address,
-                tokenHolder
-              );
-              const initialBalanceOnHoldByPartition =
-                await extension.balanceOnHoldByPartition(
-                  token.address,
-                  partition1,
-                  tokenHolder
-                );
-
-              const initialSpendableBalance =
-                await extension.spendableBalanceOf(token.address, tokenHolder);
-              const initialSpendableBalanceByPartition =
-                await extension.spendableBalanceOfByPartition(
-                  token.address,
-                  partition1,
-                  tokenHolder
-                );
-
-              const initialTotalSupplyOnHold =
-                await extension.totalSupplyOnHold(token.address);
-              const initialTotalSupplyOnHoldByPartition =
-                await extension.totalSupplyOnHoldByPartition(
-                  token.address,
-                  partition1
-                );
-
-              // Wait for 1 hour
-              await advanceTimeAndBlock(SECONDS_IN_AN_HOUR + 100);
-              await extension
-                .connect(await ethers.getSigner(tokenHolder))
-                .releaseHold(token.address, holdId);
-
-              const finalBalance = await token.balanceOf(tokenHolder);
-              const finalPartitionBalance = await token.balanceOfByPartition(
-                partition1,
-                tokenHolder
-              );
-
-              const finalBalanceOnHold = await extension.balanceOnHold(
-                token.address,
-                tokenHolder
-              );
-              const finalBalanceOnHoldByPartition =
-                await extension.balanceOnHoldByPartition(
-                  token.address,
-                  partition1,
-                  tokenHolder
-                );
-
-              const finalSpendableBalance = await extension.spendableBalanceOf(
-                token.address,
-                tokenHolder
-              );
-              const finalSpendableBalanceByPartition =
-                await extension.spendableBalanceOfByPartition(
-                  token.address,
-                  partition1,
-                  tokenHolder
-                );
-
-              const finalTotalSupplyOnHold = await extension.totalSupplyOnHold(
-                token.address
-              );
-              const finalTotalSupplyOnHoldByPartition =
-                await extension.totalSupplyOnHoldByPartition(
-                  token.address,
-                  partition1
-                );
-
-              assert.equal(initialBalance.toNumber(), issuanceAmount);
-              assert.equal(finalBalance.toNumber(), issuanceAmount);
-              assert.equal(initialPartitionBalance.toNumber(), issuanceAmount);
-              assert.equal(finalPartitionBalance.toNumber(), issuanceAmount);
-
-              assert.equal(initialBalanceOnHold.toNumber(), holdAmount);
-              assert.equal(
-                initialBalanceOnHoldByPartition.toNumber(),
-                holdAmount
-              );
-              assert.equal(finalBalanceOnHold.toNumber(), 0);
-              assert.equal(finalBalanceOnHoldByPartition.toNumber(), 0);
-
-              assert.equal(
-                initialSpendableBalance.toNumber(),
-                issuanceAmount - holdAmount
-              );
-              assert.equal(
-                initialSpendableBalanceByPartition.toNumber(),
-                issuanceAmount - holdAmount
-              );
-              assert.equal(finalSpendableBalance.toNumber(), issuanceAmount);
-              assert.equal(
-                finalSpendableBalanceByPartition.toNumber(),
-                issuanceAmount
-              );
-
-              assert.equal(initialTotalSupplyOnHold.toNumber(), holdAmount);
-              assert.equal(
-                initialTotalSupplyOnHoldByPartition.toNumber(),
-                holdAmount
-              );
-              assert.equal(finalTotalSupplyOnHold.toNumber(), 0);
-              assert.equal(finalTotalSupplyOnHoldByPartition.toNumber(), 0);
-
-              const holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.equal(holdData[0], partition1);
-              assert.equal(holdData[1], tokenHolder);
-              assert.equal(holdData[2], recipient);
-              assert.equal(holdData[3], notary);
-              assert.equal(holdData[4].toNumber(), holdAmount);
-              assert.isAtLeast(
-                holdData[5].toNumber(),
-                time.toNumber() + SECONDS_IN_AN_HOUR
-              );
-              assert.isBelow(
-                holdData[5].toNumber(),
-                time.toNumber() + SECONDS_IN_AN_HOUR + 100
-              );
-              assert.equal(holdData[6], secretHashPair.hash);
-              assert.equal(holdData[7], EMPTY_BYTE32);
-              assert.equal(holdData[8], HOLD_STATUS_RELEASED_ON_EXPIRATION);
-            });
-            it('emits an event', async function () {
-              // Wait for 1 hour
-              await advanceTimeAndBlock(SECONDS_IN_AN_HOUR + 100);
-              const { events } = await extension
-                .connect(await ethers.getSigner(tokenHolder))
-                .releaseHold(token.address, holdId)
-                .then((res) => res.wait());
-
-              assert.equal(events![0].event, 'HoldReleased');
-              assert.equal(events![0].args?.token, token.address);
-              assert.equal(events![0].args?.holdId, holdId);
-              assert.equal(events![0].args?.notary, notary);
-              assert.equal(
-                events![0].args?.status,
-                HOLD_STATUS_RELEASED_ON_EXPIRATION
-              );
-            });
-          });
-          describe('when hold is released by the notary', function () {
-            it('releases the hold', async function () {
-              const initialSpendableBalance = (
-                await extension.spendableBalanceOf(token.address, tokenHolder)
-              ).toNumber();
-              assert.equal(
-                initialSpendableBalance,
-                issuanceAmount - holdAmount
-              );
-
-              const { events } = await extension
-                .connect(await ethers.getSigner(notary))
-                .releaseHold(token.address, holdId)
-                .then((res) => res.wait());
-
-              const finalSpendableBalance = (
-                await extension.spendableBalanceOf(token.address, tokenHolder)
-              ).toNumber();
-              assert.equal(finalSpendableBalance, issuanceAmount);
-
-              const holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
-              assert.equal(
-                events![0].args?.status,
-                HOLD_STATUS_RELEASED_BY_NOTARY
-              );
-            });
-          });
-          describe('when hold is released by the recipient', function () {
-            it('releases the hold', async function () {
-              const initialSpendableBalance = (
-                await extension.spendableBalanceOf(token.address, tokenHolder)
-              ).toNumber();
-              assert.equal(
-                initialSpendableBalance,
-                issuanceAmount - holdAmount
-              );
-
-              const { events } = await extension
-                .connect(await ethers.getSigner(recipient))
-                .releaseHold(token.address, holdId)
-                .then((res) => res.wait());
-
-              const finalSpendableBalance = (
-                await extension.spendableBalanceOf(token.address, tokenHolder)
-              ).toNumber();
-              assert.equal(finalSpendableBalance, issuanceAmount);
-
-              const holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_PAYEE);
-              assert.equal(
-                events![0].args?.status,
-                HOLD_STATUS_RELEASED_BY_PAYEE
-              );
-            });
-          });
-        });
-        describe('when hold can not be released', function () {
-          describe('when hold is released by the hold sender', function () {
-            it('reverts', async function () {
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(tokenHolder))
-                  .releaseHold(token.address, holdId)
-              );
-            });
-          });
-        });
-      });
-      describe('when hold is in status ExecutedAndKeptOpen', function () {
-        it('releases the hold', async function () {
-          const initialSpendableBalance = (
-            await extension.spendableBalanceOf(token.address, tokenHolder)
-          ).toNumber();
-          assert.equal(initialSpendableBalance, issuanceAmount - holdAmount);
-
-          let holdData = await extension.retrieveHoldData(
-            token.address,
-            holdId
+              )
+            ).toNumber(),
+            0
           );
-          assert.equal(holdData[8], HOLD_STATUS_ORDERED);
-
-          const executedAmount = 10;
-          await extension
-            .connect(await ethers.getSigner(notary))
-            .executeHoldAndKeepOpen(
+          const time = (await clock.getTime()).toNumber();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          const certificate = await craftCertificate(
+            extension.interface.encodeFunctionData(
+              'holdFromWithExpirationDate',
+              [
+                token.address,
+                holdId,
+                tokenHolder,
+                recipient,
+                notary,
+                partition1,
+                holdAmount,
+                time + SECONDS_IN_AN_HOUR,
+                secretHashPair.hash,
+                ZERO_BYTE
+              ]
+            ),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          const { events } = await extension
+            .connect(controllerSigner)
+            .holdFromWithExpirationDate(
               token.address,
               holdId,
-              executedAmount,
-              EMPTY_BYTE32
-            );
-
-          holdData = await extension.retrieveHoldData(token.address, holdId);
-          assert.equal(holdData[8], HOLD_STATUS_EXECUTED_AND_KEPT_OPEN);
-
-          const { events } = await extension
-            .connect(await ethers.getSigner(notary))
-            .releaseHold(token.address, holdId)
+              tokenHolder,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              time + SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              certificate
+            )
             .then((res) => res.wait());
+          assert.equal(
+            (
+              await extension.balanceOnHoldByPartition(
+                token.address,
+                partition1,
+                tokenHolder
+              )
+            ).toNumber(),
+            holdAmount
+          );
 
-          const finalSpendableBalance = (
-            await extension.spendableBalanceOf(token.address, tokenHolder)
-          ).toNumber();
-          assert.equal(finalSpendableBalance, issuanceAmount - executedAmount);
-
-          holdData = await extension.retrieveHoldData(token.address, holdId);
-          assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
-          assert.equal(events![0].args?.status, HOLD_STATUS_RELEASED_BY_NOTARY);
-        });
-      });
-      describe('when hold is neither in status Ordered, nor ExecutedAndKeptOpen', function () {
-        it('reverts', async function () {
-          await extension
-            .connect(await ethers.getSigner(notary))
-            .releaseHold(token.address, holdId);
-
+          assert.equal(
+            events![0].args?.expiration.toNumber(),
+            time + SECONDS_IN_AN_HOUR
+          );
           const holdData = await extension.retrieveHoldData(
             token.address,
             holdId
           );
-          assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
-
+          assert.equal(holdData[5].toNumber(), time + SECONDS_IN_AN_HOUR);
+        });
+      });
+      describe('when certificate is not valid', function () {
+        it('reverts', async function () {
+          assert.equal(
+            (
+              await extension.balanceOnHoldByPartition(
+                token.address,
+                partition1,
+                tokenHolder
+              )
+            ).toNumber(),
+            0
+          );
+          const time = (await clock.getTime()).toNumber();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
           await expectRevert.unspecified(
             extension
-              .connect(await ethers.getSigner(notary))
-              .releaseHold(token.address, holdId)
+              .connect(controllerSigner)
+              .holdFromWithExpirationDate(
+                token.address,
+                holdId,
+                tokenHolder,
+                recipient,
+                notary,
+                partition1,
+                holdAmount,
+                time + SECONDS_IN_AN_HOUR,
+                secretHashPair.hash,
+                ZERO_BYTE
+              )
           );
         });
       });
     });
+  });
 
-    // RENEW HOLD
-    describe('renewHold', function () {
-      let holdId: string;
-      let time: BigNumber;
-      beforeEach(async function () {
-        await assertHoldsActivated(extension, token, true);
+  // RELEASE HOLD
+  describe('releaseHold', function () {
+    let holdId: string;
+    let time: BigNumber;
+    let secretHashPair: { hash: string; secret: string };
+    beforeEach(async function () {
+      await assertHoldsActivated(extension, token, true);
 
-        const certificate = await craftCertificate(
-          token.interface.encodeFunctionData('issueByPartition', [
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            ZERO_BYTE
-          ]),
-          token,
-          extension,
-          clock, // clock
-          controller
+      const certificate = await craftCertificate(
+        token.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        controller
+      );
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+
+      // Create hold in state Ordered
+      time = await clock.getTime();
+      holdId = newHoldId();
+      secretHashPair = newSecretHashPair();
+      const certificate2 = await craftCertificate(
+        extension.interface.encodeFunctionData('hold', [
+          token.address,
+          holdId,
+          recipient,
+          notary,
+          partition1,
+          holdAmount,
+          SECONDS_IN_AN_HOUR,
+          secretHashPair.hash,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        tokenHolder
+      );
+      await extension
+        .connect(tokenHolderSigner)
+        .hold(
+          token.address,
+          holdId,
+          recipient,
+          notary,
+          partition1,
+          holdAmount,
+          SECONDS_IN_AN_HOUR,
+          secretHashPair.hash,
+          certificate2
         );
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
-          );
+    });
 
-        // Create hold in state Ordered
-        time = await clock.getTime();
-        holdId = newHoldId();
-        const secretHashPair = newSecretHashPair();
-        const certificate2 = await craftCertificate(
-          extension.interface.encodeFunctionData('hold', [
-            token.address,
-            holdId,
-            recipient,
-            notary,
-            partition1,
-            holdAmount,
-            SECONDS_IN_AN_HOUR,
-            secretHashPair.hash,
-            ZERO_BYTE
-          ]),
-          token,
-          extension,
-          clock, // clock
-          tokenHolder
-        );
-        await extension
-          .connect(await ethers.getSigner(tokenHolder))
-          .hold(
-            token.address,
-            holdId,
-            recipient,
-            notary,
-            partition1,
-            holdAmount,
-            SECONDS_IN_AN_HOUR,
-            secretHashPair.hash,
-            certificate2
-          );
-      });
+    describe('when hold is in status Ordered', function () {
+      describe('when hold can be released', function () {
+        describe('when hold expiration date is past', function () {
+          it('releases the hold', async function () {
+            const initialBalance = await token.balanceOf(tokenHolder);
+            const initialPartitionBalance = await token.balanceOfByPartition(
+              partition1,
+              tokenHolder
+            );
 
-      describe('when certificate is not activated', function () {
-        beforeEach(async function () {
-          await setCertificateActivated(
-            extension,
-            token,
-            controller,
-            CERTIFICATE_VALIDATION_NONE
-          );
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_NONE
-          );
+            const initialBalanceOnHold = await extension.balanceOnHold(
+              token.address,
+              tokenHolder
+            );
+            const initialBalanceOnHoldByPartition =
+              await extension.balanceOnHoldByPartition(
+                token.address,
+                partition1,
+                tokenHolder
+              );
+
+            const initialSpendableBalance = await extension.spendableBalanceOf(
+              token.address,
+              tokenHolder
+            );
+            const initialSpendableBalanceByPartition =
+              await extension.spendableBalanceOfByPartition(
+                token.address,
+                partition1,
+                tokenHolder
+              );
+
+            const initialTotalSupplyOnHold = await extension.totalSupplyOnHold(
+              token.address
+            );
+            const initialTotalSupplyOnHoldByPartition =
+              await extension.totalSupplyOnHoldByPartition(
+                token.address,
+                partition1
+              );
+
+            // Wait for 1 hour
+            await advanceTimeAndBlock(SECONDS_IN_AN_HOUR + 100);
+            await extension
+              .connect(tokenHolderSigner)
+              .releaseHold(token.address, holdId);
+
+            const finalBalance = await token.balanceOf(tokenHolder);
+            const finalPartitionBalance = await token.balanceOfByPartition(
+              partition1,
+              tokenHolder
+            );
+
+            const finalBalanceOnHold = await extension.balanceOnHold(
+              token.address,
+              tokenHolder
+            );
+            const finalBalanceOnHoldByPartition =
+              await extension.balanceOnHoldByPartition(
+                token.address,
+                partition1,
+                tokenHolder
+              );
+
+            const finalSpendableBalance = await extension.spendableBalanceOf(
+              token.address,
+              tokenHolder
+            );
+            const finalSpendableBalanceByPartition =
+              await extension.spendableBalanceOfByPartition(
+                token.address,
+                partition1,
+                tokenHolder
+              );
+
+            const finalTotalSupplyOnHold = await extension.totalSupplyOnHold(
+              token.address
+            );
+            const finalTotalSupplyOnHoldByPartition =
+              await extension.totalSupplyOnHoldByPartition(
+                token.address,
+                partition1
+              );
+
+            assert.equal(initialBalance.toNumber(), issuanceAmount);
+            assert.equal(finalBalance.toNumber(), issuanceAmount);
+            assert.equal(initialPartitionBalance.toNumber(), issuanceAmount);
+            assert.equal(finalPartitionBalance.toNumber(), issuanceAmount);
+
+            assert.equal(initialBalanceOnHold.toNumber(), holdAmount);
+            assert.equal(
+              initialBalanceOnHoldByPartition.toNumber(),
+              holdAmount
+            );
+            assert.equal(finalBalanceOnHold.toNumber(), 0);
+            assert.equal(finalBalanceOnHoldByPartition.toNumber(), 0);
+
+            assert.equal(
+              initialSpendableBalance.toNumber(),
+              issuanceAmount - holdAmount
+            );
+            assert.equal(
+              initialSpendableBalanceByPartition.toNumber(),
+              issuanceAmount - holdAmount
+            );
+            assert.equal(finalSpendableBalance.toNumber(), issuanceAmount);
+            assert.equal(
+              finalSpendableBalanceByPartition.toNumber(),
+              issuanceAmount
+            );
+
+            assert.equal(initialTotalSupplyOnHold.toNumber(), holdAmount);
+            assert.equal(
+              initialTotalSupplyOnHoldByPartition.toNumber(),
+              holdAmount
+            );
+            assert.equal(finalTotalSupplyOnHold.toNumber(), 0);
+            assert.equal(finalTotalSupplyOnHoldByPartition.toNumber(), 0);
+
+            const holdData = await extension.retrieveHoldData(
+              token.address,
+              holdId
+            );
+            assert.equal(holdData[0], partition1);
+            assert.equal(holdData[1], tokenHolder);
+            assert.equal(holdData[2], recipient);
+            assert.equal(holdData[3], notary);
+            assert.equal(holdData[4].toNumber(), holdAmount);
+            assert.isAtLeast(
+              holdData[5].toNumber(),
+              time.toNumber() + SECONDS_IN_AN_HOUR
+            );
+            assert.isBelow(
+              holdData[5].toNumber(),
+              time.toNumber() + SECONDS_IN_AN_HOUR + 100
+            );
+            assert.equal(holdData[6], secretHashPair.hash);
+            assert.equal(holdData[7], EMPTY_BYTE32);
+            assert.equal(holdData[8], HOLD_STATUS_RELEASED_ON_EXPIRATION);
+          });
+          it('emits an event', async function () {
+            // Wait for 1 hour
+            await advanceTimeAndBlock(SECONDS_IN_AN_HOUR + 100);
+            const { events } = await extension
+              .connect(tokenHolderSigner)
+              .releaseHold(token.address, holdId)
+              .then((res) => res.wait());
+
+            assert.equal(events![0].event, 'HoldReleased');
+            assert.equal(events![0].args?.token, token.address);
+            assert.equal(events![0].args?.holdId, holdId);
+            assert.equal(events![0].args?.notary, notary);
+            assert.equal(
+              events![0].args?.status,
+              HOLD_STATUS_RELEASED_ON_EXPIRATION
+            );
+          });
         });
-        describe('when hold can be renewed', function () {
-          describe('when hold is in status Ordered', function () {
-            describe('when hold is not expired', function () {
-              describe('when hold is renewed by the sender', function () {
-                it('renews the hold (expiration date future)', async function () {
-                  let holdData = await extension.retrieveHoldData(
-                    token.address,
-                    holdId
-                  );
-                  assert.isAtLeast(
-                    holdData[5].toNumber(),
-                    time.toNumber() + SECONDS_IN_AN_HOUR - 2
-                  );
-                  assert.isBelow(
-                    holdData[5].toNumber(),
-                    time.toNumber() + SECONDS_IN_AN_HOUR + 100
-                  );
+        describe('when hold is released by the notary', function () {
+          it('releases the hold', async function () {
+            const initialSpendableBalance = (
+              await extension.spendableBalanceOf(token.address, tokenHolder)
+            ).toNumber();
+            assert.equal(initialSpendableBalance, issuanceAmount - holdAmount);
 
-                  time = await clock.getTime();
-                  await extension
-                    .connect(await ethers.getSigner(tokenHolder))
-                    .renewHold(
-                      token.address,
-                      holdId,
-                      SECONDS_IN_A_DAY,
-                      ZERO_BYTE
-                    );
-                  holdData = await extension.retrieveHoldData(
-                    token.address,
-                    holdId
-                  );
-                  assert.isAtLeast(
-                    holdData[5].toNumber(),
-                    time.toNumber() + SECONDS_IN_A_DAY - 2
-                  );
-                  assert.isBelow(
-                    holdData[5].toNumber(),
-                    time.toNumber() + SECONDS_IN_A_DAY + 100
-                  );
-                });
-                it('renews the hold (expiration date now)', async function () {
-                  let holdData = await extension.retrieveHoldData(
-                    token.address,
-                    holdId
-                  );
-                  assert.isAtLeast(
-                    holdData[5].toNumber(),
-                    time.toNumber() + SECONDS_IN_AN_HOUR - 2
-                  );
-                  assert.isBelow(
-                    holdData[5].toNumber(),
-                    time.toNumber() + SECONDS_IN_AN_HOUR + 100
-                  );
+            const { events } = await extension
+              .connect(notarySigner)
+              .releaseHold(token.address, holdId)
+              .then((res) => res.wait());
 
-                  time = await clock.getTime();
-                  await extension
-                    .connect(await ethers.getSigner(tokenHolder))
-                    .renewHold(token.address, holdId, 0, ZERO_BYTE);
+            const finalSpendableBalance = (
+              await extension.spendableBalanceOf(token.address, tokenHolder)
+            ).toNumber();
+            assert.equal(finalSpendableBalance, issuanceAmount);
 
-                  holdData = await extension.retrieveHoldData(
-                    token.address,
-                    holdId
-                  );
-                  assert.equal(holdData[5].toNumber(), 0);
-                });
-                it('emits an event', async function () {
-                  const { events } = await extension
-                    .connect(await ethers.getSigner(tokenHolder))
-                    .renewHold(
-                      token.address,
-                      holdId,
-                      SECONDS_IN_A_DAY,
-                      ZERO_BYTE
-                    )
-                    .then((res) => res.wait());
+            const holdData = await extension.retrieveHoldData(
+              token.address,
+              holdId
+            );
+            assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
+            assert.equal(
+              events![0].args?.status,
+              HOLD_STATUS_RELEASED_BY_NOTARY
+            );
+          });
+        });
+        describe('when hold is released by the recipient', function () {
+          it('releases the hold', async function () {
+            const initialSpendableBalance = (
+              await extension.spendableBalanceOf(token.address, tokenHolder)
+            ).toNumber();
+            assert.equal(initialSpendableBalance, issuanceAmount - holdAmount);
 
-                  assert.equal(events![0].event, 'HoldRenewed');
-                  assert.equal(events![0].args?.token, token.address);
-                  assert.equal(events![0].args?.holdId, holdId);
-                  assert.equal(events![0].args?.notary, notary);
-                  assert.isAtLeast(
-                    events![0].args?.oldExpiration.toNumber(),
-                    time.toNumber() + SECONDS_IN_AN_HOUR - 2
-                  );
-                  assert.isBelow(
-                    events![0].args?.oldExpiration.toNumber(),
-                    time.toNumber() + SECONDS_IN_AN_HOUR + 100
-                  );
-                  assert.isAtLeast(
-                    events![0].args?.newExpiration.toNumber(),
-                    time.toNumber() + SECONDS_IN_A_DAY - 2
-                  );
-                  assert.isBelow(
-                    events![0].args?.newExpiration.toNumber(),
-                    time.toNumber() + SECONDS_IN_A_DAY + 100
-                  );
-                });
-              });
-              describe('when hold is renewed by an operator', function () {
-                it('renews the hold', async function () {
-                  let holdData = await extension.retrieveHoldData(
-                    token.address,
-                    holdId
-                  );
-                  assert.isAtLeast(
-                    holdData[5].toNumber(),
-                    time.toNumber() + SECONDS_IN_AN_HOUR - 2
-                  );
-                  assert.isBelow(
-                    holdData[5].toNumber(),
-                    time.toNumber() + SECONDS_IN_AN_HOUR + 100
-                  );
+            const { events } = await extension
+              .connect(recipientSigner)
+              .releaseHold(token.address, holdId)
+              .then((res) => res.wait());
 
-                  time = await clock.getTime();
-                  await extension
-                    .connect(await ethers.getSigner(controller))
-                    .renewHold(
-                      token.address,
-                      holdId,
-                      SECONDS_IN_A_DAY,
-                      ZERO_BYTE
-                    );
+            const finalSpendableBalance = (
+              await extension.spendableBalanceOf(token.address, tokenHolder)
+            ).toNumber();
+            assert.equal(finalSpendableBalance, issuanceAmount);
 
-                  holdData = await extension.retrieveHoldData(
-                    token.address,
-                    holdId
-                  );
-                  assert.isAtLeast(
-                    holdData[5].toNumber(),
-                    time.toNumber() + SECONDS_IN_A_DAY - 2
-                  );
-                  assert.isBelow(
-                    holdData[5].toNumber(),
-                    time.toNumber() + SECONDS_IN_A_DAY + 100
-                  );
-                });
-              });
-              describe('when hold is neither renewed by the sender, nor by an operator', function () {
-                it('reverts', async function () {
-                  await expectRevert.unspecified(
-                    extension
-                      .connect(await ethers.getSigner(recipient))
-                      .renewHold(
-                        token.address,
-                        holdId,
-                        SECONDS_IN_A_DAY,
-                        ZERO_BYTE
-                      )
-                  );
-                });
-              });
-            });
-            describe('when hold is expired', function () {
-              it('reverts', async function () {
-                const holdData = await extension.retrieveHoldData(
+            const holdData = await extension.retrieveHoldData(
+              token.address,
+              holdId
+            );
+            assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_PAYEE);
+            assert.equal(
+              events![0].args?.status,
+              HOLD_STATUS_RELEASED_BY_PAYEE
+            );
+          });
+        });
+      });
+      describe('when hold can not be released', function () {
+        describe('when hold is released by the hold sender', function () {
+          it('reverts', async function () {
+            await expectRevert.unspecified(
+              extension
+                .connect(tokenHolderSigner)
+                .releaseHold(token.address, holdId)
+            );
+          });
+        });
+      });
+    });
+    describe('when hold is in status ExecutedAndKeptOpen', function () {
+      it('releases the hold', async function () {
+        const initialSpendableBalance = (
+          await extension.spendableBalanceOf(token.address, tokenHolder)
+        ).toNumber();
+        assert.equal(initialSpendableBalance, issuanceAmount - holdAmount);
+
+        let holdData = await extension.retrieveHoldData(token.address, holdId);
+        assert.equal(holdData[8], HOLD_STATUS_ORDERED);
+
+        const executedAmount = 10;
+        await extension
+          .connect(notarySigner)
+          .executeHoldAndKeepOpen(
+            token.address,
+            holdId,
+            executedAmount,
+            EMPTY_BYTE32
+          );
+
+        holdData = await extension.retrieveHoldData(token.address, holdId);
+        assert.equal(holdData[8], HOLD_STATUS_EXECUTED_AND_KEPT_OPEN);
+
+        const { events } = await extension
+          .connect(notarySigner)
+          .releaseHold(token.address, holdId)
+          .then((res) => res.wait());
+
+        const finalSpendableBalance = (
+          await extension.spendableBalanceOf(token.address, tokenHolder)
+        ).toNumber();
+        assert.equal(finalSpendableBalance, issuanceAmount - executedAmount);
+
+        holdData = await extension.retrieveHoldData(token.address, holdId);
+        assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
+        assert.equal(events![0].args?.status, HOLD_STATUS_RELEASED_BY_NOTARY);
+      });
+    });
+    describe('when hold is neither in status Ordered, nor ExecutedAndKeptOpen', function () {
+      it('reverts', async function () {
+        await extension
+          .connect(notarySigner)
+          .releaseHold(token.address, holdId);
+
+        const holdData = await extension.retrieveHoldData(
+          token.address,
+          holdId
+        );
+        assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
+
+        await expectRevert.unspecified(
+          extension.connect(notarySigner).releaseHold(token.address, holdId)
+        );
+      });
+    });
+  });
+
+  // RENEW HOLD
+  describe('renewHold', function () {
+    let holdId: string;
+    let time: BigNumber;
+    beforeEach(async function () {
+      await assertHoldsActivated(extension, token, true);
+
+      const certificate = await craftCertificate(
+        token.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        controller
+      );
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+
+      // Create hold in state Ordered
+      time = await clock.getTime();
+      holdId = newHoldId();
+      const secretHashPair = newSecretHashPair();
+      const certificate2 = await craftCertificate(
+        extension.interface.encodeFunctionData('hold', [
+          token.address,
+          holdId,
+          recipient,
+          notary,
+          partition1,
+          holdAmount,
+          SECONDS_IN_AN_HOUR,
+          secretHashPair.hash,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        tokenHolder
+      );
+      await extension
+        .connect(tokenHolderSigner)
+        .hold(
+          token.address,
+          holdId,
+          recipient,
+          notary,
+          partition1,
+          holdAmount,
+          SECONDS_IN_AN_HOUR,
+          secretHashPair.hash,
+          certificate2
+        );
+    });
+
+    describe('when certificate is not activated', function () {
+      beforeEach(async function () {
+        await setCertificateActivated(
+          extension,
+          token,
+          controller,
+          CERTIFICATE_VALIDATION_NONE
+        );
+        await assertCertificateActivated(
+          extension,
+          token,
+          CERTIFICATE_VALIDATION_NONE
+        );
+      });
+      describe('when hold can be renewed', function () {
+        describe('when hold is in status Ordered', function () {
+          describe('when hold is not expired', function () {
+            describe('when hold is renewed by the sender', function () {
+              it('renews the hold (expiration date future)', async function () {
+                let holdData = await extension.retrieveHoldData(
                   token.address,
                   holdId
                 );
@@ -8578,12 +8207,125 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                   time.toNumber() + SECONDS_IN_AN_HOUR + 100
                 );
 
-                // Wait for more than an hour
-                await advanceTimeAndBlock(SECONDS_IN_AN_HOUR + 100);
+                time = await clock.getTime();
+                await extension
+                  .connect(tokenHolderSigner)
+                  .renewHold(
+                    token.address,
+                    holdId,
+                    SECONDS_IN_A_DAY,
+                    ZERO_BYTE
+                  );
+                holdData = await extension.retrieveHoldData(
+                  token.address,
+                  holdId
+                );
+                assert.isAtLeast(
+                  holdData[5].toNumber(),
+                  time.toNumber() + SECONDS_IN_A_DAY - 2
+                );
+                assert.isBelow(
+                  holdData[5].toNumber(),
+                  time.toNumber() + SECONDS_IN_A_DAY + 100
+                );
+              });
+              it('renews the hold (expiration date now)', async function () {
+                let holdData = await extension.retrieveHoldData(
+                  token.address,
+                  holdId
+                );
+                assert.isAtLeast(
+                  holdData[5].toNumber(),
+                  time.toNumber() + SECONDS_IN_AN_HOUR - 2
+                );
+                assert.isBelow(
+                  holdData[5].toNumber(),
+                  time.toNumber() + SECONDS_IN_AN_HOUR + 100
+                );
 
+                time = await clock.getTime();
+                await extension
+                  .connect(tokenHolderSigner)
+                  .renewHold(token.address, holdId, 0, ZERO_BYTE);
+
+                holdData = await extension.retrieveHoldData(
+                  token.address,
+                  holdId
+                );
+                assert.equal(holdData[5].toNumber(), 0);
+              });
+              it('emits an event', async function () {
+                const { events } = await extension
+                  .connect(tokenHolderSigner)
+                  .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE)
+                  .then((res) => res.wait());
+
+                assert.equal(events![0].event, 'HoldRenewed');
+                assert.equal(events![0].args?.token, token.address);
+                assert.equal(events![0].args?.holdId, holdId);
+                assert.equal(events![0].args?.notary, notary);
+                assert.isAtLeast(
+                  events![0].args?.oldExpiration.toNumber(),
+                  time.toNumber() + SECONDS_IN_AN_HOUR - 2
+                );
+                assert.isBelow(
+                  events![0].args?.oldExpiration.toNumber(),
+                  time.toNumber() + SECONDS_IN_AN_HOUR + 100
+                );
+                assert.isAtLeast(
+                  events![0].args?.newExpiration.toNumber(),
+                  time.toNumber() + SECONDS_IN_A_DAY - 2
+                );
+                assert.isBelow(
+                  events![0].args?.newExpiration.toNumber(),
+                  time.toNumber() + SECONDS_IN_A_DAY + 100
+                );
+              });
+            });
+            describe('when hold is renewed by an operator', function () {
+              it('renews the hold', async function () {
+                let holdData = await extension.retrieveHoldData(
+                  token.address,
+                  holdId
+                );
+                assert.isAtLeast(
+                  holdData[5].toNumber(),
+                  time.toNumber() + SECONDS_IN_AN_HOUR - 2
+                );
+                assert.isBelow(
+                  holdData[5].toNumber(),
+                  time.toNumber() + SECONDS_IN_AN_HOUR + 100
+                );
+
+                time = await clock.getTime();
+                await extension
+                  .connect(controllerSigner)
+                  .renewHold(
+                    token.address,
+                    holdId,
+                    SECONDS_IN_A_DAY,
+                    ZERO_BYTE
+                  );
+
+                holdData = await extension.retrieveHoldData(
+                  token.address,
+                  holdId
+                );
+                assert.isAtLeast(
+                  holdData[5].toNumber(),
+                  time.toNumber() + SECONDS_IN_A_DAY - 2
+                );
+                assert.isBelow(
+                  holdData[5].toNumber(),
+                  time.toNumber() + SECONDS_IN_A_DAY + 100
+                );
+              });
+            });
+            describe('when hold is neither renewed by the sender, nor by an operator', function () {
+              it('reverts', async function () {
                 await expectRevert.unspecified(
                   extension
-                    .connect(await ethers.getSigner(tokenHolder))
+                    .connect(recipientSigner)
                     .renewHold(
                       token.address,
                       holdId,
@@ -8594,38 +8336,9 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
               });
             });
           });
-          describe('when hold is in status ExecutedAndKeptOpen', function () {
-            it('renews the hold', async function () {
-              let holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.equal(holdData[8], HOLD_STATUS_ORDERED);
-
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, tokenHolder);
-              await extension
-                .connect(await ethers.getSigner(controller))
-                .addAllowlisted(token.address, recipient);
-
-              const executedAmount = 10;
-              await extension
-                .connect(await ethers.getSigner(notary))
-                .executeHoldAndKeepOpen(
-                  token.address,
-                  holdId,
-                  executedAmount,
-                  EMPTY_BYTE32
-                );
-
-              holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.equal(holdData[8], HOLD_STATUS_EXECUTED_AND_KEPT_OPEN);
-
-              holdData = await extension.retrieveHoldData(
+          describe('when hold is expired', function () {
+            it('reverts', async function () {
+              const holdData = await extension.retrieveHoldData(
                 token.address,
                 holdId
               );
@@ -8638,62 +8351,46 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                 time.toNumber() + SECONDS_IN_AN_HOUR + 100
               );
 
-              time = await clock.getTime();
-              await extension
-                .connect(await ethers.getSigner(tokenHolder))
-                .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE);
-
-              holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.isAtLeast(
-                holdData[5].toNumber(),
-                time.toNumber() + SECONDS_IN_A_DAY - 2
-              );
-              assert.isBelow(
-                holdData[5].toNumber(),
-                time.toNumber() + SECONDS_IN_A_DAY + 100
-              );
-            });
-          });
-        });
-        describe('when hold can not be renewed', function () {
-          describe('when hold is neither in status Ordered, nor ExecutedAndKeptOpen', function () {
-            it('reverts', async function () {
-              await extension
-                .connect(await ethers.getSigner(notary))
-                .releaseHold(token.address, holdId);
-
-              const holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
+              // Wait for more than an hour
+              await advanceTimeAndBlock(SECONDS_IN_AN_HOUR + 100);
 
               await expectRevert.unspecified(
                 extension
-                  .connect(await ethers.getSigner(tokenHolder))
+                  .connect(tokenHolderSigner)
                   .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE)
               );
             });
           });
         });
-      });
-      describe('when certificate is activated', function () {
-        beforeEach(async function () {
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_SALT
-          );
-        });
-        describe('when certificate is valid', function () {
-          it('renews the hold (expiration date future)', async function () {
+        describe('when hold is in status ExecutedAndKeptOpen', function () {
+          it('renews the hold', async function () {
             let holdData = await extension.retrieveHoldData(
               token.address,
               holdId
             );
+            assert.equal(holdData[8], HOLD_STATUS_ORDERED);
+
+            await extension
+              .connect(controllerSigner)
+              .addAllowlisted(token.address, tokenHolder);
+            await extension
+              .connect(controllerSigner)
+              .addAllowlisted(token.address, recipient);
+
+            const executedAmount = 10;
+            await extension
+              .connect(notarySigner)
+              .executeHoldAndKeepOpen(
+                token.address,
+                holdId,
+                executedAmount,
+                EMPTY_BYTE32
+              );
+
+            holdData = await extension.retrieveHoldData(token.address, holdId);
+            assert.equal(holdData[8], HOLD_STATUS_EXECUTED_AND_KEPT_OPEN);
+
+            holdData = await extension.retrieveHoldData(token.address, holdId);
             assert.isAtLeast(
               holdData[5].toNumber(),
               time.toNumber() + SECONDS_IN_AN_HOUR - 2
@@ -8704,21 +8401,9 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
             );
 
             time = await clock.getTime();
-            const certificate = await craftCertificate(
-              extension.interface.encodeFunctionData('renewHold', [
-                token.address,
-                holdId,
-                SECONDS_IN_A_DAY,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              tokenHolder
-            );
             await extension
-              .connect(await ethers.getSigner(tokenHolder))
-              .renewHold(token.address, holdId, SECONDS_IN_A_DAY, certificate);
+              .connect(tokenHolderSigner)
+              .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE);
 
             holdData = await extension.retrieveHoldData(token.address, holdId);
             assert.isAtLeast(
@@ -8731,243 +8416,182 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
             );
           });
         });
-        describe('when certificate is not valid', function () {
+      });
+      describe('when hold can not be renewed', function () {
+        describe('when hold is neither in status Ordered, nor ExecutedAndKeptOpen', function () {
           it('reverts', async function () {
+            await extension
+              .connect(notarySigner)
+              .releaseHold(token.address, holdId);
+
             const holdData = await extension.retrieveHoldData(
               token.address,
               holdId
             );
-            assert.isAtLeast(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR - 2
-            );
-            assert.isBelow(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR + 100
-            );
+            assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
 
-            time = await clock.getTime();
             await expectRevert.unspecified(
               extension
-                .connect(await ethers.getSigner(tokenHolder))
+                .connect(tokenHolderSigner)
                 .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE)
             );
           });
         });
       });
     });
-
-    // RENEW HOLD WITH EXPIRATION DATE
-    describe('renewHoldWithExpirationDate', function () {
-      let time: BigNumber;
-      let holdId: string;
-      let secretHashPair: { hash: string; secret: string };
+    describe('when certificate is activated', function () {
       beforeEach(async function () {
-        await assertHoldsActivated(extension, token, true);
-
-        const certificate = await craftCertificate(
-          token.interface.encodeFunctionData('issueByPartition', [
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            ZERO_BYTE
-          ]),
-          token,
+        await assertCertificateActivated(
           extension,
-          clock, // clock
-          controller
-        );
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
-          );
-
-        // Create hold in state Ordered
-        time = await clock.getTime();
-        holdId = newHoldId();
-        secretHashPair = newSecretHashPair();
-        const certificate2 = await craftCertificate(
-          extension.interface.encodeFunctionData('hold', [
-            token.address,
-            holdId,
-            recipient,
-            notary,
-            partition1,
-            holdAmount,
-            SECONDS_IN_AN_HOUR,
-            secretHashPair.hash,
-            ZERO_BYTE
-          ]),
           token,
-          extension,
-          clock, // clock
-          tokenHolder
+          CERTIFICATE_VALIDATION_SALT
         );
-        await extension
-          .connect(await ethers.getSigner(tokenHolder))
-          .hold(
-            token.address,
-            holdId,
-            recipient,
-            notary,
-            partition1,
-            holdAmount,
-            SECONDS_IN_AN_HOUR,
-            secretHashPair.hash,
-            certificate2
-          );
       });
-
-      describe('when certificate is not activated', function () {
-        beforeEach(async function () {
-          await setCertificateActivated(
-            extension,
-            token,
-            controller,
-            CERTIFICATE_VALIDATION_NONE
+      describe('when certificate is valid', function () {
+        it('renews the hold (expiration date future)', async function () {
+          let holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
           );
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_NONE
+          assert.isAtLeast(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR - 2
           );
-        });
-        describe('when expiration date is valid', function () {
-          describe('when expiration date is in the future', function () {
-            it('renews the hold', async function () {
-              let holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.isAtLeast(
-                holdData[5].toNumber(),
-                time.toNumber() + SECONDS_IN_AN_HOUR - 2
-              );
-              assert.isBelow(
-                holdData[5].toNumber(),
-                time.toNumber() + SECONDS_IN_AN_HOUR + 100
-              );
+          assert.isBelow(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR + 100
+          );
 
-              time = await clock.getTime();
-              const { events } = await extension
-                .connect(await ethers.getSigner(tokenHolder))
-                .renewHoldWithExpirationDate(
-                  token.address,
-                  holdId,
-                  time.toNumber() + SECONDS_IN_A_DAY,
-                  ZERO_BYTE
-                )
-                .then((res) => res.wait());
+          time = await clock.getTime();
+          const certificate = await craftCertificate(
+            extension.interface.encodeFunctionData('renewHold', [
+              token.address,
+              holdId,
+              SECONDS_IN_A_DAY,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            tokenHolder
+          );
+          await extension
+            .connect(tokenHolderSigner)
+            .renewHold(token.address, holdId, SECONDS_IN_A_DAY, certificate);
 
-              holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.isAtLeast(
-                holdData[5].toNumber(),
-                time.toNumber() + SECONDS_IN_A_DAY - 2
-              );
-              assert.isBelow(
-                holdData[5].toNumber(),
-                time.toNumber() + SECONDS_IN_A_DAY + 100
-              );
-
-              assert.equal(events![0].event, 'HoldRenewed');
-              assert.equal(events![0].args?.token, token.address);
-              assert.equal(events![0].args?.holdId, holdId);
-              assert.equal(events![0].args?.notary, notary);
-              assert.isAtLeast(
-                events![0].args?.oldExpiration.toNumber(),
-                time.toNumber() + SECONDS_IN_AN_HOUR - 2
-              );
-              assert.isBelow(
-                events![0].args?.oldExpiration.toNumber(),
-                time.toNumber() + SECONDS_IN_AN_HOUR + 100
-              );
-              assert.isAtLeast(
-                events![0].args?.newExpiration.toNumber(),
-                time.toNumber() + SECONDS_IN_A_DAY - 2
-              );
-              assert.isBelow(
-                events![0].args?.newExpiration.toNumber(),
-                time.toNumber() + SECONDS_IN_A_DAY + 100
-              );
-            });
-          });
-          describe('when there is no expiration date', function () {
-            it('renews the hold', async function () {
-              let holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-              assert.isAtLeast(
-                holdData[5].toNumber(),
-                time.toNumber() + SECONDS_IN_AN_HOUR - 2
-              );
-              assert.isBelow(
-                holdData[5].toNumber(),
-                time.toNumber() + SECONDS_IN_AN_HOUR + 100
-              );
-
-              const { events } = await extension
-                .connect(await ethers.getSigner(tokenHolder))
-                .renewHoldWithExpirationDate(
-                  token.address,
-                  holdId,
-                  0,
-                  ZERO_BYTE
-                )
-                .then((res) => res.wait());
-
-              holdData = await extension.retrieveHoldData(
-                token.address,
-                holdId
-              );
-
-              assert.equal(holdData[5].toNumber(), 0);
-
-              assert.equal(events![0].event, 'HoldRenewed');
-              assert.isAtLeast(
-                events![0].args?.oldExpiration.toNumber(),
-                time.toNumber() + SECONDS_IN_AN_HOUR - 2
-              );
-              assert.isBelow(
-                events![0].args?.oldExpiration.toNumber(),
-                time.toNumber() + SECONDS_IN_AN_HOUR + 100
-              );
-              assert.equal(events![0].args?.newExpiration.toNumber(), 0);
-            });
-          });
-        });
-        describe('when expiration date is not valid', function () {
-          it('reverts', async function () {
-            time = await clock.getTime();
-            await expectRevert.unspecified(
-              extension
-                .connect(await ethers.getSigner(tokenHolder))
-                .renewHoldWithExpirationDate(
-                  token.address,
-                  holdId,
-                  time.toNumber() - 1,
-                  ZERO_BYTE
-                )
-            );
-          });
+          holdData = await extension.retrieveHoldData(token.address, holdId);
+          assert.isAtLeast(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_A_DAY - 2
+          );
+          assert.isBelow(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_A_DAY + 100
+          );
         });
       });
-      describe('when certificate is activated', function () {
-        beforeEach(async function () {
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_SALT
+      describe('when certificate is not valid', function () {
+        it('reverts', async function () {
+          const holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
+          );
+          assert.isAtLeast(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR - 2
+          );
+          assert.isBelow(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR + 100
+          );
+
+          time = await clock.getTime();
+          await expectRevert.unspecified(
+            extension
+              .connect(tokenHolderSigner)
+              .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE)
           );
         });
-        describe('when certificate is valid', function () {
+      });
+    });
+  });
+
+  // RENEW HOLD WITH EXPIRATION DATE
+  describe('renewHoldWithExpirationDate', function () {
+    let time: BigNumber;
+    let holdId: string;
+    let secretHashPair: { hash: string; secret: string };
+    beforeEach(async function () {
+      await assertHoldsActivated(extension, token, true);
+
+      const certificate = await craftCertificate(
+        token.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        controller
+      );
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+
+      // Create hold in state Ordered
+      time = await clock.getTime();
+      holdId = newHoldId();
+      secretHashPair = newSecretHashPair();
+      const certificate2 = await craftCertificate(
+        extension.interface.encodeFunctionData('hold', [
+          token.address,
+          holdId,
+          recipient,
+          notary,
+          partition1,
+          holdAmount,
+          SECONDS_IN_AN_HOUR,
+          secretHashPair.hash,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        tokenHolder
+      );
+      await extension
+        .connect(tokenHolderSigner)
+        .hold(
+          token.address,
+          holdId,
+          recipient,
+          notary,
+          partition1,
+          holdAmount,
+          SECONDS_IN_AN_HOUR,
+          secretHashPair.hash,
+          certificate2
+        );
+    });
+
+    describe('when certificate is not activated', function () {
+      beforeEach(async function () {
+        await setCertificateActivated(
+          extension,
+          token,
+          controller,
+          CERTIFICATE_VALIDATION_NONE
+        );
+        await assertCertificateActivated(
+          extension,
+          token,
+          CERTIFICATE_VALIDATION_NONE
+        );
+      });
+      describe('when expiration date is valid', function () {
+        describe('when expiration date is in the future', function () {
           it('renews the hold', async function () {
             let holdData = await extension.retrieveHoldData(
               token.address,
@@ -8983,31 +8607,16 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
             );
 
             time = await clock.getTime();
-            const certificate = await craftCertificate(
-              extension.interface.encodeFunctionData(
-                'renewHoldWithExpirationDate',
-                [
-                  token.address,
-                  holdId,
-                  time.toNumber() + SECONDS_IN_A_DAY,
-                  ZERO_BYTE
-                ]
-              ),
-              token,
-              extension,
-              clock, // clock
-              tokenHolder
-            );
-
             const { events } = await extension
-              .connect(await ethers.getSigner(tokenHolder))
+              .connect(tokenHolderSigner)
               .renewHoldWithExpirationDate(
                 token.address,
                 holdId,
                 time.toNumber() + SECONDS_IN_A_DAY,
-                certificate
+                ZERO_BYTE
               )
               .then((res) => res.wait());
+
             holdData = await extension.retrieveHoldData(token.address, holdId);
             assert.isAtLeast(
               holdData[5].toNumber(),
@@ -9040,9 +8649,9 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
             );
           });
         });
-        describe('when certificate is not valid', function () {
+        describe('when there is no expiration date', function () {
           it('renews the hold', async function () {
-            const holdData = await extension.retrieveHoldData(
+            let holdData = await extension.retrieveHoldData(
               token.address,
               holdId
             );
@@ -9055,1784 +8664,1661 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
               time.toNumber() + SECONDS_IN_AN_HOUR + 100
             );
 
-            time = await clock.getTime();
-            await expectRevert.unspecified(
-              extension
-                .connect(await ethers.getSigner(tokenHolder))
-                .renewHoldWithExpirationDate(
-                  token.address,
-                  holdId,
-                  time.toNumber() + SECONDS_IN_A_DAY,
-                  ZERO_BYTE
-                )
+            const { events } = await extension
+              .connect(tokenHolderSigner)
+              .renewHoldWithExpirationDate(token.address, holdId, 0, ZERO_BYTE)
+              .then((res) => res.wait());
+
+            holdData = await extension.retrieveHoldData(token.address, holdId);
+
+            assert.equal(holdData[5].toNumber(), 0);
+
+            assert.equal(events![0].event, 'HoldRenewed');
+            assert.isAtLeast(
+              events![0].args?.oldExpiration.toNumber(),
+              time.toNumber() + SECONDS_IN_AN_HOUR - 2
             );
+            assert.isBelow(
+              events![0].args?.oldExpiration.toNumber(),
+              time.toNumber() + SECONDS_IN_AN_HOUR + 100
+            );
+            assert.equal(events![0].args?.newExpiration.toNumber(), 0);
           });
         });
       });
+      describe('when expiration date is not valid', function () {
+        it('reverts', async function () {
+          time = await clock.getTime();
+          await expectRevert.unspecified(
+            extension
+              .connect(tokenHolderSigner)
+              .renewHoldWithExpirationDate(
+                token.address,
+                holdId,
+                time.toNumber() - 1,
+                ZERO_BYTE
+              )
+          );
+        });
+      });
+    });
+    describe('when certificate is activated', function () {
+      beforeEach(async function () {
+        await assertCertificateActivated(
+          extension,
+          token,
+          CERTIFICATE_VALIDATION_SALT
+        );
+      });
+      describe('when certificate is valid', function () {
+        it('renews the hold', async function () {
+          let holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
+          );
+          assert.isAtLeast(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR - 2
+          );
+          assert.isBelow(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR + 100
+          );
+
+          time = await clock.getTime();
+          const certificate = await craftCertificate(
+            extension.interface.encodeFunctionData(
+              'renewHoldWithExpirationDate',
+              [
+                token.address,
+                holdId,
+                time.toNumber() + SECONDS_IN_A_DAY,
+                ZERO_BYTE
+              ]
+            ),
+            token,
+            extension,
+            clock, // clock
+            tokenHolder
+          );
+
+          const { events } = await extension
+            .connect(tokenHolderSigner)
+            .renewHoldWithExpirationDate(
+              token.address,
+              holdId,
+              time.toNumber() + SECONDS_IN_A_DAY,
+              certificate
+            )
+            .then((res) => res.wait());
+          holdData = await extension.retrieveHoldData(token.address, holdId);
+          assert.isAtLeast(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_A_DAY - 2
+          );
+          assert.isBelow(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_A_DAY + 100
+          );
+
+          assert.equal(events![0].event, 'HoldRenewed');
+          assert.equal(events![0].args?.token, token.address);
+          assert.equal(events![0].args?.holdId, holdId);
+          assert.equal(events![0].args?.notary, notary);
+          assert.isAtLeast(
+            events![0].args?.oldExpiration.toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR - 2
+          );
+          assert.isBelow(
+            events![0].args?.oldExpiration.toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR + 100
+          );
+          assert.isAtLeast(
+            events![0].args?.newExpiration.toNumber(),
+            time.toNumber() + SECONDS_IN_A_DAY - 2
+          );
+          assert.isBelow(
+            events![0].args?.newExpiration.toNumber(),
+            time.toNumber() + SECONDS_IN_A_DAY + 100
+          );
+        });
+      });
+      describe('when certificate is not valid', function () {
+        it('renews the hold', async function () {
+          const holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
+          );
+          assert.isAtLeast(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR - 2
+          );
+          assert.isBelow(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR + 100
+          );
+
+          time = await clock.getTime();
+          await expectRevert.unspecified(
+            extension
+              .connect(tokenHolderSigner)
+              .renewHoldWithExpirationDate(
+                token.address,
+                holdId,
+                time.toNumber() + SECONDS_IN_A_DAY,
+                ZERO_BYTE
+              )
+          );
+        });
+      });
+    });
+  });
+
+  // EXECUTE HOLD
+  describe('executeHold', function () {
+    let holdId: string;
+    let time: BigNumber;
+    let secretHashPair: { hash: string; secret: string };
+    beforeEach(async function () {
+      await assertHoldsActivated(extension, token, true);
+
+      const certificate = await craftCertificate(
+        token.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        controller
+      );
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+
+      // Create hold in state Ordered
+      time = await clock.getTime();
+      holdId = newHoldId();
+      secretHashPair = newSecretHashPair();
+      const certificate2 = await craftCertificate(
+        extension.interface.encodeFunctionData('hold', [
+          token.address,
+          holdId,
+          recipient,
+          notary,
+          partition1,
+          holdAmount,
+          SECONDS_IN_AN_HOUR,
+          secretHashPair.hash,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        tokenHolder
+      );
+      await extension
+        .connect(tokenHolderSigner)
+        .hold(
+          token.address,
+          holdId,
+          recipient,
+          notary,
+          partition1,
+          holdAmount,
+          SECONDS_IN_AN_HOUR,
+          secretHashPair.hash,
+          certificate2
+        );
     });
 
-    // EXECUTE HOLD
-    describe('executeHold', function () {
-      let holdId: string;
-      let time: BigNumber;
-      let secretHashPair: { hash: string; secret: string };
-      beforeEach(async function () {
-        await assertHoldsActivated(extension, token, true);
-
-        const certificate = await craftCertificate(
-          token.interface.encodeFunctionData('issueByPartition', [
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            ZERO_BYTE
-          ]),
-          token,
-          extension,
-          clock, // clock
-          controller
-        );
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
-            partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
-          );
-
-        // Create hold in state Ordered
-        time = await clock.getTime();
-        holdId = newHoldId();
-        secretHashPair = newSecretHashPair();
-        const certificate2 = await craftCertificate(
-          extension.interface.encodeFunctionData('hold', [
-            token.address,
-            holdId,
-            recipient,
-            notary,
-            partition1,
-            holdAmount,
-            SECONDS_IN_AN_HOUR,
-            secretHashPair.hash,
-            ZERO_BYTE
-          ]),
-          token,
-          extension,
-          clock, // clock
-          tokenHolder
-        );
-        await extension
-          .connect(await ethers.getSigner(tokenHolder))
-          .hold(
-            token.address,
-            holdId,
-            recipient,
-            notary,
-            partition1,
-            holdAmount,
-            SECONDS_IN_AN_HOUR,
-            secretHashPair.hash,
-            certificate2
-          );
-      });
-
-      describe('when hold can be executed', function () {
-        describe('when hold is in status Ordered', function () {
-          describe('when value is not nil', function () {
-            describe('when hold is executed by the notary', function () {
-              describe('when hold is not expired', function () {
-                describe('when value is not higher than hold value', function () {
-                  describe('when hold shall not be kept open', function () {
-                    describe('when the whole amount is executed', function () {
-                      it('executes the hold', async function () {
-                        const initialBalance = await token.balanceOf(
+    describe('when hold can be executed', function () {
+      describe('when hold is in status Ordered', function () {
+        describe('when value is not nil', function () {
+          describe('when hold is executed by the notary', function () {
+            describe('when hold is not expired', function () {
+              describe('when value is not higher than hold value', function () {
+                describe('when hold shall not be kept open', function () {
+                  describe('when the whole amount is executed', function () {
+                    it('executes the hold', async function () {
+                      const initialBalance = await token.balanceOf(tokenHolder);
+                      const initialPartitionBalance =
+                        await token.balanceOfByPartition(
+                          partition1,
                           tokenHolder
                         );
-                        const initialPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            tokenHolder
-                          );
 
-                        const initialBalanceOnHold =
-                          await extension.balanceOnHold(
-                            token.address,
-                            tokenHolder
-                          );
-                        const initialBalanceOnHoldByPartition =
-                          await extension.balanceOnHoldByPartition(
-                            token.address,
-                            partition1,
-                            tokenHolder
-                          );
-
-                        const initialSpendableBalance =
-                          await extension.spendableBalanceOf(
-                            token.address,
-                            tokenHolder
-                          );
-                        const initialSpendableBalanceByPartition =
-                          await extension.spendableBalanceOfByPartition(
-                            token.address,
-                            partition1,
-                            tokenHolder
-                          );
-
-                        const initialTotalSupplyOnHold =
-                          await extension.totalSupplyOnHold(token.address);
-                        const initialTotalSupplyOnHoldByPartition =
-                          await extension.totalSupplyOnHoldByPartition(
-                            token.address,
-                            partition1
-                          );
-
-                        const initialRecipientBalance = await token.balanceOf(
-                          recipient
-                        );
-                        const initialRecipientPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            recipient
-                          );
-
-                        await extension
-                          .connect(await ethers.getSigner(notary))
-                          .executeHold(
-                            token.address,
-                            holdId,
-                            holdAmount,
-                            EMPTY_BYTE32
-                          );
-
-                        const finalBalance = await token.balanceOf(tokenHolder);
-                        const finalPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            tokenHolder
-                          );
-
-                        const finalBalanceOnHold =
-                          await extension.balanceOnHold(
-                            token.address,
-                            tokenHolder
-                          );
-                        const finalBalanceOnHoldByPartition =
-                          await extension.balanceOnHoldByPartition(
-                            token.address,
-                            partition1,
-                            tokenHolder
-                          );
-
-                        const finalSpendableBalance =
-                          await extension.spendableBalanceOf(
-                            token.address,
-                            tokenHolder
-                          );
-                        const finalSpendableBalanceByPartition =
-                          await extension.spendableBalanceOfByPartition(
-                            token.address,
-                            partition1,
-                            tokenHolder
-                          );
-
-                        const finalTotalSupplyOnHold =
-                          await extension.totalSupplyOnHold(token.address);
-                        const finalTotalSupplyOnHoldByPartition =
-                          await extension.totalSupplyOnHoldByPartition(
-                            token.address,
-                            partition1
-                          );
-
-                        const finalRecipientBalance = await token.balanceOf(
-                          recipient
-                        );
-                        const finalRecipientPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            recipient
-                          );
-
-                        assert.equal(initialBalance.toNumber(), issuanceAmount);
-                        assert.equal(
-                          finalBalance.toNumber(),
-                          issuanceAmount - holdAmount
-                        );
-                        assert.equal(
-                          initialPartitionBalance.toNumber(),
-                          issuanceAmount
-                        );
-                        assert.equal(
-                          finalPartitionBalance.toNumber(),
-                          issuanceAmount - holdAmount
-                        );
-
-                        assert.equal(
-                          initialBalanceOnHold.toNumber(),
-                          holdAmount
-                        );
-                        assert.equal(
-                          initialBalanceOnHoldByPartition.toNumber(),
-                          holdAmount
-                        );
-                        assert.equal(finalBalanceOnHold.toNumber(), 0);
-                        assert.equal(
-                          finalBalanceOnHoldByPartition.toNumber(),
-                          0
-                        );
-
-                        assert.equal(
-                          initialSpendableBalance.toNumber(),
-                          issuanceAmount - holdAmount
-                        );
-                        assert.equal(
-                          initialSpendableBalanceByPartition.toNumber(),
-                          issuanceAmount - holdAmount
-                        );
-                        assert.equal(
-                          finalSpendableBalance.toNumber(),
-                          issuanceAmount - holdAmount
-                        );
-                        assert.equal(
-                          finalSpendableBalanceByPartition.toNumber(),
-                          issuanceAmount - holdAmount
-                        );
-
-                        assert.equal(
-                          initialTotalSupplyOnHold.toNumber(),
-                          holdAmount
-                        );
-                        assert.equal(
-                          initialTotalSupplyOnHoldByPartition.toNumber(),
-                          holdAmount
-                        );
-                        assert.equal(finalTotalSupplyOnHold.toNumber(), 0);
-                        assert.equal(
-                          finalTotalSupplyOnHoldByPartition.toNumber(),
-                          0
-                        );
-
-                        assert.equal(initialRecipientBalance.toNumber(), 0);
-                        assert.equal(
-                          initialRecipientPartitionBalance.toNumber(),
-                          0
-                        );
-                        assert.equal(
-                          finalRecipientBalance.toNumber(),
-                          holdAmount
-                        );
-                        assert.equal(
-                          finalRecipientPartitionBalance.toNumber(),
-                          holdAmount
-                        );
-
-                        const holdData = await extension.retrieveHoldData(
+                      const initialBalanceOnHold =
+                        await extension.balanceOnHold(
                           token.address,
-                          holdId
-                        );
-                        assert.equal(holdData[0], partition1);
-                        assert.equal(holdData[1], tokenHolder);
-                        assert.equal(holdData[2], recipient);
-                        assert.equal(holdData[3], notary);
-                        assert.equal(holdData[4].toNumber(), holdAmount);
-                        assert.isAtLeast(
-                          holdData[5].toNumber(),
-                          time.toNumber() + SECONDS_IN_AN_HOUR
-                        );
-                        assert.isBelow(
-                          holdData[5].toNumber(),
-                          time.toNumber() + SECONDS_IN_AN_HOUR + 100
-                        );
-                        assert.equal(holdData[6], secretHashPair.hash);
-                        assert.equal(holdData[7], EMPTY_BYTE32);
-                        assert.equal(holdData[8], HOLD_STATUS_EXECUTED);
-                      });
-                      it('emits an event', async function () {
-                        const { events } = await extension
-                          .connect(await ethers.getSigner(notary))
-                          .executeHold(
-                            token.address,
-                            holdId,
-                            holdAmount,
-                            EMPTY_BYTE32
-                          )
-                          .then((res) => res.wait());
-
-                        assert.equal(events![0].event, 'HoldExecuted');
-                        assert.equal(events![0].args?.token, token.address);
-                        assert.equal(events![0].args?.holdId, holdId);
-                        assert.equal(events![0].args?.notary, notary);
-                        assert.equal(events![0].args?.heldValue, holdAmount);
-                        assert.equal(
-                          events![0].args?.transferredValue,
-                          holdAmount
-                        );
-                        assert.equal(events![0].args?.secret, EMPTY_BYTE32);
-                      });
-                    });
-                    describe('when a partial amount is executed', function () {
-                      it('executes the hold', async function () {
-                        const initialPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            tokenHolder
-                          );
-                        const initialRecipientPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            recipient
-                          );
-
-                        const executedAmount = 400;
-                        await extension
-                          .connect(await ethers.getSigner(notary))
-                          .executeHold(
-                            token.address,
-                            holdId,
-                            executedAmount,
-                            EMPTY_BYTE32
-                          );
-
-                        const finalPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            tokenHolder
-                          );
-                        const finalRecipientPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            recipient
-                          );
-
-                        assert.equal(
-                          initialPartitionBalance.toNumber(),
-                          issuanceAmount
-                        );
-                        assert.equal(
-                          finalPartitionBalance.toNumber(),
-                          issuanceAmount - executedAmount
-                        );
-
-                        assert.equal(
-                          initialRecipientPartitionBalance.toNumber(),
-                          0
-                        );
-                        assert.equal(
-                          finalRecipientPartitionBalance.toNumber(),
-                          executedAmount
-                        );
-
-                        const holdData = await extension.retrieveHoldData(
-                          token.address,
-                          holdId
-                        );
-                        assert.equal(holdData[4].toNumber(), holdAmount);
-                      });
-                      it('emits an event', async function () {
-                        const executedAmount = 400;
-                        const { events } = await extension
-                          .connect(await ethers.getSigner(notary))
-                          .executeHold(
-                            token.address,
-                            holdId,
-                            executedAmount,
-                            EMPTY_BYTE32
-                          )
-                          .then((res) => res.wait());
-
-                        assert.equal(events![0].event, 'HoldExecuted');
-                        assert.equal(events![0].args?.token, token.address);
-                        assert.equal(events![0].args?.holdId, holdId);
-                        assert.equal(events![0].args?.notary, notary);
-                        assert.equal(events![0].args?.heldValue, holdAmount);
-                        assert.equal(
-                          events![0].args?.transferredValue,
-                          executedAmount
-                        );
-                        assert.equal(events![0].args?.secret, EMPTY_BYTE32);
-                      });
-                    });
-                  });
-                  describe('when hold shall be kept open', function () {
-                    describe('when value is lower than hold value', function () {
-                      it('executes the hold', async function () {
-                        const initialBalance = await token.balanceOf(
                           tokenHolder
                         );
-                        const initialPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            tokenHolder
-                          );
-
-                        const initialBalanceOnHold =
-                          await extension.balanceOnHold(
-                            token.address,
-                            tokenHolder
-                          );
-                        const initialBalanceOnHoldByPartition =
-                          await extension.balanceOnHoldByPartition(
-                            token.address,
-                            partition1,
-                            tokenHolder
-                          );
-
-                        const initialSpendableBalance =
-                          await extension.spendableBalanceOf(
-                            token.address,
-                            tokenHolder
-                          );
-                        const initialSpendableBalanceByPartition =
-                          await extension.spendableBalanceOfByPartition(
-                            token.address,
-                            partition1,
-                            tokenHolder
-                          );
-
-                        const initialTotalSupplyOnHold =
-                          await extension.totalSupplyOnHold(token.address);
-                        const initialTotalSupplyOnHoldByPartition =
-                          await extension.totalSupplyOnHoldByPartition(
-                            token.address,
-                            partition1
-                          );
-
-                        const initialRecipientBalance = await token.balanceOf(
-                          recipient
-                        );
-                        const initialRecipientPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            recipient
-                          );
-
-                        const executedAmount = 400;
-                        await extension
-                          .connect(await ethers.getSigner(notary))
-                          .executeHoldAndKeepOpen(
-                            token.address,
-                            holdId,
-                            executedAmount,
-                            EMPTY_BYTE32
-                          );
-
-                        const finalBalance = await token.balanceOf(tokenHolder);
-                        const finalPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            tokenHolder
-                          );
-
-                        const finalBalanceOnHold =
-                          await extension.balanceOnHold(
-                            token.address,
-                            tokenHolder
-                          );
-                        const finalBalanceOnHoldByPartition =
-                          await extension.balanceOnHoldByPartition(
-                            token.address,
-                            partition1,
-                            tokenHolder
-                          );
-
-                        const finalSpendableBalance =
-                          await extension.spendableBalanceOf(
-                            token.address,
-                            tokenHolder
-                          );
-                        const finalSpendableBalanceByPartition =
-                          await extension.spendableBalanceOfByPartition(
-                            token.address,
-                            partition1,
-                            tokenHolder
-                          );
-
-                        const finalTotalSupplyOnHold =
-                          await extension.totalSupplyOnHold(token.address);
-                        const finalTotalSupplyOnHoldByPartition =
-                          await extension.totalSupplyOnHoldByPartition(
-                            token.address,
-                            partition1
-                          );
-
-                        const finalRecipientBalance = await token.balanceOf(
-                          recipient
-                        );
-                        const finalRecipientPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            recipient
-                          );
-
-                        assert.equal(initialBalance.toNumber(), issuanceAmount);
-                        assert.equal(
-                          finalBalance.toNumber(),
-                          issuanceAmount - executedAmount
-                        );
-                        assert.equal(
-                          initialPartitionBalance.toNumber(),
-                          issuanceAmount
-                        );
-                        assert.equal(
-                          finalPartitionBalance.toNumber(),
-                          issuanceAmount - executedAmount
-                        );
-
-                        assert.equal(
-                          initialBalanceOnHold.toNumber(),
-                          holdAmount
-                        );
-                        assert.equal(
-                          initialBalanceOnHoldByPartition.toNumber(),
-                          holdAmount
-                        );
-                        assert.equal(
-                          finalBalanceOnHold.toNumber(),
-                          holdAmount - executedAmount
-                        );
-                        assert.equal(
-                          finalBalanceOnHoldByPartition.toNumber(),
-                          holdAmount - executedAmount
-                        );
-
-                        assert.equal(
-                          initialSpendableBalance.toNumber(),
-                          issuanceAmount - holdAmount
-                        );
-                        assert.equal(
-                          initialSpendableBalanceByPartition.toNumber(),
-                          issuanceAmount - holdAmount
-                        );
-                        assert.equal(
-                          finalSpendableBalance.toNumber(),
-                          issuanceAmount - holdAmount
-                        );
-                        assert.equal(
-                          finalSpendableBalanceByPartition.toNumber(),
-                          issuanceAmount - holdAmount
-                        );
-
-                        assert.equal(
-                          initialTotalSupplyOnHold.toNumber(),
-                          holdAmount
-                        );
-                        assert.equal(
-                          initialTotalSupplyOnHoldByPartition.toNumber(),
-                          holdAmount
-                        );
-                        assert.equal(
-                          finalTotalSupplyOnHold.toNumber(),
-                          holdAmount - executedAmount
-                        );
-                        assert.equal(
-                          finalTotalSupplyOnHoldByPartition.toNumber(),
-                          holdAmount - executedAmount
-                        );
-
-                        assert.equal(initialRecipientBalance.toNumber(), 0);
-                        assert.equal(
-                          initialRecipientPartitionBalance.toNumber(),
-                          0
-                        );
-                        assert.equal(
-                          finalRecipientBalance.toNumber(),
-                          executedAmount
-                        );
-                        assert.equal(
-                          finalRecipientPartitionBalance.toNumber(),
-                          executedAmount
-                        );
-
-                        const holdData = await extension.retrieveHoldData(
+                      const initialBalanceOnHoldByPartition =
+                        await extension.balanceOnHoldByPartition(
                           token.address,
-                          holdId
-                        );
-                        assert.equal(holdData[0], partition1);
-                        assert.equal(holdData[1], tokenHolder);
-                        assert.equal(holdData[2], recipient);
-                        assert.equal(holdData[3], notary);
-                        assert.equal(
-                          holdData[4].toNumber(),
-                          holdAmount - executedAmount
-                        );
-                        assert.isAtLeast(
-                          holdData[5].toNumber(),
-                          time.toNumber() + SECONDS_IN_AN_HOUR
-                        );
-                        assert.isBelow(
-                          holdData[5].toNumber(),
-                          time.toNumber() + SECONDS_IN_AN_HOUR + 100
-                        );
-                        assert.equal(holdData[6], secretHashPair.hash);
-                        assert.equal(holdData[7], EMPTY_BYTE32);
-                        assert.equal(
-                          holdData[8],
-                          HOLD_STATUS_EXECUTED_AND_KEPT_OPEN
-                        );
-                      });
-                      it('emits an event', async function () {
-                        const executedAmount = 400;
-                        const { events } = await extension
-                          .connect(await ethers.getSigner(notary))
-                          .executeHoldAndKeepOpen(
-                            token.address,
-                            holdId,
-                            executedAmount,
-                            EMPTY_BYTE32
-                          )
-                          .then((res) => res.wait());
-
-                        assert.equal(
-                          events![0].event,
-                          'HoldExecutedAndKeptOpen'
-                        );
-                        assert.equal(events![0].args?.token, token.address);
-                        assert.equal(events![0].args?.holdId, holdId);
-                        assert.equal(events![0].args?.notary, notary);
-                        assert.equal(
-                          events![0].args?.heldValue,
-                          holdAmount - executedAmount
-                        );
-                        assert.equal(
-                          events![0].args?.transferredValue,
-                          executedAmount
-                        );
-                        assert.equal(events![0].args?.secret, EMPTY_BYTE32);
-                      });
-                    });
-                    describe('when value is equal to hold value', function () {
-                      it('executes the hold', async function () {
-                        const initialPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            tokenHolder
-                          );
-                        const initialRecipientPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            recipient
-                          );
-
-                        await extension
-                          .connect(await ethers.getSigner(notary))
-                          .executeHoldAndKeepOpen(
-                            token.address,
-                            holdId,
-                            holdAmount,
-                            EMPTY_BYTE32
-                          );
-
-                        const finalPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            tokenHolder
-                          );
-                        const finalRecipientPartitionBalance =
-                          await token.balanceOfByPartition(
-                            partition1,
-                            recipient
-                          );
-
-                        assert.equal(
-                          initialPartitionBalance.toNumber(),
-                          issuanceAmount
-                        );
-                        assert.equal(
-                          finalPartitionBalance.toNumber(),
-                          issuanceAmount - holdAmount
+                          partition1,
+                          tokenHolder
                         );
 
-                        assert.equal(
-                          initialRecipientPartitionBalance.toNumber(),
-                          0
+                      const initialSpendableBalance =
+                        await extension.spendableBalanceOf(
+                          token.address,
+                          tokenHolder
                         );
-                        assert.equal(
-                          finalRecipientPartitionBalance.toNumber(),
-                          holdAmount
+                      const initialSpendableBalanceByPartition =
+                        await extension.spendableBalanceOfByPartition(
+                          token.address,
+                          partition1,
+                          tokenHolder
                         );
-                      });
-                      it('emits an event', async function () {
-                        const { events } = await extension
-                          .connect(await ethers.getSigner(notary))
-                          .executeHoldAndKeepOpen(
-                            token.address,
-                            holdId,
-                            holdAmount,
-                            EMPTY_BYTE32
-                          )
-                          .then((res) => res.wait());
 
-                        assert.equal(events![0].event, 'HoldExecuted');
-                        assert.equal(events![0].args?.token, token.address);
-                        assert.equal(events![0].args?.holdId, holdId);
-                        assert.equal(events![0].args?.notary, notary);
-                        assert.equal(events![0].args?.heldValue, holdAmount);
-                        assert.equal(
-                          events![0].args?.transferredValue,
-                          holdAmount
+                      const initialTotalSupplyOnHold =
+                        await extension.totalSupplyOnHold(token.address);
+                      const initialTotalSupplyOnHoldByPartition =
+                        await extension.totalSupplyOnHoldByPartition(
+                          token.address,
+                          partition1
                         );
-                        assert.equal(events![0].args?.secret, EMPTY_BYTE32);
-                      });
-                    });
-                  });
-                });
-                describe('when value is higher than hold value', function () {
-                  it('reverts', async function () {
-                    await expectRevert.unspecified(
-                      extension
-                        .connect(await ethers.getSigner(notary))
+
+                      const initialRecipientBalance = await token.balanceOf(
+                        recipient
+                      );
+                      const initialRecipientPartitionBalance =
+                        await token.balanceOfByPartition(partition1, recipient);
+
+                      await extension
+                        .connect(notarySigner)
                         .executeHold(
                           token.address,
                           holdId,
-                          holdAmount + 1,
+                          holdAmount,
+                          EMPTY_BYTE32
+                        );
+
+                      const finalBalance = await token.balanceOf(tokenHolder);
+                      const finalPartitionBalance =
+                        await token.balanceOfByPartition(
+                          partition1,
+                          tokenHolder
+                        );
+
+                      const finalBalanceOnHold = await extension.balanceOnHold(
+                        token.address,
+                        tokenHolder
+                      );
+                      const finalBalanceOnHoldByPartition =
+                        await extension.balanceOnHoldByPartition(
+                          token.address,
+                          partition1,
+                          tokenHolder
+                        );
+
+                      const finalSpendableBalance =
+                        await extension.spendableBalanceOf(
+                          token.address,
+                          tokenHolder
+                        );
+                      const finalSpendableBalanceByPartition =
+                        await extension.spendableBalanceOfByPartition(
+                          token.address,
+                          partition1,
+                          tokenHolder
+                        );
+
+                      const finalTotalSupplyOnHold =
+                        await extension.totalSupplyOnHold(token.address);
+                      const finalTotalSupplyOnHoldByPartition =
+                        await extension.totalSupplyOnHoldByPartition(
+                          token.address,
+                          partition1
+                        );
+
+                      const finalRecipientBalance = await token.balanceOf(
+                        recipient
+                      );
+                      const finalRecipientPartitionBalance =
+                        await token.balanceOfByPartition(partition1, recipient);
+
+                      assert.equal(initialBalance.toNumber(), issuanceAmount);
+                      assert.equal(
+                        finalBalance.toNumber(),
+                        issuanceAmount - holdAmount
+                      );
+                      assert.equal(
+                        initialPartitionBalance.toNumber(),
+                        issuanceAmount
+                      );
+                      assert.equal(
+                        finalPartitionBalance.toNumber(),
+                        issuanceAmount - holdAmount
+                      );
+
+                      assert.equal(initialBalanceOnHold.toNumber(), holdAmount);
+                      assert.equal(
+                        initialBalanceOnHoldByPartition.toNumber(),
+                        holdAmount
+                      );
+                      assert.equal(finalBalanceOnHold.toNumber(), 0);
+                      assert.equal(finalBalanceOnHoldByPartition.toNumber(), 0);
+
+                      assert.equal(
+                        initialSpendableBalance.toNumber(),
+                        issuanceAmount - holdAmount
+                      );
+                      assert.equal(
+                        initialSpendableBalanceByPartition.toNumber(),
+                        issuanceAmount - holdAmount
+                      );
+                      assert.equal(
+                        finalSpendableBalance.toNumber(),
+                        issuanceAmount - holdAmount
+                      );
+                      assert.equal(
+                        finalSpendableBalanceByPartition.toNumber(),
+                        issuanceAmount - holdAmount
+                      );
+
+                      assert.equal(
+                        initialTotalSupplyOnHold.toNumber(),
+                        holdAmount
+                      );
+                      assert.equal(
+                        initialTotalSupplyOnHoldByPartition.toNumber(),
+                        holdAmount
+                      );
+                      assert.equal(finalTotalSupplyOnHold.toNumber(), 0);
+                      assert.equal(
+                        finalTotalSupplyOnHoldByPartition.toNumber(),
+                        0
+                      );
+
+                      assert.equal(initialRecipientBalance.toNumber(), 0);
+                      assert.equal(
+                        initialRecipientPartitionBalance.toNumber(),
+                        0
+                      );
+                      assert.equal(
+                        finalRecipientBalance.toNumber(),
+                        holdAmount
+                      );
+                      assert.equal(
+                        finalRecipientPartitionBalance.toNumber(),
+                        holdAmount
+                      );
+
+                      const holdData = await extension.retrieveHoldData(
+                        token.address,
+                        holdId
+                      );
+                      assert.equal(holdData[0], partition1);
+                      assert.equal(holdData[1], tokenHolder);
+                      assert.equal(holdData[2], recipient);
+                      assert.equal(holdData[3], notary);
+                      assert.equal(holdData[4].toNumber(), holdAmount);
+                      assert.isAtLeast(
+                        holdData[5].toNumber(),
+                        time.toNumber() + SECONDS_IN_AN_HOUR
+                      );
+                      assert.isBelow(
+                        holdData[5].toNumber(),
+                        time.toNumber() + SECONDS_IN_AN_HOUR + 100
+                      );
+                      assert.equal(holdData[6], secretHashPair.hash);
+                      assert.equal(holdData[7], EMPTY_BYTE32);
+                      assert.equal(holdData[8], HOLD_STATUS_EXECUTED);
+                    });
+                    it('emits an event', async function () {
+                      const { events } = await extension
+                        .connect(notarySigner)
+                        .executeHold(
+                          token.address,
+                          holdId,
+                          holdAmount,
                           EMPTY_BYTE32
                         )
-                    );
+                        .then((res) => res.wait());
+
+                      assert.equal(events![0].event, 'HoldExecuted');
+                      assert.equal(events![0].args?.token, token.address);
+                      assert.equal(events![0].args?.holdId, holdId);
+                      assert.equal(events![0].args?.notary, notary);
+                      assert.equal(events![0].args?.heldValue, holdAmount);
+                      assert.equal(
+                        events![0].args?.transferredValue,
+                        holdAmount
+                      );
+                      assert.equal(events![0].args?.secret, EMPTY_BYTE32);
+                    });
+                  });
+                  describe('when a partial amount is executed', function () {
+                    it('executes the hold', async function () {
+                      const initialPartitionBalance =
+                        await token.balanceOfByPartition(
+                          partition1,
+                          tokenHolder
+                        );
+                      const initialRecipientPartitionBalance =
+                        await token.balanceOfByPartition(partition1, recipient);
+
+                      const executedAmount = 400;
+                      await extension
+                        .connect(notarySigner)
+                        .executeHold(
+                          token.address,
+                          holdId,
+                          executedAmount,
+                          EMPTY_BYTE32
+                        );
+
+                      const finalPartitionBalance =
+                        await token.balanceOfByPartition(
+                          partition1,
+                          tokenHolder
+                        );
+                      const finalRecipientPartitionBalance =
+                        await token.balanceOfByPartition(partition1, recipient);
+
+                      assert.equal(
+                        initialPartitionBalance.toNumber(),
+                        issuanceAmount
+                      );
+                      assert.equal(
+                        finalPartitionBalance.toNumber(),
+                        issuanceAmount - executedAmount
+                      );
+
+                      assert.equal(
+                        initialRecipientPartitionBalance.toNumber(),
+                        0
+                      );
+                      assert.equal(
+                        finalRecipientPartitionBalance.toNumber(),
+                        executedAmount
+                      );
+
+                      const holdData = await extension.retrieveHoldData(
+                        token.address,
+                        holdId
+                      );
+                      assert.equal(holdData[4].toNumber(), holdAmount);
+                    });
+                    it('emits an event', async function () {
+                      const executedAmount = 400;
+                      const { events } = await extension
+                        .connect(notarySigner)
+                        .executeHold(
+                          token.address,
+                          holdId,
+                          executedAmount,
+                          EMPTY_BYTE32
+                        )
+                        .then((res) => res.wait());
+
+                      assert.equal(events![0].event, 'HoldExecuted');
+                      assert.equal(events![0].args?.token, token.address);
+                      assert.equal(events![0].args?.holdId, holdId);
+                      assert.equal(events![0].args?.notary, notary);
+                      assert.equal(events![0].args?.heldValue, holdAmount);
+                      assert.equal(
+                        events![0].args?.transferredValue,
+                        executedAmount
+                      );
+                      assert.equal(events![0].args?.secret, EMPTY_BYTE32);
+                    });
+                  });
+                });
+                describe('when hold shall be kept open', function () {
+                  describe('when value is lower than hold value', function () {
+                    it('executes the hold', async function () {
+                      const initialBalance = await token.balanceOf(tokenHolder);
+                      const initialPartitionBalance =
+                        await token.balanceOfByPartition(
+                          partition1,
+                          tokenHolder
+                        );
+
+                      const initialBalanceOnHold =
+                        await extension.balanceOnHold(
+                          token.address,
+                          tokenHolder
+                        );
+                      const initialBalanceOnHoldByPartition =
+                        await extension.balanceOnHoldByPartition(
+                          token.address,
+                          partition1,
+                          tokenHolder
+                        );
+
+                      const initialSpendableBalance =
+                        await extension.spendableBalanceOf(
+                          token.address,
+                          tokenHolder
+                        );
+                      const initialSpendableBalanceByPartition =
+                        await extension.spendableBalanceOfByPartition(
+                          token.address,
+                          partition1,
+                          tokenHolder
+                        );
+
+                      const initialTotalSupplyOnHold =
+                        await extension.totalSupplyOnHold(token.address);
+                      const initialTotalSupplyOnHoldByPartition =
+                        await extension.totalSupplyOnHoldByPartition(
+                          token.address,
+                          partition1
+                        );
+
+                      const initialRecipientBalance = await token.balanceOf(
+                        recipient
+                      );
+                      const initialRecipientPartitionBalance =
+                        await token.balanceOfByPartition(partition1, recipient);
+
+                      const executedAmount = 400;
+                      await extension
+                        .connect(notarySigner)
+                        .executeHoldAndKeepOpen(
+                          token.address,
+                          holdId,
+                          executedAmount,
+                          EMPTY_BYTE32
+                        );
+
+                      const finalBalance = await token.balanceOf(tokenHolder);
+                      const finalPartitionBalance =
+                        await token.balanceOfByPartition(
+                          partition1,
+                          tokenHolder
+                        );
+
+                      const finalBalanceOnHold = await extension.balanceOnHold(
+                        token.address,
+                        tokenHolder
+                      );
+                      const finalBalanceOnHoldByPartition =
+                        await extension.balanceOnHoldByPartition(
+                          token.address,
+                          partition1,
+                          tokenHolder
+                        );
+
+                      const finalSpendableBalance =
+                        await extension.spendableBalanceOf(
+                          token.address,
+                          tokenHolder
+                        );
+                      const finalSpendableBalanceByPartition =
+                        await extension.spendableBalanceOfByPartition(
+                          token.address,
+                          partition1,
+                          tokenHolder
+                        );
+
+                      const finalTotalSupplyOnHold =
+                        await extension.totalSupplyOnHold(token.address);
+                      const finalTotalSupplyOnHoldByPartition =
+                        await extension.totalSupplyOnHoldByPartition(
+                          token.address,
+                          partition1
+                        );
+
+                      const finalRecipientBalance = await token.balanceOf(
+                        recipient
+                      );
+                      const finalRecipientPartitionBalance =
+                        await token.balanceOfByPartition(partition1, recipient);
+
+                      assert.equal(initialBalance.toNumber(), issuanceAmount);
+                      assert.equal(
+                        finalBalance.toNumber(),
+                        issuanceAmount - executedAmount
+                      );
+                      assert.equal(
+                        initialPartitionBalance.toNumber(),
+                        issuanceAmount
+                      );
+                      assert.equal(
+                        finalPartitionBalance.toNumber(),
+                        issuanceAmount - executedAmount
+                      );
+
+                      assert.equal(initialBalanceOnHold.toNumber(), holdAmount);
+                      assert.equal(
+                        initialBalanceOnHoldByPartition.toNumber(),
+                        holdAmount
+                      );
+                      assert.equal(
+                        finalBalanceOnHold.toNumber(),
+                        holdAmount - executedAmount
+                      );
+                      assert.equal(
+                        finalBalanceOnHoldByPartition.toNumber(),
+                        holdAmount - executedAmount
+                      );
+
+                      assert.equal(
+                        initialSpendableBalance.toNumber(),
+                        issuanceAmount - holdAmount
+                      );
+                      assert.equal(
+                        initialSpendableBalanceByPartition.toNumber(),
+                        issuanceAmount - holdAmount
+                      );
+                      assert.equal(
+                        finalSpendableBalance.toNumber(),
+                        issuanceAmount - holdAmount
+                      );
+                      assert.equal(
+                        finalSpendableBalanceByPartition.toNumber(),
+                        issuanceAmount - holdAmount
+                      );
+
+                      assert.equal(
+                        initialTotalSupplyOnHold.toNumber(),
+                        holdAmount
+                      );
+                      assert.equal(
+                        initialTotalSupplyOnHoldByPartition.toNumber(),
+                        holdAmount
+                      );
+                      assert.equal(
+                        finalTotalSupplyOnHold.toNumber(),
+                        holdAmount - executedAmount
+                      );
+                      assert.equal(
+                        finalTotalSupplyOnHoldByPartition.toNumber(),
+                        holdAmount - executedAmount
+                      );
+
+                      assert.equal(initialRecipientBalance.toNumber(), 0);
+                      assert.equal(
+                        initialRecipientPartitionBalance.toNumber(),
+                        0
+                      );
+                      assert.equal(
+                        finalRecipientBalance.toNumber(),
+                        executedAmount
+                      );
+                      assert.equal(
+                        finalRecipientPartitionBalance.toNumber(),
+                        executedAmount
+                      );
+
+                      const holdData = await extension.retrieveHoldData(
+                        token.address,
+                        holdId
+                      );
+                      assert.equal(holdData[0], partition1);
+                      assert.equal(holdData[1], tokenHolder);
+                      assert.equal(holdData[2], recipient);
+                      assert.equal(holdData[3], notary);
+                      assert.equal(
+                        holdData[4].toNumber(),
+                        holdAmount - executedAmount
+                      );
+                      assert.isAtLeast(
+                        holdData[5].toNumber(),
+                        time.toNumber() + SECONDS_IN_AN_HOUR
+                      );
+                      assert.isBelow(
+                        holdData[5].toNumber(),
+                        time.toNumber() + SECONDS_IN_AN_HOUR + 100
+                      );
+                      assert.equal(holdData[6], secretHashPair.hash);
+                      assert.equal(holdData[7], EMPTY_BYTE32);
+                      assert.equal(
+                        holdData[8],
+                        HOLD_STATUS_EXECUTED_AND_KEPT_OPEN
+                      );
+                    });
+                    it('emits an event', async function () {
+                      const executedAmount = 400;
+                      const { events } = await extension
+                        .connect(notarySigner)
+                        .executeHoldAndKeepOpen(
+                          token.address,
+                          holdId,
+                          executedAmount,
+                          EMPTY_BYTE32
+                        )
+                        .then((res) => res.wait());
+
+                      assert.equal(events![0].event, 'HoldExecutedAndKeptOpen');
+                      assert.equal(events![0].args?.token, token.address);
+                      assert.equal(events![0].args?.holdId, holdId);
+                      assert.equal(events![0].args?.notary, notary);
+                      assert.equal(
+                        events![0].args?.heldValue,
+                        holdAmount - executedAmount
+                      );
+                      assert.equal(
+                        events![0].args?.transferredValue,
+                        executedAmount
+                      );
+                      assert.equal(events![0].args?.secret, EMPTY_BYTE32);
+                    });
+                  });
+                  describe('when value is equal to hold value', function () {
+                    it('executes the hold', async function () {
+                      const initialPartitionBalance =
+                        await token.balanceOfByPartition(
+                          partition1,
+                          tokenHolder
+                        );
+                      const initialRecipientPartitionBalance =
+                        await token.balanceOfByPartition(partition1, recipient);
+
+                      await extension
+                        .connect(notarySigner)
+                        .executeHoldAndKeepOpen(
+                          token.address,
+                          holdId,
+                          holdAmount,
+                          EMPTY_BYTE32
+                        );
+
+                      const finalPartitionBalance =
+                        await token.balanceOfByPartition(
+                          partition1,
+                          tokenHolder
+                        );
+                      const finalRecipientPartitionBalance =
+                        await token.balanceOfByPartition(partition1, recipient);
+
+                      assert.equal(
+                        initialPartitionBalance.toNumber(),
+                        issuanceAmount
+                      );
+                      assert.equal(
+                        finalPartitionBalance.toNumber(),
+                        issuanceAmount - holdAmount
+                      );
+
+                      assert.equal(
+                        initialRecipientPartitionBalance.toNumber(),
+                        0
+                      );
+                      assert.equal(
+                        finalRecipientPartitionBalance.toNumber(),
+                        holdAmount
+                      );
+                    });
+                    it('emits an event', async function () {
+                      const { events } = await extension
+                        .connect(notarySigner)
+                        .executeHoldAndKeepOpen(
+                          token.address,
+                          holdId,
+                          holdAmount,
+                          EMPTY_BYTE32
+                        )
+                        .then((res) => res.wait());
+
+                      assert.equal(events![0].event, 'HoldExecuted');
+                      assert.equal(events![0].args?.token, token.address);
+                      assert.equal(events![0].args?.holdId, holdId);
+                      assert.equal(events![0].args?.notary, notary);
+                      assert.equal(events![0].args?.heldValue, holdAmount);
+                      assert.equal(
+                        events![0].args?.transferredValue,
+                        holdAmount
+                      );
+                      assert.equal(events![0].args?.secret, EMPTY_BYTE32);
+                    });
                   });
                 });
               });
-              describe('when hold is expired', function () {
+              describe('when value is higher than hold value', function () {
                 it('reverts', async function () {
-                  // Wait for more than an hour
-                  await advanceTimeAndBlock(SECONDS_IN_AN_HOUR + 100);
-
                   await expectRevert.unspecified(
                     extension
-                      .connect(await ethers.getSigner(notary))
+                      .connect(notarySigner)
                       .executeHold(
                         token.address,
                         holdId,
-                        holdAmount,
+                        holdAmount + 1,
                         EMPTY_BYTE32
                       )
                   );
                 });
               });
             });
-            describe('when hold is executed by the secret holder', function () {
-              describe('when the token sender provides the correct secret', function () {
-                it('executes the hold', async function () {
-                  const initialPartitionBalance =
-                    await token.balanceOfByPartition(partition1, tokenHolder);
-                  const initialRecipientPartitionBalance =
-                    await token.balanceOfByPartition(partition1, recipient);
+            describe('when hold is expired', function () {
+              it('reverts', async function () {
+                // Wait for more than an hour
+                await advanceTimeAndBlock(SECONDS_IN_AN_HOUR + 100);
 
-                  const { events } = await extension
-                    .connect(await ethers.getSigner(recipient))
+                await expectRevert.unspecified(
+                  extension
+                    .connect(notarySigner)
                     .executeHold(
                       token.address,
                       holdId,
                       holdAmount,
-                      secretHashPair.secret
+                      EMPTY_BYTE32
                     )
-                    .then((res) => res.wait());
-
-                  const finalPartitionBalance =
-                    await token.balanceOfByPartition(partition1, tokenHolder);
-                  const finalRecipientPartitionBalance =
-                    await token.balanceOfByPartition(partition1, recipient);
-
-                  assert.equal(
-                    initialPartitionBalance.toNumber(),
-                    issuanceAmount
-                  );
-                  assert.equal(
-                    finalPartitionBalance.toNumber(),
-                    issuanceAmount - holdAmount
-                  );
-
-                  assert.equal(initialRecipientPartitionBalance.toNumber(), 0);
-                  assert.equal(
-                    finalRecipientPartitionBalance.toNumber(),
-                    holdAmount
-                  );
-
-                  const holdData = await extension.retrieveHoldData(
-                    token.address,
-                    holdId
-                  );
-                  assert.equal(holdData[4].toNumber(), holdAmount);
-
-                  assert.equal(events![0].event, 'HoldExecuted');
-                  assert.equal(events![0].args?.secret, secretHashPair.secret); // HTLC mechanism
-                });
-              });
-              describe("when the token sender doesn't provide the correct secret", function () {
-                it('reverts', async function () {
-                  const fakeSecretHashPair = newSecretHashPair();
-                  await expectRevert.unspecified(
-                    extension
-                      .connect(await ethers.getSigner(recipient))
-                      .executeHold(
-                        token.address,
-                        holdId,
-                        holdAmount,
-                        fakeSecretHashPair.secret
-                      )
-                  );
-                });
+                );
               });
             });
           });
-          describe('when value is nil', function () {
-            it('reverts', async function () {
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(notary))
-                  .executeHold(token.address, holdId, 0, EMPTY_BYTE32)
-              );
+          describe('when hold is executed by the secret holder', function () {
+            describe('when the token sender provides the correct secret', function () {
+              it('executes the hold', async function () {
+                const initialPartitionBalance =
+                  await token.balanceOfByPartition(partition1, tokenHolder);
+                const initialRecipientPartitionBalance =
+                  await token.balanceOfByPartition(partition1, recipient);
+
+                const { events } = await extension
+                  .connect(recipientSigner)
+                  .executeHold(
+                    token.address,
+                    holdId,
+                    holdAmount,
+                    secretHashPair.secret
+                  )
+                  .then((res) => res.wait());
+
+                const finalPartitionBalance = await token.balanceOfByPartition(
+                  partition1,
+                  tokenHolder
+                );
+                const finalRecipientPartitionBalance =
+                  await token.balanceOfByPartition(partition1, recipient);
+
+                assert.equal(
+                  initialPartitionBalance.toNumber(),
+                  issuanceAmount
+                );
+                assert.equal(
+                  finalPartitionBalance.toNumber(),
+                  issuanceAmount - holdAmount
+                );
+
+                assert.equal(initialRecipientPartitionBalance.toNumber(), 0);
+                assert.equal(
+                  finalRecipientPartitionBalance.toNumber(),
+                  holdAmount
+                );
+
+                const holdData = await extension.retrieveHoldData(
+                  token.address,
+                  holdId
+                );
+                assert.equal(holdData[4].toNumber(), holdAmount);
+
+                assert.equal(events![0].event, 'HoldExecuted');
+                assert.equal(events![0].args?.secret, secretHashPair.secret); // HTLC mechanism
+              });
+            });
+            describe("when the token sender doesn't provide the correct secret", function () {
+              it('reverts', async function () {
+                const fakeSecretHashPair = newSecretHashPair();
+                await expectRevert.unspecified(
+                  extension
+                    .connect(recipientSigner)
+                    .executeHold(
+                      token.address,
+                      holdId,
+                      holdAmount,
+                      fakeSecretHashPair.secret
+                    )
+                );
+              });
             });
           });
         });
-        describe('when hold is in status ExecutedAndKeptOpen', function () {
-          it('executes the hold', async function () {
-            let holdData = await extension.retrieveHoldData(
-              token.address,
-              holdId
+        describe('when value is nil', function () {
+          it('reverts', async function () {
+            await expectRevert.unspecified(
+              extension
+                .connect(notarySigner)
+                .executeHold(token.address, holdId, 0, EMPTY_BYTE32)
             );
-            assert.equal(holdData[8], HOLD_STATUS_ORDERED);
-
-            const partitionBalance1 = await token.balanceOfByPartition(
-              partition1,
-              tokenHolder
-            );
-            const recipientPartitionBalance1 = await token.balanceOfByPartition(
-              partition1,
-              recipient
-            );
-
-            const executedAmount = 10;
-            await extension
-              .connect(await ethers.getSigner(notary))
-              .executeHoldAndKeepOpen(
-                token.address,
-                holdId,
-                executedAmount,
-                EMPTY_BYTE32
-              );
-
-            holdData = await extension.retrieveHoldData(token.address, holdId);
-            assert.equal(holdData[8], HOLD_STATUS_EXECUTED_AND_KEPT_OPEN);
-
-            const partitionBalance2 = await token.balanceOfByPartition(
-              partition1,
-              tokenHolder
-            );
-            const recipientPartitionBalance2 = await token.balanceOfByPartition(
-              partition1,
-              recipient
-            );
-
-            await extension
-              .connect(await ethers.getSigner(notary))
-              .executeHold(
-                token.address,
-                holdId,
-                holdAmount - executedAmount,
-                EMPTY_BYTE32
-              );
-
-            const partitionBalance3 = await token.balanceOfByPartition(
-              partition1,
-              tokenHolder
-            );
-            const recipientPartitionBalance3 = await token.balanceOfByPartition(
-              partition1,
-              recipient
-            );
-
-            assert.equal(partitionBalance1.toNumber(), issuanceAmount);
-            assert.equal(recipientPartitionBalance1.toNumber(), 0);
-
-            assert.equal(
-              partitionBalance2.toNumber(),
-              issuanceAmount - executedAmount
-            );
-            assert.equal(recipientPartitionBalance2.toNumber(), executedAmount);
-
-            assert.equal(
-              partitionBalance3.toNumber(),
-              issuanceAmount - holdAmount
-            );
-            assert.equal(recipientPartitionBalance3.toNumber(), holdAmount);
           });
         });
       });
-      describe('when hold can not be executed', function () {
-        it('reverts', async function () {
+      describe('when hold is in status ExecutedAndKeptOpen', function () {
+        it('executes the hold', async function () {
+          let holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
+          );
+          assert.equal(holdData[8], HOLD_STATUS_ORDERED);
+
+          const partitionBalance1 = await token.balanceOfByPartition(
+            partition1,
+            tokenHolder
+          );
+          const recipientPartitionBalance1 = await token.balanceOfByPartition(
+            partition1,
+            recipient
+          );
+
+          const executedAmount = 10;
           await extension
-            .connect(await ethers.getSigner(notary))
+            .connect(notarySigner)
+            .executeHoldAndKeepOpen(
+              token.address,
+              holdId,
+              executedAmount,
+              EMPTY_BYTE32
+            );
+
+          holdData = await extension.retrieveHoldData(token.address, holdId);
+          assert.equal(holdData[8], HOLD_STATUS_EXECUTED_AND_KEPT_OPEN);
+
+          const partitionBalance2 = await token.balanceOfByPartition(
+            partition1,
+            tokenHolder
+          );
+          const recipientPartitionBalance2 = await token.balanceOfByPartition(
+            partition1,
+            recipient
+          );
+
+          await extension
+            .connect(notarySigner)
+            .executeHold(
+              token.address,
+              holdId,
+              holdAmount - executedAmount,
+              EMPTY_BYTE32
+            );
+
+          const partitionBalance3 = await token.balanceOfByPartition(
+            partition1,
+            tokenHolder
+          );
+          const recipientPartitionBalance3 = await token.balanceOfByPartition(
+            partition1,
+            recipient
+          );
+
+          assert.equal(partitionBalance1.toNumber(), issuanceAmount);
+          assert.equal(recipientPartitionBalance1.toNumber(), 0);
+
+          assert.equal(
+            partitionBalance2.toNumber(),
+            issuanceAmount - executedAmount
+          );
+          assert.equal(recipientPartitionBalance2.toNumber(), executedAmount);
+
+          assert.equal(
+            partitionBalance3.toNumber(),
+            issuanceAmount - holdAmount
+          );
+          assert.equal(recipientPartitionBalance3.toNumber(), holdAmount);
+        });
+      });
+    });
+    describe('when hold can not be executed', function () {
+      it('reverts', async function () {
+        await extension
+          .connect(notarySigner)
+          .releaseHold(token.address, holdId);
+
+        const holdData = await extension.retrieveHoldData(
+          token.address,
+          holdId
+        );
+        assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
+
+        await expectRevert.unspecified(
+          extension
+            .connect(notarySigner)
+            .executeHold(token.address, holdId, holdAmount, EMPTY_BYTE32)
+        );
+      });
+    });
+  });
+
+  // SET TOKEN CONTROLLERS
+  describe('setTokenControllers', function () {
+    describe('when the caller is the token contract owner', function () {
+      it('sets the operators as token controllers', async function () {
+        await assertIsTokenController(extension, token, controller, true);
+
+        await assertIsTokenController(
+          extension,
+          token,
+          tokenController1,
+          false
+        );
+        await addTokenController(extension, token, owner, tokenController1);
+        await assertIsTokenController(extension, token, tokenController1, true);
+      });
+    });
+    describe('when the caller is an other token controller', function () {
+      it('sets the operators as token controllers', async function () {
+        await assertIsTokenController(extension, token, controller, true);
+
+        await assertIsTokenController(
+          extension,
+          token,
+          tokenController1,
+          false
+        );
+        await addTokenController(extension, token, owner, tokenController1);
+        await assertIsTokenController(extension, token, tokenController1, true);
+
+        await assertIsTokenController(
+          extension,
+          token,
+          tokenController2,
+          false
+        );
+        await addTokenController(
+          extension,
+          token,
+          tokenController1,
+          tokenController2
+        );
+        await assertIsTokenController(extension, token, tokenController2, true);
+      });
+    });
+    describe('when the caller is neither the token contract owner nor a token controller', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          addTokenController(extension, token, unknown, tokenController1)
+        );
+      });
+    });
+  });
+
+  // PRE-HOLDS
+  describe('pre-hold', function () {
+    beforeEach(async function () {
+      await assertHoldsActivated(extension, token, true);
+
+      const certificate = await craftCertificate(
+        token.interface.encodeFunctionData('issueByPartition', [
+          partition1,
+          tokenHolder,
+          issuanceAmount,
+          ZERO_BYTE
+        ]),
+        token,
+        extension,
+        clock, // clock
+        controller
+      );
+      await token
+        .connect(controllerSigner)
+        .issueByPartition(partition1, tokenHolder, issuanceAmount, certificate);
+    });
+
+    describe('when certificate is not activated', function () {
+      beforeEach(async function () {
+        await setCertificateActivated(
+          extension,
+          token,
+          controller,
+          CERTIFICATE_VALIDATION_NONE
+        );
+        await assertCertificateActivated(
+          extension,
+          token,
+          CERTIFICATE_VALIDATION_NONE
+        );
+      });
+      describe('when pre-hold can be created', function () {
+        it('creates a pre-hold', async function () {
+          const initialBalance = await token.balanceOf(recipient);
+          const initialPartitionBalance = await token.balanceOfByPartition(
+            partition1,
+            recipient
+          );
+
+          const initialBalanceOnHold = await extension.balanceOnHold(
+            token.address,
+            recipient
+          );
+          const initialBalanceOnHoldByPartition =
+            await extension.balanceOnHoldByPartition(
+              token.address,
+              partition1,
+              recipient
+            );
+
+          const initialSpendableBalance = await extension.spendableBalanceOf(
+            token.address,
+            recipient
+          );
+          const initialSpendableBalanceByPartition =
+            await extension.spendableBalanceOfByPartition(
+              token.address,
+              partition1,
+              recipient
+            );
+
+          const initialTotalSupplyOnHold = await extension.totalSupplyOnHold(
+            token.address
+          );
+          const initialTotalSupplyOnHoldByPartition =
+            await extension.totalSupplyOnHoldByPartition(
+              token.address,
+              partition1
+            );
+
+          const time = await clock.getTime();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await extension
+            .connect(controllerSigner)
+            .preHoldFor(
+              token.address,
+              holdId,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              ZERO_BYTE
+            );
+
+          const finalBalance = await token.balanceOf(recipient);
+          const finalPartitionBalance = await token.balanceOfByPartition(
+            partition1,
+            recipient
+          );
+
+          const finalBalanceOnHold = await extension.balanceOnHold(
+            token.address,
+            recipient
+          );
+          const finalBalanceOnHoldByPartition =
+            await extension.balanceOnHoldByPartition(
+              token.address,
+              partition1,
+              recipient
+            );
+
+          const finalSpendableBalance = await extension.spendableBalanceOf(
+            token.address,
+            recipient
+          );
+          const finalSpendableBalanceByPartition =
+            await extension.spendableBalanceOfByPartition(
+              token.address,
+              partition1,
+              recipient
+            );
+
+          const finalTotalSupplyOnHold = await extension.totalSupplyOnHold(
+            token.address
+          );
+          const finalTotalSupplyOnHoldByPartition =
+            await extension.totalSupplyOnHoldByPartition(
+              token.address,
+              partition1
+            );
+
+          assert.equal(initialBalance.toNumber(), 0);
+          assert.equal(finalBalance.toNumber(), 0);
+          assert.equal(initialPartitionBalance.toNumber(), 0);
+          assert.equal(finalPartitionBalance.toNumber(), 0);
+
+          assert.equal(initialBalanceOnHold.toNumber(), 0);
+          assert.equal(initialBalanceOnHoldByPartition.toNumber(), 0);
+          assert.equal(finalBalanceOnHold.toNumber(), 0);
+          assert.equal(finalBalanceOnHoldByPartition.toNumber(), 0);
+
+          assert.equal(initialSpendableBalance.toNumber(), 0);
+          assert.equal(initialSpendableBalanceByPartition.toNumber(), 0);
+          assert.equal(finalSpendableBalance.toNumber(), 0);
+          assert.equal(finalSpendableBalanceByPartition.toNumber(), 0);
+
+          assert.equal(initialTotalSupplyOnHold.toNumber(), 0);
+          assert.equal(initialTotalSupplyOnHoldByPartition.toNumber(), 0);
+          assert.equal(finalTotalSupplyOnHold.toNumber(), 0);
+          assert.equal(finalTotalSupplyOnHoldByPartition.toNumber(), 0);
+
+          const holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
+          );
+          assert.equal(holdData[0], partition1);
+          assert.equal(holdData[1], ZERO_ADDRESS);
+          assert.equal(holdData[2], recipient);
+          assert.equal(holdData[3], notary);
+          assert.equal(holdData[4].toNumber(), holdAmount);
+          assert.isAtLeast(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR
+          );
+          assert.isBelow(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR + 100
+          );
+          assert.equal(holdData[6], secretHashPair.hash);
+          assert.equal(holdData[7], EMPTY_BYTE32);
+          assert.equal(holdData[8], HOLD_STATUS_ORDERED);
+        });
+        it('emits an event', async function () {
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          const time = await clock.getTime();
+          const { events } = await extension
+            .connect(controllerSigner)
+            .preHoldFor(
+              token.address,
+              holdId,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              ZERO_BYTE
+            )
+            .then((res) => res.wait());
+
+          assert.equal(events![0].event, 'HoldCreated');
+          assert.equal(events![0].args?.token, token.address);
+          assert.equal(events![0].args?.holdId, holdId);
+          assert.equal(events![0].args?.partition, partition1);
+          assert.equal(events![0].args?.sender, ZERO_ADDRESS);
+          assert.equal(events![0].args?.recipient, recipient);
+          assert.equal(events![0].args?.notary, notary);
+          assert.equal(events![0].args?.value, holdAmount);
+          assert.isAtLeast(
+            (events![0].args?.expiration).toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR
+          );
+          assert.isBelow(
+            (events![0].args?.expiration).toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR + 100
+          );
+          assert.equal(events![0].args?.secretHash, secretHashPair.hash);
+        });
+        it('creates a pre-hold with expiration time', async function () {
+          const time = (await clock.getTime()).toNumber();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await extension
+            .connect(controllerSigner)
+            .preHoldForWithExpirationDate(
+              token.address,
+              holdId,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              time + SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              ZERO_BYTE
+            );
+
+          const holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
+          );
+          assert.equal(holdData[0], partition1);
+          assert.equal(holdData[1], ZERO_ADDRESS);
+          assert.equal(holdData[2], recipient);
+          assert.equal(holdData[3], notary);
+          assert.equal(holdData[4].toNumber(), holdAmount);
+          assert.equal(holdData[5].toNumber(), time + SECONDS_IN_AN_HOUR);
+          assert.equal(holdData[6], secretHashPair.hash);
+          assert.equal(holdData[7], EMPTY_BYTE32);
+          assert.equal(holdData[8], HOLD_STATUS_ORDERED);
+        });
+        it('creates and releases a pre-hold', async function () {
+          const time = (await clock.getTime()).toNumber();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await extension
+            .connect(controllerSigner)
+            .preHoldForWithExpirationDate(
+              token.address,
+              holdId,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              time + SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              ZERO_BYTE
+            );
+          await extension
+            .connect(notarySigner)
             .releaseHold(token.address, holdId);
 
           const holdData = await extension.retrieveHoldData(
             token.address,
             holdId
           );
+          assert.equal(holdData[0], partition1);
+          assert.equal(holdData[1], ZERO_ADDRESS);
+          assert.equal(holdData[2], recipient);
+          assert.equal(holdData[3], notary);
+          assert.equal(holdData[4].toNumber(), holdAmount);
+          assert.equal(holdData[5].toNumber(), time + SECONDS_IN_AN_HOUR);
+          assert.equal(holdData[6], secretHashPair.hash);
+          assert.equal(holdData[7], EMPTY_BYTE32);
           assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
+        });
+        it('creates and renews a pre-hold', async function () {
+          const time = (await clock.getTime()).toNumber();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await extension
+            .connect(controllerSigner)
+            .preHoldForWithExpirationDate(
+              token.address,
+              holdId,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              time + SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              ZERO_BYTE
+            );
+          await extension
+            .connect(controllerSigner)
+            .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE);
 
+          const holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
+          );
+          assert.equal(holdData[0], partition1);
+          assert.equal(holdData[1], ZERO_ADDRESS);
+          assert.equal(holdData[2], recipient);
+          assert.equal(holdData[3], notary);
+          assert.equal(holdData[4].toNumber(), holdAmount);
+          assert.isAtLeast(holdData[5].toNumber(), time + SECONDS_IN_A_DAY - 2);
+          assert.isBelow(holdData[5].toNumber(), time + SECONDS_IN_A_DAY + 100);
+          assert.equal(holdData[6], secretHashPair.hash);
+          assert.equal(holdData[7], EMPTY_BYTE32);
+          assert.equal(holdData[8], HOLD_STATUS_ORDERED);
+        });
+        it('creates a pre-hold and fails renewing it', async function () {
+          const time = (await clock.getTime()).toNumber();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await extension
+            .connect(controllerSigner)
+            .preHoldForWithExpirationDate(
+              token.address,
+              holdId,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              time + SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              ZERO_BYTE
+            );
           await expectRevert.unspecified(
             extension
-              .connect(await ethers.getSigner(notary))
-              .executeHold(token.address, holdId, holdAmount, EMPTY_BYTE32)
+              .connect(recipientSigner)
+              .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE)
           );
         });
-      });
-    });
-
-    // SET TOKEN CONTROLLERS
-    describe('setTokenControllers', function () {
-      describe('when the caller is the token contract owner', function () {
-        it('sets the operators as token controllers', async function () {
-          await assertIsTokenController(extension, token, controller, true);
-
-          await assertIsTokenController(
-            extension,
-            token,
-            tokenController1,
-            false
-          );
-          await addTokenController(extension, token, owner, tokenController1);
-          await assertIsTokenController(
-            extension,
-            token,
-            tokenController1,
-            true
-          );
-        });
-      });
-      describe('when the caller is an other token controller', function () {
-        it('sets the operators as token controllers', async function () {
-          await assertIsTokenController(extension, token, controller, true);
-
-          await assertIsTokenController(
-            extension,
-            token,
-            tokenController1,
-            false
-          );
-          await addTokenController(extension, token, owner, tokenController1);
-          await assertIsTokenController(
-            extension,
-            token,
-            tokenController1,
-            true
-          );
-
-          await assertIsTokenController(
-            extension,
-            token,
-            tokenController2,
-            false
-          );
-          await addTokenController(
-            extension,
-            token,
-            tokenController1,
-            tokenController2
-          );
-          await assertIsTokenController(
-            extension,
-            token,
-            tokenController2,
-            true
-          );
-        });
-      });
-      describe('when the caller is neither the token contract owner nor a token controller', function () {
-        it('reverts', async function () {
-          await expectRevert.unspecified(
-            addTokenController(extension, token, unknown, tokenController1)
-          );
-        });
-      });
-    });
-
-    // PRE-HOLDS
-    describe('pre-hold', function () {
-      beforeEach(async function () {
-        await assertHoldsActivated(extension, token, true);
-
-        const certificate = await craftCertificate(
-          token.interface.encodeFunctionData('issueByPartition', [
+        it('creates and executes pre-hold', async function () {
+          const initialBalance = await token.balanceOf(recipient);
+          const initialPartitionBalance = await token.balanceOfByPartition(
             partition1,
-            tokenHolder,
-            issuanceAmount,
-            ZERO_BYTE
-          ]),
-          token,
-          extension,
-          clock, // clock
-          controller
-        );
-        await token
-          .connect(await ethers.getSigner(controller))
-          .issueByPartition(
+            recipient
+          );
+
+          const initialBalanceOnHold = await extension.balanceOnHold(
+            token.address,
+            recipient
+          );
+          const initialBalanceOnHoldByPartition =
+            await extension.balanceOnHoldByPartition(
+              token.address,
+              partition1,
+              recipient
+            );
+
+          const initialSpendableBalance = await extension.spendableBalanceOf(
+            token.address,
+            recipient
+          );
+          const initialSpendableBalanceByPartition =
+            await extension.spendableBalanceOfByPartition(
+              token.address,
+              partition1,
+              recipient
+            );
+
+          const initialTotalSupplyOnHold = await extension.totalSupplyOnHold(
+            token.address
+          );
+          const initialTotalSupplyOnHoldByPartition =
+            await extension.totalSupplyOnHoldByPartition(
+              token.address,
+              partition1
+            );
+
+          const time = await clock.getTime();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await extension
+            .connect(controllerSigner)
+            .preHoldFor(
+              token.address,
+              holdId,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              ZERO_BYTE
+            );
+          await extension
+            .connect(controllerSigner)
+            .addAllowlisted(token.address, recipient);
+          await extension
+            .connect(recipientSigner)
+            .executeHold(
+              token.address,
+              holdId,
+              holdAmount,
+              secretHashPair.secret
+            );
+
+          const finalBalance = await token.balanceOf(recipient);
+          const finalPartitionBalance = await token.balanceOfByPartition(
             partition1,
-            tokenHolder,
-            issuanceAmount,
-            certificate
+            recipient
           );
-      });
 
-      describe('when certificate is not activated', function () {
-        beforeEach(async function () {
-          await setCertificateActivated(
-            extension,
-            token,
-            controller,
-            CERTIFICATE_VALIDATION_NONE
+          const finalBalanceOnHold = await extension.balanceOnHold(
+            token.address,
+            recipient
           );
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_NONE
+          const finalBalanceOnHoldByPartition =
+            await extension.balanceOnHoldByPartition(
+              token.address,
+              partition1,
+              recipient
+            );
+
+          const finalSpendableBalance = await extension.spendableBalanceOf(
+            token.address,
+            recipient
           );
+          const finalSpendableBalanceByPartition =
+            await extension.spendableBalanceOfByPartition(
+              token.address,
+              partition1,
+              recipient
+            );
+
+          const finalTotalSupplyOnHold = await extension.totalSupplyOnHold(
+            token.address
+          );
+          const finalTotalSupplyOnHoldByPartition =
+            await extension.totalSupplyOnHoldByPartition(
+              token.address,
+              partition1
+            );
+
+          assert.equal(initialBalance.toNumber(), 0);
+          assert.equal(finalBalance.toNumber(), holdAmount);
+          assert.equal(initialPartitionBalance.toNumber(), 0);
+          assert.equal(finalPartitionBalance.toNumber(), holdAmount);
+
+          assert.equal(initialBalanceOnHold.toNumber(), 0);
+          assert.equal(initialBalanceOnHoldByPartition.toNumber(), 0);
+          assert.equal(finalBalanceOnHold.toNumber(), 0);
+          assert.equal(finalBalanceOnHoldByPartition.toNumber(), 0);
+
+          assert.equal(initialSpendableBalance.toNumber(), 0);
+          assert.equal(initialSpendableBalanceByPartition.toNumber(), 0);
+          assert.equal(finalSpendableBalance.toNumber(), holdAmount);
+          assert.equal(finalSpendableBalanceByPartition.toNumber(), holdAmount);
+
+          assert.equal(initialTotalSupplyOnHold.toNumber(), 0);
+          assert.equal(initialTotalSupplyOnHoldByPartition.toNumber(), 0);
+          assert.equal(finalTotalSupplyOnHold.toNumber(), 0);
+          assert.equal(finalTotalSupplyOnHoldByPartition.toNumber(), 0);
+
+          const holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
+          );
+          assert.equal(holdData[0], partition1);
+          assert.equal(holdData[1], ZERO_ADDRESS);
+          assert.equal(holdData[2], recipient);
+          assert.equal(holdData[3], notary);
+          assert.equal(holdData[4].toNumber(), holdAmount);
+          assert.isAtLeast(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR
+          );
+          assert.isBelow(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR + 100
+          );
+          assert.equal(holdData[6], secretHashPair.hash);
+          assert.equal(holdData[7], secretHashPair.secret);
+          assert.equal(holdData[8], HOLD_STATUS_EXECUTED);
         });
-        describe('when pre-hold can be created', function () {
-          it('creates a pre-hold', async function () {
-            const initialBalance = await token.balanceOf(recipient);
-            const initialPartitionBalance = await token.balanceOfByPartition(
+        it('creates and executes pre-hold in 2 times', async function () {
+          const initialBalance = await token.balanceOf(recipient);
+
+          const time = await clock.getTime();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await extension
+            .connect(controllerSigner)
+            .preHoldFor(
+              token.address,
+              holdId,
+              recipient,
+              notary,
               partition1,
-              recipient
+              holdAmount,
+              SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              ZERO_BYTE
             );
-
-            const initialBalanceOnHold = await extension.balanceOnHold(
+          await extension
+            .connect(controllerSigner)
+            .addAllowlisted(token.address, recipient);
+          await extension
+            .connect(recipientSigner)
+            .executeHoldAndKeepOpen(
               token.address,
-              recipient
-            );
-            const initialBalanceOnHoldByPartition =
-              await extension.balanceOnHoldByPartition(
-                token.address,
-                partition1,
-                recipient
-              );
-
-            const initialSpendableBalance = await extension.spendableBalanceOf(
-              token.address,
-              recipient
-            );
-            const initialSpendableBalanceByPartition =
-              await extension.spendableBalanceOfByPartition(
-                token.address,
-                partition1,
-                recipient
-              );
-
-            const initialTotalSupplyOnHold = await extension.totalSupplyOnHold(
-              token.address
-            );
-            const initialTotalSupplyOnHoldByPartition =
-              await extension.totalSupplyOnHoldByPartition(
-                token.address,
-                partition1
-              );
-
-            const time = await clock.getTime();
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .preHoldFor(
-                token.address,
-                holdId,
-                recipient,
-                notary,
-                partition1,
-                holdAmount,
-                SECONDS_IN_AN_HOUR,
-                secretHashPair.hash,
-                ZERO_BYTE
-              );
-
-            const finalBalance = await token.balanceOf(recipient);
-            const finalPartitionBalance = await token.balanceOfByPartition(
-              partition1,
-              recipient
+              holdId,
+              holdAmount - 100,
+              secretHashPair.secret
             );
 
-            const finalBalanceOnHold = await extension.balanceOnHold(
-              token.address,
-              recipient
-            );
-            const finalBalanceOnHoldByPartition =
-              await extension.balanceOnHoldByPartition(
-                token.address,
-                partition1,
-                recipient
-              );
+          const intermediateBalance = await token.balanceOf(recipient);
 
-            const finalSpendableBalance = await extension.spendableBalanceOf(
-              token.address,
-              recipient
-            );
-            const finalSpendableBalanceByPartition =
-              await extension.spendableBalanceOfByPartition(
-                token.address,
-                partition1,
-                recipient
-              );
+          let holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
+          );
+          assert.equal(holdData[0], partition1);
+          assert.equal(holdData[1], ZERO_ADDRESS);
+          assert.equal(holdData[2], recipient);
+          assert.equal(holdData[3], notary);
+          assert.equal(holdData[4].toNumber(), 100);
+          assert.isAtLeast(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR
+          );
+          assert.isBelow(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR + 100
+          );
+          assert.equal(holdData[6], secretHashPair.hash);
+          assert.equal(holdData[7], secretHashPair.secret);
+          assert.equal(holdData[8], HOLD_STATUS_EXECUTED_AND_KEPT_OPEN);
 
-            const finalTotalSupplyOnHold = await extension.totalSupplyOnHold(
-              token.address
-            );
-            const finalTotalSupplyOnHoldByPartition =
-              await extension.totalSupplyOnHoldByPartition(
-                token.address,
-                partition1
-              );
+          await extension
+            .connect(recipientSigner)
+            .executeHold(token.address, holdId, 100, secretHashPair.secret);
 
-            assert.equal(initialBalance.toNumber(), 0);
-            assert.equal(finalBalance.toNumber(), 0);
-            assert.equal(initialPartitionBalance.toNumber(), 0);
-            assert.equal(finalPartitionBalance.toNumber(), 0);
+          const finalBalance = await token.balanceOf(recipient);
 
-            assert.equal(initialBalanceOnHold.toNumber(), 0);
-            assert.equal(initialBalanceOnHoldByPartition.toNumber(), 0);
-            assert.equal(finalBalanceOnHold.toNumber(), 0);
-            assert.equal(finalBalanceOnHoldByPartition.toNumber(), 0);
+          assert.equal(initialBalance.toNumber(), 0);
+          assert.equal(intermediateBalance.toNumber(), holdAmount - 100);
+          assert.equal(finalBalance.toNumber(), holdAmount);
 
-            assert.equal(initialSpendableBalance.toNumber(), 0);
-            assert.equal(initialSpendableBalanceByPartition.toNumber(), 0);
-            assert.equal(finalSpendableBalance.toNumber(), 0);
-            assert.equal(finalSpendableBalanceByPartition.toNumber(), 0);
-
-            assert.equal(initialTotalSupplyOnHold.toNumber(), 0);
-            assert.equal(initialTotalSupplyOnHoldByPartition.toNumber(), 0);
-            assert.equal(finalTotalSupplyOnHold.toNumber(), 0);
-            assert.equal(finalTotalSupplyOnHoldByPartition.toNumber(), 0);
-
-            const holdData = await extension.retrieveHoldData(
-              token.address,
-              holdId
-            );
-            assert.equal(holdData[0], partition1);
-            assert.equal(holdData[1], ZERO_ADDRESS);
-            assert.equal(holdData[2], recipient);
-            assert.equal(holdData[3], notary);
-            assert.equal(holdData[4].toNumber(), holdAmount);
-            assert.isAtLeast(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR
-            );
-            assert.isBelow(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR + 100
-            );
-            assert.equal(holdData[6], secretHashPair.hash);
-            assert.equal(holdData[7], EMPTY_BYTE32);
-            assert.equal(holdData[8], HOLD_STATUS_ORDERED);
-          });
-          it('emits an event', async function () {
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            const time = await clock.getTime();
-            const { events } = await extension
-              .connect(await ethers.getSigner(controller))
-              .preHoldFor(
-                token.address,
-                holdId,
-                recipient,
-                notary,
-                partition1,
-                holdAmount,
-                SECONDS_IN_AN_HOUR,
-                secretHashPair.hash,
-                ZERO_BYTE
-              )
-              .then((res) => res.wait());
-
-            assert.equal(events![0].event, 'HoldCreated');
-            assert.equal(events![0].args?.token, token.address);
-            assert.equal(events![0].args?.holdId, holdId);
-            assert.equal(events![0].args?.partition, partition1);
-            assert.equal(events![0].args?.sender, ZERO_ADDRESS);
-            assert.equal(events![0].args?.recipient, recipient);
-            assert.equal(events![0].args?.notary, notary);
-            assert.equal(events![0].args?.value, holdAmount);
-            assert.isAtLeast(
-              (events![0].args?.expiration).toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR
-            );
-            assert.isBelow(
-              (events![0].args?.expiration).toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR + 100
-            );
-            assert.equal(events![0].args?.secretHash, secretHashPair.hash);
-          });
-          it('creates a pre-hold with expiration time', async function () {
-            const time = (await clock.getTime()).toNumber();
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .preHoldForWithExpirationDate(
-                token.address,
-                holdId,
-                recipient,
-                notary,
-                partition1,
-                holdAmount,
-                time + SECONDS_IN_AN_HOUR,
-                secretHashPair.hash,
-                ZERO_BYTE
-              );
-
-            const holdData = await extension.retrieveHoldData(
-              token.address,
-              holdId
-            );
-            assert.equal(holdData[0], partition1);
-            assert.equal(holdData[1], ZERO_ADDRESS);
-            assert.equal(holdData[2], recipient);
-            assert.equal(holdData[3], notary);
-            assert.equal(holdData[4].toNumber(), holdAmount);
-            assert.equal(holdData[5].toNumber(), time + SECONDS_IN_AN_HOUR);
-            assert.equal(holdData[6], secretHashPair.hash);
-            assert.equal(holdData[7], EMPTY_BYTE32);
-            assert.equal(holdData[8], HOLD_STATUS_ORDERED);
-          });
-          it('creates and releases a pre-hold', async function () {
-            const time = (await clock.getTime()).toNumber();
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .preHoldForWithExpirationDate(
-                token.address,
-                holdId,
-                recipient,
-                notary,
-                partition1,
-                holdAmount,
-                time + SECONDS_IN_AN_HOUR,
-                secretHashPair.hash,
-                ZERO_BYTE
-              );
-            await extension
-              .connect(await ethers.getSigner(notary))
-              .releaseHold(token.address, holdId);
-
-            const holdData = await extension.retrieveHoldData(
-              token.address,
-              holdId
-            );
-            assert.equal(holdData[0], partition1);
-            assert.equal(holdData[1], ZERO_ADDRESS);
-            assert.equal(holdData[2], recipient);
-            assert.equal(holdData[3], notary);
-            assert.equal(holdData[4].toNumber(), holdAmount);
-            assert.equal(holdData[5].toNumber(), time + SECONDS_IN_AN_HOUR);
-            assert.equal(holdData[6], secretHashPair.hash);
-            assert.equal(holdData[7], EMPTY_BYTE32);
-            assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
-          });
-          it('creates and renews a pre-hold', async function () {
-            const time = (await clock.getTime()).toNumber();
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .preHoldForWithExpirationDate(
-                token.address,
-                holdId,
-                recipient,
-                notary,
-                partition1,
-                holdAmount,
-                time + SECONDS_IN_AN_HOUR,
-                secretHashPair.hash,
-                ZERO_BYTE
-              );
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE);
-
-            const holdData = await extension.retrieveHoldData(
-              token.address,
-              holdId
-            );
-            assert.equal(holdData[0], partition1);
-            assert.equal(holdData[1], ZERO_ADDRESS);
-            assert.equal(holdData[2], recipient);
-            assert.equal(holdData[3], notary);
-            assert.equal(holdData[4].toNumber(), holdAmount);
-            assert.isAtLeast(
-              holdData[5].toNumber(),
-              time + SECONDS_IN_A_DAY - 2
-            );
-            assert.isBelow(
-              holdData[5].toNumber(),
-              time + SECONDS_IN_A_DAY + 100
-            );
-            assert.equal(holdData[6], secretHashPair.hash);
-            assert.equal(holdData[7], EMPTY_BYTE32);
-            assert.equal(holdData[8], HOLD_STATUS_ORDERED);
-          });
-          it('creates a pre-hold and fails renewing it', async function () {
-            const time = (await clock.getTime()).toNumber();
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .preHoldForWithExpirationDate(
-                token.address,
-                holdId,
-                recipient,
-                notary,
-                partition1,
-                holdAmount,
-                time + SECONDS_IN_AN_HOUR,
-                secretHashPair.hash,
-                ZERO_BYTE
-              );
-            await expectRevert.unspecified(
-              extension
-                .connect(await ethers.getSigner(recipient))
-                .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE)
-            );
-          });
-          it('creates and executes pre-hold', async function () {
-            const initialBalance = await token.balanceOf(recipient);
-            const initialPartitionBalance = await token.balanceOfByPartition(
-              partition1,
-              recipient
-            );
-
-            const initialBalanceOnHold = await extension.balanceOnHold(
-              token.address,
-              recipient
-            );
-            const initialBalanceOnHoldByPartition =
-              await extension.balanceOnHoldByPartition(
-                token.address,
-                partition1,
-                recipient
-              );
-
-            const initialSpendableBalance = await extension.spendableBalanceOf(
-              token.address,
-              recipient
-            );
-            const initialSpendableBalanceByPartition =
-              await extension.spendableBalanceOfByPartition(
-                token.address,
-                partition1,
-                recipient
-              );
-
-            const initialTotalSupplyOnHold = await extension.totalSupplyOnHold(
-              token.address
-            );
-            const initialTotalSupplyOnHoldByPartition =
-              await extension.totalSupplyOnHoldByPartition(
-                token.address,
-                partition1
-              );
-
-            const time = await clock.getTime();
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .preHoldFor(
-                token.address,
-                holdId,
-                recipient,
-                notary,
-                partition1,
-                holdAmount,
-                SECONDS_IN_AN_HOUR,
-                secretHashPair.hash,
-                ZERO_BYTE
-              );
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addAllowlisted(token.address, recipient);
-            await extension
-              .connect(await ethers.getSigner(recipient))
-              .executeHold(
-                token.address,
-                holdId,
-                holdAmount,
-                secretHashPair.secret
-              );
-
-            const finalBalance = await token.balanceOf(recipient);
-            const finalPartitionBalance = await token.balanceOfByPartition(
-              partition1,
-              recipient
-            );
-
-            const finalBalanceOnHold = await extension.balanceOnHold(
-              token.address,
-              recipient
-            );
-            const finalBalanceOnHoldByPartition =
-              await extension.balanceOnHoldByPartition(
-                token.address,
-                partition1,
-                recipient
-              );
-
-            const finalSpendableBalance = await extension.spendableBalanceOf(
-              token.address,
-              recipient
-            );
-            const finalSpendableBalanceByPartition =
-              await extension.spendableBalanceOfByPartition(
-                token.address,
-                partition1,
-                recipient
-              );
-
-            const finalTotalSupplyOnHold = await extension.totalSupplyOnHold(
-              token.address
-            );
-            const finalTotalSupplyOnHoldByPartition =
-              await extension.totalSupplyOnHoldByPartition(
-                token.address,
-                partition1
-              );
-
-            assert.equal(initialBalance.toNumber(), 0);
-            assert.equal(finalBalance.toNumber(), holdAmount);
-            assert.equal(initialPartitionBalance.toNumber(), 0);
-            assert.equal(finalPartitionBalance.toNumber(), holdAmount);
-
-            assert.equal(initialBalanceOnHold.toNumber(), 0);
-            assert.equal(initialBalanceOnHoldByPartition.toNumber(), 0);
-            assert.equal(finalBalanceOnHold.toNumber(), 0);
-            assert.equal(finalBalanceOnHoldByPartition.toNumber(), 0);
-
-            assert.equal(initialSpendableBalance.toNumber(), 0);
-            assert.equal(initialSpendableBalanceByPartition.toNumber(), 0);
-            assert.equal(finalSpendableBalance.toNumber(), holdAmount);
-            assert.equal(
-              finalSpendableBalanceByPartition.toNumber(),
-              holdAmount
-            );
-
-            assert.equal(initialTotalSupplyOnHold.toNumber(), 0);
-            assert.equal(initialTotalSupplyOnHoldByPartition.toNumber(), 0);
-            assert.equal(finalTotalSupplyOnHold.toNumber(), 0);
-            assert.equal(finalTotalSupplyOnHoldByPartition.toNumber(), 0);
-
-            const holdData = await extension.retrieveHoldData(
-              token.address,
-              holdId
-            );
-            assert.equal(holdData[0], partition1);
-            assert.equal(holdData[1], ZERO_ADDRESS);
-            assert.equal(holdData[2], recipient);
-            assert.equal(holdData[3], notary);
-            assert.equal(holdData[4].toNumber(), holdAmount);
-            assert.isAtLeast(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR
-            );
-            assert.isBelow(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR + 100
-            );
-            assert.equal(holdData[6], secretHashPair.hash);
-            assert.equal(holdData[7], secretHashPair.secret);
-            assert.equal(holdData[8], HOLD_STATUS_EXECUTED);
-          });
-          it('creates and executes pre-hold in 2 times', async function () {
-            const initialBalance = await token.balanceOf(recipient);
-
-            const time = await clock.getTime();
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .preHoldFor(
-                token.address,
-                holdId,
-                recipient,
-                notary,
-                partition1,
-                holdAmount,
-                SECONDS_IN_AN_HOUR,
-                secretHashPair.hash,
-                ZERO_BYTE
-              );
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .addAllowlisted(token.address, recipient);
-            await extension
-              .connect(await ethers.getSigner(recipient))
-              .executeHoldAndKeepOpen(
-                token.address,
-                holdId,
-                holdAmount - 100,
-                secretHashPair.secret
-              );
-
-            const intermediateBalance = await token.balanceOf(recipient);
-
-            let holdData = await extension.retrieveHoldData(
-              token.address,
-              holdId
-            );
-            assert.equal(holdData[0], partition1);
-            assert.equal(holdData[1], ZERO_ADDRESS);
-            assert.equal(holdData[2], recipient);
-            assert.equal(holdData[3], notary);
-            assert.equal(holdData[4].toNumber(), 100);
-            assert.isAtLeast(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR
-            );
-            assert.isBelow(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR + 100
-            );
-            assert.equal(holdData[6], secretHashPair.hash);
-            assert.equal(holdData[7], secretHashPair.secret);
-            assert.equal(holdData[8], HOLD_STATUS_EXECUTED_AND_KEPT_OPEN);
-
-            await extension
-              .connect(await ethers.getSigner(recipient))
-              .executeHold(token.address, holdId, 100, secretHashPair.secret);
-
-            const finalBalance = await token.balanceOf(recipient);
-
-            assert.equal(initialBalance.toNumber(), 0);
-            assert.equal(intermediateBalance.toNumber(), holdAmount - 100);
-            assert.equal(finalBalance.toNumber(), holdAmount);
-
-            holdData = await extension.retrieveHoldData(token.address, holdId);
-            assert.equal(holdData[0], partition1);
-            assert.equal(holdData[1], ZERO_ADDRESS);
-            assert.equal(holdData[2], recipient);
-            assert.equal(holdData[3], notary);
-            assert.equal(holdData[4].toNumber(), 100);
-            assert.isAtLeast(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR
-            );
-            assert.isBelow(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR + 100
-            );
-            assert.equal(holdData[6], secretHashPair.hash);
-            assert.equal(holdData[7], secretHashPair.secret);
-            assert.equal(holdData[8], HOLD_STATUS_EXECUTED);
-          });
-        });
-        describe('when pre-hold can not be created', function () {
-          describe('when expiration date is not valid', function () {
-            it('reverts', async function () {
-              const time = (await clock.getTime()).toNumber();
-              const holdId = newHoldId();
-              const secretHashPair = newSecretHashPair();
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(controller))
-                  .preHoldForWithExpirationDate(
-                    token.address,
-                    holdId,
-                    recipient,
-                    notary,
-                    partition1,
-                    holdAmount,
-                    time - 1,
-                    secretHashPair.hash,
-                    ZERO_BYTE
-                  )
-              );
-            });
-          });
-          describe('when caller is not a minter', function () {
-            it('reverts', async function () {
-              const holdId = newHoldId();
-              const secretHashPair = newSecretHashPair();
-              await expectRevert.unspecified(
-                extension
-                  .connect(await ethers.getSigner(notary))
-                  .preHoldFor(
-                    token.address,
-                    holdId,
-                    recipient,
-                    notary,
-                    partition1,
-                    holdAmount,
-                    SECONDS_IN_AN_HOUR,
-                    secretHashPair.hash,
-                    ZERO_BYTE
-                  )
-              );
-            });
-          });
+          holdData = await extension.retrieveHoldData(token.address, holdId);
+          assert.equal(holdData[0], partition1);
+          assert.equal(holdData[1], ZERO_ADDRESS);
+          assert.equal(holdData[2], recipient);
+          assert.equal(holdData[3], notary);
+          assert.equal(holdData[4].toNumber(), 100);
+          assert.isAtLeast(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR
+          );
+          assert.isBelow(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR + 100
+          );
+          assert.equal(holdData[6], secretHashPair.hash);
+          assert.equal(holdData[7], secretHashPair.secret);
+          assert.equal(holdData[8], HOLD_STATUS_EXECUTED);
         });
       });
-      describe('when certificate is activated', function () {
-        beforeEach(async function () {
-          await assertCertificateActivated(
-            extension,
-            token,
-            CERTIFICATE_VALIDATION_SALT
-          );
-        });
-        describe('when certificate is valid', function () {
-          it('creates a pre-hold', async function () {
-            const initialBalance = await token.balanceOf(recipient);
-            const initialPartitionBalance = await token.balanceOfByPartition(
-              partition1,
-              recipient
-            );
-
-            const initialBalanceOnHold = await extension.balanceOnHold(
-              token.address,
-              recipient
-            );
-            const initialBalanceOnHoldByPartition =
-              await extension.balanceOnHoldByPartition(
-                token.address,
-                partition1,
-                recipient
-              );
-
-            const initialSpendableBalance = await extension.spendableBalanceOf(
-              token.address,
-              recipient
-            );
-            const initialSpendableBalanceByPartition =
-              await extension.spendableBalanceOfByPartition(
-                token.address,
-                partition1,
-                recipient
-              );
-
-            const initialTotalSupplyOnHold = await extension.totalSupplyOnHold(
-              token.address
-            );
-            const initialTotalSupplyOnHoldByPartition =
-              await extension.totalSupplyOnHoldByPartition(
-                token.address,
-                partition1
-              );
-
-            const time = await clock.getTime();
-            const holdId = newHoldId();
-            const secretHashPair = newSecretHashPair();
-            const certificate = await craftCertificate(
-              extension.interface.encodeFunctionData('preHoldFor', [
-                token.address,
-                holdId,
-                recipient,
-                notary,
-                partition1,
-                holdAmount,
-                SECONDS_IN_AN_HOUR,
-                secretHashPair.hash,
-                ZERO_BYTE
-              ]),
-              token,
-              extension,
-              clock, // clock
-              controller
-            );
-            await extension
-              .connect(await ethers.getSigner(controller))
-              .preHoldFor(
-                token.address,
-                holdId,
-                recipient,
-                notary,
-                partition1,
-                holdAmount,
-                SECONDS_IN_AN_HOUR,
-                secretHashPair.hash,
-                certificate
-              );
-
-            const finalBalance = await token.balanceOf(recipient);
-            const finalPartitionBalance = await token.balanceOfByPartition(
-              partition1,
-              recipient
-            );
-
-            const finalBalanceOnHold = await extension.balanceOnHold(
-              token.address,
-              recipient
-            );
-            const finalBalanceOnHoldByPartition =
-              await extension.balanceOnHoldByPartition(
-                token.address,
-                partition1,
-                recipient
-              );
-
-            const finalSpendableBalance = await extension.spendableBalanceOf(
-              token.address,
-              recipient
-            );
-            const finalSpendableBalanceByPartition =
-              await extension.spendableBalanceOfByPartition(
-                token.address,
-                partition1,
-                recipient
-              );
-
-            const finalTotalSupplyOnHold = await extension.totalSupplyOnHold(
-              token.address
-            );
-            const finalTotalSupplyOnHoldByPartition =
-              await extension.totalSupplyOnHoldByPartition(
-                token.address,
-                partition1
-              );
-
-            assert.equal(initialBalance.toNumber(), 0);
-            assert.equal(finalBalance.toNumber(), 0);
-            assert.equal(initialPartitionBalance.toNumber(), 0);
-            assert.equal(finalPartitionBalance.toNumber(), 0);
-
-            assert.equal(initialBalanceOnHold.toNumber(), 0);
-            assert.equal(initialBalanceOnHoldByPartition.toNumber(), 0);
-            assert.equal(finalBalanceOnHold.toNumber(), 0);
-            assert.equal(finalBalanceOnHoldByPartition.toNumber(), 0);
-
-            assert.equal(initialSpendableBalance.toNumber(), 0);
-            assert.equal(initialSpendableBalanceByPartition.toNumber(), 0);
-            assert.equal(finalSpendableBalance.toNumber(), 0);
-            assert.equal(finalSpendableBalanceByPartition.toNumber(), 0);
-
-            assert.equal(initialTotalSupplyOnHold.toNumber(), 0);
-            assert.equal(initialTotalSupplyOnHoldByPartition.toNumber(), 0);
-            assert.equal(finalTotalSupplyOnHold.toNumber(), 0);
-            assert.equal(finalTotalSupplyOnHoldByPartition.toNumber(), 0);
-
-            const holdData = await extension.retrieveHoldData(
-              token.address,
-              holdId
-            );
-            assert.equal(holdData[0], partition1);
-            assert.equal(holdData[1], ZERO_ADDRESS);
-            assert.equal(holdData[2], recipient);
-            assert.equal(holdData[3], notary);
-            assert.equal(holdData[4].toNumber(), holdAmount);
-            assert.isAtLeast(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR
-            );
-            assert.isBelow(
-              holdData[5].toNumber(),
-              time.toNumber() + SECONDS_IN_AN_HOUR + 100
-            );
-            assert.equal(holdData[6], secretHashPair.hash);
-            assert.equal(holdData[7], EMPTY_BYTE32);
-            assert.equal(holdData[8], HOLD_STATUS_ORDERED);
-          });
-        });
-        describe('when certificate is not valid', function () {
-          it('creates a pre-hold', async function () {
+      describe('when pre-hold can not be created', function () {
+        describe('when expiration date is not valid', function () {
+          it('reverts', async function () {
+            const time = (await clock.getTime()).toNumber();
             const holdId = newHoldId();
             const secretHashPair = newSecretHashPair();
             await expectRevert.unspecified(
               extension
-                .connect(await ethers.getSigner(controller))
+                .connect(controllerSigner)
+                .preHoldForWithExpirationDate(
+                  token.address,
+                  holdId,
+                  recipient,
+                  notary,
+                  partition1,
+                  holdAmount,
+                  time - 1,
+                  secretHashPair.hash,
+                  ZERO_BYTE
+                )
+            );
+          });
+        });
+        describe('when caller is not a minter', function () {
+          it('reverts', async function () {
+            const holdId = newHoldId();
+            const secretHashPair = newSecretHashPair();
+            await expectRevert.unspecified(
+              extension
+                .connect(notarySigner)
                 .preHoldFor(
                   token.address,
                   holdId,
@@ -10849,5 +10335,187 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
         });
       });
     });
-  }
-);
+    describe('when certificate is activated', function () {
+      beforeEach(async function () {
+        await assertCertificateActivated(
+          extension,
+          token,
+          CERTIFICATE_VALIDATION_SALT
+        );
+      });
+      describe('when certificate is valid', function () {
+        it('creates a pre-hold', async function () {
+          const initialBalance = await token.balanceOf(recipient);
+          const initialPartitionBalance = await token.balanceOfByPartition(
+            partition1,
+            recipient
+          );
+
+          const initialBalanceOnHold = await extension.balanceOnHold(
+            token.address,
+            recipient
+          );
+          const initialBalanceOnHoldByPartition =
+            await extension.balanceOnHoldByPartition(
+              token.address,
+              partition1,
+              recipient
+            );
+
+          const initialSpendableBalance = await extension.spendableBalanceOf(
+            token.address,
+            recipient
+          );
+          const initialSpendableBalanceByPartition =
+            await extension.spendableBalanceOfByPartition(
+              token.address,
+              partition1,
+              recipient
+            );
+
+          const initialTotalSupplyOnHold = await extension.totalSupplyOnHold(
+            token.address
+          );
+          const initialTotalSupplyOnHoldByPartition =
+            await extension.totalSupplyOnHoldByPartition(
+              token.address,
+              partition1
+            );
+
+          const time = await clock.getTime();
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          const certificate = await craftCertificate(
+            extension.interface.encodeFunctionData('preHoldFor', [
+              token.address,
+              holdId,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              ZERO_BYTE
+            ]),
+            token,
+            extension,
+            clock, // clock
+            controller
+          );
+          await extension
+            .connect(controllerSigner)
+            .preHoldFor(
+              token.address,
+              holdId,
+              recipient,
+              notary,
+              partition1,
+              holdAmount,
+              SECONDS_IN_AN_HOUR,
+              secretHashPair.hash,
+              certificate
+            );
+
+          const finalBalance = await token.balanceOf(recipient);
+          const finalPartitionBalance = await token.balanceOfByPartition(
+            partition1,
+            recipient
+          );
+
+          const finalBalanceOnHold = await extension.balanceOnHold(
+            token.address,
+            recipient
+          );
+          const finalBalanceOnHoldByPartition =
+            await extension.balanceOnHoldByPartition(
+              token.address,
+              partition1,
+              recipient
+            );
+
+          const finalSpendableBalance = await extension.spendableBalanceOf(
+            token.address,
+            recipient
+          );
+          const finalSpendableBalanceByPartition =
+            await extension.spendableBalanceOfByPartition(
+              token.address,
+              partition1,
+              recipient
+            );
+
+          const finalTotalSupplyOnHold = await extension.totalSupplyOnHold(
+            token.address
+          );
+          const finalTotalSupplyOnHoldByPartition =
+            await extension.totalSupplyOnHoldByPartition(
+              token.address,
+              partition1
+            );
+
+          assert.equal(initialBalance.toNumber(), 0);
+          assert.equal(finalBalance.toNumber(), 0);
+          assert.equal(initialPartitionBalance.toNumber(), 0);
+          assert.equal(finalPartitionBalance.toNumber(), 0);
+
+          assert.equal(initialBalanceOnHold.toNumber(), 0);
+          assert.equal(initialBalanceOnHoldByPartition.toNumber(), 0);
+          assert.equal(finalBalanceOnHold.toNumber(), 0);
+          assert.equal(finalBalanceOnHoldByPartition.toNumber(), 0);
+
+          assert.equal(initialSpendableBalance.toNumber(), 0);
+          assert.equal(initialSpendableBalanceByPartition.toNumber(), 0);
+          assert.equal(finalSpendableBalance.toNumber(), 0);
+          assert.equal(finalSpendableBalanceByPartition.toNumber(), 0);
+
+          assert.equal(initialTotalSupplyOnHold.toNumber(), 0);
+          assert.equal(initialTotalSupplyOnHoldByPartition.toNumber(), 0);
+          assert.equal(finalTotalSupplyOnHold.toNumber(), 0);
+          assert.equal(finalTotalSupplyOnHoldByPartition.toNumber(), 0);
+
+          const holdData = await extension.retrieveHoldData(
+            token.address,
+            holdId
+          );
+          assert.equal(holdData[0], partition1);
+          assert.equal(holdData[1], ZERO_ADDRESS);
+          assert.equal(holdData[2], recipient);
+          assert.equal(holdData[3], notary);
+          assert.equal(holdData[4].toNumber(), holdAmount);
+          assert.isAtLeast(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR
+          );
+          assert.isBelow(
+            holdData[5].toNumber(),
+            time.toNumber() + SECONDS_IN_AN_HOUR + 100
+          );
+          assert.equal(holdData[6], secretHashPair.hash);
+          assert.equal(holdData[7], EMPTY_BYTE32);
+          assert.equal(holdData[8], HOLD_STATUS_ORDERED);
+        });
+      });
+      describe('when certificate is not valid', function () {
+        it('creates a pre-hold', async function () {
+          const holdId = newHoldId();
+          const secretHashPair = newSecretHashPair();
+          await expectRevert.unspecified(
+            extension
+              .connect(controllerSigner)
+              .preHoldFor(
+                token.address,
+                holdId,
+                recipient,
+                notary,
+                partition1,
+                holdAmount,
+                SECONDS_IN_AN_HOUR,
+                secretHashPair.hash,
+                ZERO_BYTE
+              )
+          );
+        });
+      });
+    });
+  });
+});

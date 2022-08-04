@@ -1,4 +1,5 @@
-import { assert, ethers, contract } from 'hardhat';
+import { ethers } from 'hardhat';
+import { assert } from 'chai';
 import {
   Swaps,
   ERC1400,
@@ -14,63 +15,42 @@ import {
   ERC721
 } from '../typechain-types';
 import { advanceTimeAndBlock } from './utils/time';
-import { addressToBytes32, NumToNumBytes32 } from './utils/bytes';
+import {
+  addressToBytes32,
+  numToHexBytes32,
+  numToNumBytes32
+} from './utils/bytes';
 
 // @ts-ignore
 import { expectRevert } from '@openzeppelin/test-helpers';
 
-import { BigNumber, BigNumberish, Contract, Signer } from 'ethers';
+import { BigNumber, BigNumberish, Signer } from 'ethers';
 import {
-  assertBalanceOf,
   assertBalanceOfByPartition,
-  assertERC1400Allowance,
-  assertERC20Allowance,
-  assertERC721Allowance,
   assertEtherBalance,
   assertGlobalBalancesAreCorrect,
-  assertTokenOf,
   assertTokenTransferred,
   assertTrade,
   assertTradeAccepted,
   assertTradeState,
+  ERC1400STANDARD,
+  ERC20STANDARD,
+  ERC721STANDARD,
+  ETHSTANDARD,
   fullAssertTrade,
+  OFFCHAIN,
   STATE_CANCELLED,
   STATE_EXECUTED,
   STATE_FORCED,
   STATE_PENDING,
   TYPE_ESCROW,
   TYPE_SWAP,
-  ZERO_BYTE
+  ZERO_ADDRESS,
+  ZERO_BYTE,
+  ZERO_BYTES32
 } from './utils/assert';
-import {
-  extractTokenAccepted,
-  extractTokenAddress,
-  extractTokenAmount,
-  extractTokenApproved,
-  extractTokenId,
-  extractTokenStandard
-} from './utils/extract';
-
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-
-const ZERO_BYTES32 =
-  '0x0000000000000000000000000000000000000000000000000000000000000000';
-
-const TRUE_BYTES32 =
-  '0x0000000000000000000000000000000000000000000000000000000000000001';
-const FALSE_BYTES32 =
-  '0x0000000000000000000000000000000000000000000000000000000000000000';
-
-const OFFCHAIN =
-  '0x0000000000000000000000000000000000000000000000000000000000000000';
-const ETHSTANDARD =
-  '0x0000000000000000000000000000000000000000000000000000000000000001';
-const ERC20STANDARD =
-  '0x0000000000000000000000000000000000000000000000000000000000000002';
-const ERC721STANDARD =
-  '0x0000000000000000000000000000000000000000000000000000000000000003';
-const ERC1400STANDARD =
-  '0x0000000000000000000000000000000000000000000000000000000000000004';
+import { extractTokenAmount, extractTokenStandard } from './utils/extract';
+import truffleFixture from './truffle-fixture';
 
 const HEX_TYPE_ESCROW =
   '0x0000000000000000000000000000000000000000000000000000000000000002';
@@ -127,48 +107,39 @@ const issuanceTokenId = 123456789;
 
 const SECONDS_IN_A_WEEK = 86400 * 7;
 
-const NumToHexBytes32 = (_num: number, _fillTo = 32) => {
-  const arr1 = [];
-  const _str = _num.toString(16);
-  for (let n = 0, l = _str.length; n < l; n++) {
-    arr1.push(_str[n]);
-  }
-  for (let m = _str.length; m < 2 * _fillTo; m++) {
-    arr1.unshift(0);
-  }
-  return arr1.join('');
-};
-
 const getTradeProposalData = (
-  _tradeRecipient: any,
-  _tradeExecuter: any,
-  _expirationDate: any,
+  _tradeRecipient: string,
+  _tradeExecuter: string,
+  _expirationDate: number,
   _settlementDate: number,
-  _token2Address: any,
+  _token2Address: string,
   _token2Amount: number,
   _token2Id: string,
-  _token2Standard: string,
+  _token2Standard: BigNumberish,
   _tradeType2: number,
   isFake?: boolean
 ) => {
   const flag = isFake ? partitionFlag : dvpTradeProposalFlag;
   const hexTradeRecipient = addressToBytes32(_tradeRecipient);
   const hexTradeExecuter = addressToBytes32(_tradeExecuter);
-  const hexExpirationDate = NumToHexBytes32(_expirationDate);
-  const hexSettlementDate = NumToHexBytes32(_settlementDate);
+  const hexExpirationDate = numToHexBytes32(_expirationDate);
+  const hexSettlementDate = numToHexBytes32(_settlementDate);
 
   const hexTradeTokenAddress2 = addressToBytes32(_token2Address);
-  const hexTradeTokenAmount2 = NumToHexBytes32(_token2Amount);
+  const hexTradeTokenAmount2 = numToHexBytes32(_token2Amount);
   let hexTradeTokenId;
   if (typeof _token2Id === 'string' && _token2Id.length === 66) {
     hexTradeTokenId = _token2Id.substring(2);
   } else if (typeof _token2Id === 'number') {
-    hexTradeTokenId = NumToHexBytes32(_token2Id);
+    hexTradeTokenId = numToHexBytes32(_token2Id);
   } else {
     throw new Error('getTradeProposalData: Invalid type for tokenId');
   }
-  const hexTradeTokenStandard2 = _token2Standard.substring(2);
-  const hexTradeType = NumToHexBytes32(_tradeType2);
+
+  const hexTradeTokenStandard2 = ethers.utils
+    .hexlify(_token2Standard)
+    .substring(2);
+  const hexTradeType = numToHexBytes32(_tradeType2);
   const tradeTokenData = `${hexTradeTokenAddress2}${hexTradeTokenAmount2}${hexTradeTokenId}${hexTradeTokenStandard2}${hexTradeType}`;
 
   return `${flag}${hexTradeRecipient}${hexTradeExecuter}${hexExpirationDate}${hexSettlementDate}${tradeTokenData}`;
@@ -179,7 +150,7 @@ const getTradeAcceptanceData = (
   isFake: boolean | undefined = false
 ) => {
   const flag = isFake ? partitionFlag : dvpTradeAcceptanceFlag;
-  const hexTradeIndex = NumToHexBytes32(tradeIndex);
+  const hexTradeIndex = numToHexBytes32(tradeIndex);
 
   return `${flag}${hexTradeIndex}`;
 };
@@ -188,16 +159,16 @@ const createTradeRequest = async (
   dvp: Swaps,
   token1: ERC1400 | ERC20 | ERC721 | undefined,
   token2: ERC1400 | ERC20 | ERC721 | undefined,
-  tokenStandard1: string,
-  tokenStandard2: string,
-  holder1: any,
-  holder2: any,
+  tokenStandard1: BigNumberish,
+  tokenStandard2: BigNumberish,
+  holder1: string,
+  holder2: string,
   executer: string,
-  requester: any,
+  requesterSigner: Signer,
   realExpirationDate: boolean,
   tradeType: number,
-  tokenAmount1: string | number,
-  tokenAmount2: number
+  tokenAmount1: BigNumberish,
+  tokenAmount2: BigNumberish
 ) => {
   await fullCreateTradeRequest(
     dvp,
@@ -208,7 +179,7 @@ const createTradeRequest = async (
     holder1,
     holder2,
     executer,
-    requester,
+    requesterSigner,
     realExpirationDate,
     tradeType,
     tradeType,
@@ -223,20 +194,21 @@ const fullCreateTradeRequest = async (
   dvp: Swaps,
   token1: ERC1400 | ERC20 | ERC721 | undefined,
   token2: ERC1400 | ERC20 | ERC721 | undefined,
-  tokenStandard1: string,
-  tokenStandard2: string,
-  holder1: any,
-  holder2: any,
-  executer: any,
-  requester: string,
-  realExpirationDate: any,
+  tokenStandard1: BigNumberish,
+  tokenStandard2: BigNumberish,
+  holder1: string,
+  holder2: string,
+  executer: string,
+  requesterSigner: Signer,
+  realExpirationDate: boolean,
   tradeType1: any,
   tradeType2: any,
-  tokenAmount1: any,
-  tokenAmount2: any,
+  tokenAmount1: BigNumberish,
+  tokenAmount2: BigNumberish,
   settlementDate: number,
   preimage: string
 ) => {
+  const requester = await requesterSigner.getAddress();
   const tokenAmount =
     requester === holder1
       ? tokenAmount1
@@ -295,33 +267,33 @@ const fullCreateTradeRequest = async (
     executer: executer,
     expirationDate: realExpirationDate ? expirationDate : 0,
     tokenAddress1: token1 ? token1.address : ZERO_ADDRESS,
-    tokenValue1: tokenStandard1 === ERC721STANDARD ? 0 : tokenAmount1,
-    tokenId1:
-      tokenStandard1 === ERC721STANDARD
-        ? NumToNumBytes32(issuanceTokenId)
-        : tokenStandard1 === ERC1400STANDARD
-        ? partition1
-        : ZERO_BYTES32,
+    tokenValue1: BigNumber.from(tokenStandard1).eq(ERC721STANDARD)
+      ? 0
+      : tokenAmount1,
+    tokenId1: BigNumber.from(tokenStandard1).eq(ERC721STANDARD)
+      ? numToNumBytes32(issuanceTokenId)
+      : BigNumber.from(tokenStandard1).eq(ERC1400STANDARD)
+      ? partition1
+      : ZERO_BYTES32,
     tokenStandard1: tokenStandard1,
     tokenAddress2: token2 ? token2.address : ZERO_ADDRESS,
-    tokenValue2: tokenStandard2 === ERC721STANDARD ? 0 : tokenAmount2,
-    tokenId2:
-      tokenStandard2 === ERC721STANDARD
-        ? NumToNumBytes32(issuanceTokenId)
-        : tokenStandard2 === ERC1400STANDARD
-        ? partition1
-        : ZERO_BYTES32,
+    tokenValue2: BigNumber.from(tokenStandard2).eq(ERC721STANDARD)
+      ? 0
+      : tokenAmount2,
+    tokenId2: BigNumber.from(tokenStandard2).eq(ERC721STANDARD)
+      ? numToNumBytes32(issuanceTokenId)
+      : BigNumber.from(tokenStandard2).eq(ERC1400STANDARD)
+      ? partition1
+      : ZERO_BYTES32,
     tokenStandard2: tokenStandard2,
     tradeType1: tradeType1,
     tradeType2: tradeType2,
     settlementDate: settlementDate
   };
 
-  await dvp
-    .connect(await ethers.getSigner(requester))
-    .requestTrade(tradeInputData, preimage, {
-      value: tokenStandard === ETHSTANDARD ? tokenAmount : 0
-    });
+  await dvp.connect(requesterSigner).requestTrade(tradeInputData, preimage, {
+    value: BigNumber.from(tokenStandard).eq(ETHSTANDARD) ? tokenAmount : 0
+  });
 
   const tradeIndex = (await dvp.getNbTrades()).toNumber();
   assert.equal(tradeIndex, initialNumberOfTrades + 1);
@@ -349,20 +321,20 @@ const fullCreateTradeRequest = async (
     tradeType2,
     STATE_PENDING,
     token1 ? token1.address : ZERO_ADDRESS,
-    tokenStandard1 === ERC721STANDARD ? 0 : tokenAmount1,
-    tokenStandard1 === ERC721STANDARD
-      ? NumToNumBytes32(issuanceTokenId)
-      : tokenStandard1 === ERC1400STANDARD
+    BigNumber.from(tokenStandard1).eq(ERC721STANDARD) ? 0 : tokenAmount1,
+    BigNumber.from(tokenStandard1).eq(ERC721STANDARD)
+      ? numToNumBytes32(issuanceTokenId)
+      : BigNumber.from(tokenStandard1).eq(ERC1400STANDARD)
       ? partition1
       : ZERO_BYTES32,
     tokenStandard1,
     requester === holder1,
     false,
     token2 ? token2.address : ZERO_ADDRESS,
-    tokenStandard2 === ERC721STANDARD ? 0 : tokenAmount2,
-    tokenStandard2 === ERC721STANDARD
-      ? NumToNumBytes32(issuanceTokenId)
-      : tokenStandard2 === ERC1400STANDARD
+    BigNumber.from(tokenStandard2).eq(ERC721STANDARD) ? 0 : tokenAmount2,
+    BigNumber.from(tokenStandard2).eq(ERC721STANDARD)
+      ? numToNumBytes32(issuanceTokenId)
+      : BigNumber.from(tokenStandard2).eq(ERC1400STANDARD)
       ? partition1
       : ZERO_BYTES32,
     tokenStandard2,
@@ -375,10 +347,10 @@ const createTradeRequestWithoutCallingDVP = async (
   dvp: Swaps,
   token1: ERC1400 | ERC20 | ERC721,
   token2: ERC1400 | ERC20 | ERC721,
-  tokenStandard2: string,
+  tokenStandard2: BigNumberish,
   tokenId2: string,
-  holder1: any,
-  holder2: any,
+  holder1Signer: Signer,
+  holder2: string,
   executer: string,
   realExpirationDate: boolean,
   tokenAmount1: number,
@@ -392,6 +364,7 @@ const createTradeRequestWithoutCallingDVP = async (
 
   const initialNumberOfTrades = (await dvp.getNbTrades()).toNumber();
 
+  const holder1 = await holder1Signer.getAddress();
   await assertTokenTransferred(
     dvp,
     token1,
@@ -420,7 +393,7 @@ const createTradeRequestWithoutCallingDVP = async (
   );
 
   await (token1 as ERC1400)
-    .connect(await ethers.getSigner(holder1))
+    .connect(holder1Signer)
     .operatorTransferByPartition(
       partition1,
       holder1,
@@ -462,9 +435,9 @@ const createTradeRequestWithoutCallingDVP = async (
     true,
     false,
     token2 ? token2.address : ZERO_ADDRESS,
-    tokenStandard2 === ERC721STANDARD ? 0 : tokenAmount2,
-    tokenStandard2 === ERC721STANDARD
-      ? NumToNumBytes32(issuanceTokenId)
+    BigNumber.from(tokenStandard2).eq(ERC721STANDARD) ? 0 : tokenAmount2,
+    BigNumber.from(tokenStandard2).eq(ERC721STANDARD)
+      ? numToNumBytes32(issuanceTokenId)
       : tokenId2,
     tokenStandard2,
     false,
@@ -477,7 +450,7 @@ const acceptTradeRequest = async (
   token1: ERC1400 | ERC20 | ERC721 | undefined,
   token2: ERC1400 | ERC20 | ERC721 | undefined,
   tradeIndex: number,
-  requester: any,
+  requesterSigner: Signer,
   newTradeState: number,
   acceptedTrade: boolean
 ) => {
@@ -486,7 +459,7 @@ const acceptTradeRequest = async (
     token1,
     token2,
     tradeIndex,
-    requester,
+    requesterSigner,
     newTradeState,
     acceptedTrade,
     ZERO_BYTES32
@@ -498,7 +471,7 @@ const acceptTradeRequestWithPreimage = async (
   token1: ERC1400 | ERC20 | ERC721 | undefined,
   token2: ERC1400 | ERC20 | ERC721 | undefined,
   tradeIndex: BigNumberish,
-  requester: string,
+  requesterSigner: Signer,
   newTradeState: any,
   acceptedTrade: any,
   preimage: string
@@ -514,6 +487,8 @@ const acceptTradeRequestWithPreimage = async (
   const tokenData2 = trade.userTradeData2;
   const tokenStandard2 = extractTokenStandard(tokenData2);
   const tokenAmount2 = extractTokenAmount(tokenData2);
+
+  const requester = await requesterSigner.getAddress();
 
   const tokenAmount =
     requester === holder1
@@ -542,11 +517,9 @@ const acceptTradeRequestWithPreimage = async (
     partition2
   );
 
-  await dvp
-    .connect(await ethers.getSigner(requester))
-    .acceptTrade(tradeIndex, preimage, {
-      value: BigNumber.from(tokenStandard).eq(ETHSTANDARD) ? tokenAmount : 0
-    });
+  await dvp.connect(requesterSigner).acceptTrade(tradeIndex, preimage, {
+    value: BigNumber.from(tokenStandard).eq(ETHSTANDARD) ? tokenAmount : 0
+  });
   await assertTradeState(dvp, tradeIndex, newTradeState);
 
   await assertGlobalBalancesAreCorrect(
@@ -571,11 +544,12 @@ const acceptTradeRequestWithoutCallingDVP = async (
   token1: ERC1400 | ERC20 | ERC721,
   token2: ERC1400 | ERC20 | ERC721,
   tradeIndex: number,
-  requester: any,
+  requesterSigner: Signer,
   newTradeState: number,
   acceptedTrade: boolean
 ) => {
   const trade = await dvp.getTrade(tradeIndex);
+  const requester = await requesterSigner.getAddress();
   const holder1 = trade.holder1;
   const holder2 = trade.holder2 !== ZERO_ADDRESS ? trade.holder2 : requester;
 
@@ -609,7 +583,7 @@ const acceptTradeRequestWithoutCallingDVP = async (
   const tradeAcceptanceData = getTradeAcceptanceData(tradeIndex);
 
   await (token2 as ERC1400)
-    .connect(await ethers.getSigner(requester))
+    .connect(requesterSigner)
     .operatorTransferByPartition(
       partition1,
       requester,
@@ -648,12 +622,12 @@ const approveTradeRequest = async (
   token1: ERC1400 | ERC20 | ERC721,
   token2: ERC1400 | ERC20 | ERC721,
   tradeIndex: BigNumberish,
-  requester: string,
+  requesterSigner: Signer,
   newTradeState: number,
   approvedTrade: boolean
 ) => {
   assert.equal(await dvp.getTradeApprovalStatus(tradeIndex), false);
-
+  const requester = await requesterSigner.getAddress();
   await assertGlobalBalancesAreCorrect(
     dvp,
     token1,
@@ -666,9 +640,7 @@ const approveTradeRequest = async (
     partition2
   );
 
-  await dvp
-    .connect(await ethers.getSigner(requester))
-    .approveTrade(tradeIndex, true);
+  await dvp.connect(requesterSigner).approveTrade(tradeIndex, true);
   await assertTradeState(dvp, tradeIndex, newTradeState);
 
   await assertGlobalBalancesAreCorrect(
@@ -691,8 +663,9 @@ const executeTradeRequest = async (
   token1: ERC1400 | ERC20 | ERC721 | undefined,
   token2: ERC1400 | ERC20 | ERC721 | undefined,
   tradeIndex: BigNumberish,
-  requester: string
+  requesterSigner: Signer
 ) => {
+  const requester = await requesterSigner.getAddress();
   await assertGlobalBalancesAreCorrect(
     dvp,
     token1,
@@ -705,7 +678,7 @@ const executeTradeRequest = async (
     partition2
   );
 
-  await dvp.connect(await ethers.getSigner(requester)).executeTrade(tradeIndex);
+  await dvp.connect(requesterSigner).executeTrade(tradeIndex);
   await assertTradeState(dvp, tradeIndex, STATE_EXECUTED);
 
   await assertGlobalBalancesAreCorrect(
@@ -726,8 +699,9 @@ const forceTradeRequest = async (
   token1: ERC1400 | ERC20 | ERC721,
   token2: ERC1400 | ERC20 | ERC721,
   tradeIndex: BigNumberish,
-  requester: string
+  requesterSigner: Signer
 ) => {
+  const requester = await requesterSigner.getAddress();
   await assertGlobalBalancesAreCorrect(
     dvp,
     token1,
@@ -740,7 +714,7 @@ const forceTradeRequest = async (
     partition2
   );
 
-  await dvp.connect(await ethers.getSigner(requester)).forceTrade(tradeIndex);
+  await dvp.connect(requesterSigner).forceTrade(tradeIndex);
   await assertTradeState(dvp, tradeIndex, STATE_FORCED);
 
   await assertGlobalBalancesAreCorrect(
@@ -761,8 +735,9 @@ const cancelTradeRequest = async (
   token1: ERC1400 | ERC20 | ERC721,
   token2: ERC1400 | ERC20 | ERC721,
   tradeIndex: BigNumberish,
-  requester: string
+  requesterSigner: Signer
 ) => {
+  const requester = await requesterSigner.getAddress();
   await assertGlobalBalancesAreCorrect(
     dvp,
     token1,
@@ -775,7 +750,7 @@ const cancelTradeRequest = async (
     partition2
   );
 
-  await dvp.connect(await ethers.getSigner(requester)).cancelTrade(tradeIndex);
+  await dvp.connect(requesterSigner).cancelTrade(tradeIndex);
   await assertTradeState(dvp, tradeIndex, STATE_CANCELLED);
 
   await assertGlobalBalancesAreCorrect(
@@ -791,174 +766,178 @@ const cancelTradeRequest = async (
   );
 };
 
-contract(
-  'DVP',
-  function ([
-    owner,
-    tokenController1,
-    tokenController2,
-    executer,
-    oracle,
-    tokenHolder1,
-    tokenHolder2,
-    recipient1,
-    recipient2,
-    unknown
-  ]) {
-    let signer: Signer;
-    before(async function () {
-      signer = await ethers.getSigner(owner);
-      // console.log('Owner: ', owner);
-      // console.log('Controller: ', controller);
-      // console.log('TokenHolder1: ', tokenHolder1);
-      // console.log('TokenHolder2: ', tokenHolder2);
-      // console.log('Recipient1: ', recipient1);
-      // console.log('Recipient2: ', recipient2);
-    });
+describe('DVP', function () {
+  let signer: Signer;
+  let tokenController1Signer: Signer;
+  let tokenController2Signer: Signer;
+  let executerSigner: Signer;
+  let oracleSigner: Signer;
+  let tokenHolder1Signer: Signer;
+  let tokenHolder2Signer: Signer;
+  let recipient1Signer: Signer;
+  let recipient2Signer: Signer;
+  let unknownSigner: Signer;
 
-    // PARAMETERS
+  let owner: string;
+  let tokenController1: string;
+  let tokenController2: string;
+  let executer: string;
+  let oracle: string;
+  let tokenHolder1: string;
+  let tokenHolder2: string;
+  let recipient1: string;
+  let recipient2: string;
+  let unknown: string;
 
-    describe('parameters', function () {
-      describe('owner', function () {
-        it('returns the owner of the contract', async function () {
-          const dvp: Swaps = await new Swaps__factory(signer).deploy(false);
+  before(async function () {
+    const signers = await ethers.getSigners();
+    [
+      signer,
+      tokenController1Signer,
+      tokenController2Signer,
+      executerSigner,
+      oracleSigner,
+      tokenHolder1Signer,
+      tokenHolder2Signer,
+      recipient1Signer,
+      recipient2Signer,
+      unknownSigner
+    ] = signers;
+    [
+      owner,
+      tokenController1,
+      tokenController2,
+      executer,
+      oracle,
+      tokenHolder1,
+      tokenHolder2,
+      recipient1,
+      recipient2,
+      unknown
+    ] = signers.map((s) => s.address);
 
-          const contractOwner = await dvp.owner();
-          assert.equal(contractOwner, owner);
-        });
-      });
-      describe('tradeExecuters', function () {
-        it('returns the list of trade executers', async function () {
-          const dvp: Swaps = await new Swaps__factory(signer).deploy(true);
+    await truffleFixture([2]);
 
-          const tradeExecuters = await dvp.tradeExecuters();
+    // console.log('Owner: ', owner);
+    // console.log('Controller: ', controller);
+    // console.log('TokenHolder1: ', tokenHolder1);
+    // console.log('TokenHolder2: ', tokenHolder2);
+    // console.log('Recipient1: ', recipient1);
+    // console.log('Recipient2: ', recipient2);
+  });
 
-          assert.equal(tradeExecuters.length, 1);
-          assert.equal(tradeExecuters[0], owner);
-        });
-        it('returns empty list of trade executers', async function () {
-          const dvp: Swaps = await new Swaps__factory(signer).deploy(false);
+  // PARAMETERS
 
-          const tradeExecuters = await dvp.tradeExecuters();
+  describe('parameters', function () {
+    describe('owner', function () {
+      it('returns the owner of the contract', async function () {
+        const dvp: Swaps = await new Swaps__factory(signer).deploy(false);
 
-          assert.equal(tradeExecuters.length, 0);
-        });
-      });
-    });
-
-    // CANIMPLEMENTINTERFACEFORADDRESS
-
-    describe('canImplementInterfaceForAddress', function () {
-      let dvp: Swaps;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
-      });
-      describe('when the interface label is ERC777TokensRecipient', function () {
-        it('returns ERC1820_ACCEPT_MAGIC', async function () {
-          const answer = await dvp.canImplementInterfaceForAddress(
-            ERC1400_TOKENS_RECIPIENT_INTERFACE_HASH,
-            unknown
-          );
-          assert.equal(answer, ERC1820_ACCEPT_MAGIC);
-        });
-      });
-      describe('when the interface label is not ERC777TokensRecipient', function () {
-        it('returns empty bytes32', async function () {
-          const answer = await dvp.canImplementInterfaceForAddress(
-            ERC1400_TOKENS_SENDER_INTERFACE_HASH,
-            unknown
-          );
-          assert.equal(answer, ZERO_BYTES32);
-        });
+        const contractOwner = await dvp.owner();
+        assert.equal(contractOwner, owner);
       });
     });
+    describe('tradeExecuters', function () {
+      it('returns the list of trade executers', async function () {
+        const dvp: Swaps = await new Swaps__factory(signer).deploy(true);
 
-    // CANRECEIVE
+        const tradeExecuters = await dvp.tradeExecuters();
 
-    describe('canReceive', function () {
-      let dvp: Swaps;
-      let emoney1400: ERC1400;
-      let tradeProposalData: string;
-      let tradeAcceptanceData: string;
-      let fakeTradeProposalData: string;
-      let fakeTradeAcceptanceData: string;
-
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
-
-        emoney1400 = await new ERC1400__factory(signer).deploy(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [owner],
-          partitions
-        );
-
-        const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
-        const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
-        tradeProposalData = getTradeProposalData(
-          recipient1,
-          executer,
-          expirationDate,
-          0,
-          emoney1400.address,
-          token2Amount,
-          partition1,
-          ERC1400STANDARD,
-          TYPE_ESCROW
-        );
-        tradeAcceptanceData = getTradeAcceptanceData(1);
-
-        fakeTradeProposalData = getTradeProposalData(
-          recipient1,
-          executer,
-          expirationDate,
-          0,
-          emoney1400.address,
-          token2Amount,
-          partition1,
-          ERC1400STANDARD,
-          TYPE_ESCROW,
-          true
-        );
-        fakeTradeAcceptanceData = getTradeAcceptanceData(1, true);
+        assert.equal(tradeExecuters.length, 1);
+        assert.equal(tradeExecuters[0], owner);
       });
-      describe('when operatorData is not empty', function () {
-        describe('when data has the correct length', function () {
-          describe('when data has the right format', function () {
-            describe('when data is formatted for a trade proposal', function () {
-              it('returns true', async function () {
-                const answer = await dvp.canReceive(
-                  '0x00000000',
-                  partition1,
-                  unknown,
-                  unknown,
-                  unknown,
-                  1,
-                  tradeProposalData,
-                  MOCK_CERTIFICATE
-                );
-                assert.equal(answer, true);
-              });
-            });
-            describe('when data is formatted for a trade acceptance', function () {
-              it('returns true', async function () {
-                const answer = await dvp.canReceive(
-                  '0x00000000',
-                  partition1,
-                  unknown,
-                  unknown,
-                  unknown,
-                  1,
-                  tradeAcceptanceData,
-                  MOCK_CERTIFICATE
-                );
-                assert.equal(answer, true);
-              });
-            });
-          });
-          describe('when data does not have the right format', function () {
-            it('returns false', async function () {
+      it('returns empty list of trade executers', async function () {
+        const dvp: Swaps = await new Swaps__factory(signer).deploy(false);
+
+        const tradeExecuters = await dvp.tradeExecuters();
+
+        assert.equal(tradeExecuters.length, 0);
+      });
+    });
+  });
+
+  // CANIMPLEMENTINTERFACEFORADDRESS
+
+  describe('canImplementInterfaceForAddress', function () {
+    let dvp: Swaps;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
+    });
+    describe('when the interface label is ERC777TokensRecipient', function () {
+      it('returns ERC1820_ACCEPT_MAGIC', async function () {
+        const answer = await dvp.canImplementInterfaceForAddress(
+          ERC1400_TOKENS_RECIPIENT_INTERFACE_HASH,
+          unknown
+        );
+        assert.equal(answer, ERC1820_ACCEPT_MAGIC);
+      });
+    });
+    describe('when the interface label is not ERC777TokensRecipient', function () {
+      it('returns empty bytes32', async function () {
+        const answer = await dvp.canImplementInterfaceForAddress(
+          ERC1400_TOKENS_SENDER_INTERFACE_HASH,
+          unknown
+        );
+        assert.equal(answer, ZERO_BYTES32);
+      });
+    });
+  });
+
+  // CANRECEIVE
+
+  describe('canReceive', function () {
+    let dvp: Swaps;
+    let emoney1400: ERC1400;
+    let tradeProposalData: string;
+    let tradeAcceptanceData: string;
+    let fakeTradeProposalData: string;
+    let fakeTradeAcceptanceData: string;
+
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
+
+      emoney1400 = await new ERC1400__factory(signer).deploy(
+        'ERC1400Token',
+        'DAU',
+        1,
+        [owner],
+        partitions
+      );
+
+      const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
+      const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
+      tradeProposalData = getTradeProposalData(
+        recipient1,
+        executer,
+        expirationDate,
+        0,
+        emoney1400.address,
+        token2Amount,
+        partition1,
+        ERC1400STANDARD,
+        TYPE_ESCROW
+      );
+      tradeAcceptanceData = getTradeAcceptanceData(1);
+
+      fakeTradeProposalData = getTradeProposalData(
+        recipient1,
+        executer,
+        expirationDate,
+        0,
+        emoney1400.address,
+        token2Amount,
+        partition1,
+        ERC1400STANDARD,
+        TYPE_ESCROW,
+        true
+      );
+      fakeTradeAcceptanceData = getTradeAcceptanceData(1, true);
+    });
+    describe('when operatorData is not empty', function () {
+      describe('when data has the correct length', function () {
+        describe('when data has the right format', function () {
+          describe('when data is formatted for a trade proposal', function () {
+            it('returns true', async function () {
               const answer = await dvp.canReceive(
                 '0x00000000',
                 partition1,
@@ -966,12 +945,14 @@ contract(
                 unknown,
                 unknown,
                 1,
-                fakeTradeProposalData,
+                tradeProposalData,
                 MOCK_CERTIFICATE
               );
-              assert.equal(answer, false);
+              assert.equal(answer, true);
             });
-            it('returns false', async function () {
+          });
+          describe('when data is formatted for a trade acceptance', function () {
+            it('returns true', async function () {
               const answer = await dvp.canReceive(
                 '0x00000000',
                 partition1,
@@ -979,14 +960,14 @@ contract(
                 unknown,
                 unknown,
                 1,
-                fakeTradeAcceptanceData,
+                tradeAcceptanceData,
                 MOCK_CERTIFICATE
               );
-              assert.equal(answer, false);
+              assert.equal(answer, true);
             });
           });
         });
-        describe('when data does not have the correct length', function () {
+        describe('when data does not have the right format', function () {
           it('returns false', async function () {
             const answer = await dvp.canReceive(
               '0x00000000',
@@ -995,14 +976,27 @@ contract(
               unknown,
               unknown,
               1,
-              tradeProposalData.substring(0, tradeProposalData.length - 2),
+              fakeTradeProposalData,
+              MOCK_CERTIFICATE
+            );
+            assert.equal(answer, false);
+          });
+          it('returns false', async function () {
+            const answer = await dvp.canReceive(
+              '0x00000000',
+              partition1,
+              unknown,
+              unknown,
+              unknown,
+              1,
+              fakeTradeAcceptanceData,
               MOCK_CERTIFICATE
             );
             assert.equal(answer, false);
           });
         });
       });
-      describe('when operatorData is empty', function () {
+      describe('when data does not have the correct length', function () {
         it('returns false', async function () {
           const answer = await dvp.canReceive(
             '0x00000000',
@@ -1011,259 +1005,235 @@ contract(
             unknown,
             unknown,
             1,
-            tradeProposalData,
-            ZERO_BYTE
+            tradeProposalData.substring(0, tradeProposalData.length - 2),
+            MOCK_CERTIFICATE
           );
           assert.equal(answer, false);
         });
       });
     });
-
-    // TOKENSRECEIVED (HOOK)
-
-    describe('tokensReceived', function () {
-      let dvp: Swaps;
-      let security1400: ERC1400;
-      let emoney1400: ERC1400;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
-
-        security1400 = await new ERC1400__factory(signer).deploy(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [owner],
-          partitions
-        );
-        await security1400.issueByPartition(
+    describe('when operatorData is empty', function () {
+      it('returns false', async function () {
+        const answer = await dvp.canReceive(
+          '0x00000000',
           partition1,
-          tokenHolder1,
-          issuanceAmount,
-          MOCK_CERTIFICATE
-        );
-
-        emoney1400 = await new ERC1400__factory(signer).deploy(
-          'ERC1400Token',
-          'DAU',
+          unknown,
+          unknown,
+          unknown,
           1,
-          [owner],
-          partitions
+          tradeProposalData,
+          ZERO_BYTE
         );
-        await emoney1400.issueByPartition(
-          partition1,
-          recipient1,
-          issuanceAmount,
-          MOCK_CERTIFICATE
-        );
+        assert.equal(answer, false);
       });
-      describe('when hook is called from ERC1400 contract', function () {
-        describe('when recipient is the DVP contract', function () {
-          describe('when data field is valid', function () {
-            describe('when received tokens correspond to a new trade proposal', function () {
-              it('creates and accepts the trade request', async function () {
-                assert.equal((await dvp.getNbTrades()).eq(0), true);
-                await createTradeRequestWithoutCallingDVP(
-                  dvp,
-                  security1400,
-                  emoney1400,
-                  ERC1400STANDARD,
-                  partition1,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  true,
-                  token1Amount,
-                  token2Amount
-                );
-                assert.equal((await dvp.getNbTrades()).eq(1), true);
-              });
-              it('creates and accepts a second trade request', async function () {
-                assert.equal((await dvp.getNbTrades()).eq(0), true);
-                await createTradeRequestWithoutCallingDVP(
-                  dvp,
-                  security1400,
-                  emoney1400,
-                  ERC1400STANDARD,
-                  partition1,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  true,
-                  token1Amount,
-                  token2Amount
-                );
+    });
+  });
 
-                const chainTime = (await ethers.provider.getBlock('latest'))
-                  .timestamp;
-                const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
-                const tradeProposalData = getTradeProposalData(
-                  recipient1,
-                  executer,
-                  expirationDate,
-                  0,
-                  emoney1400.address,
-                  token2Amount,
-                  partition1,
-                  ERC1400STANDARD,
-                  TYPE_ESCROW
-                );
-                await security1400
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .operatorTransferByPartition(
-                    partition1,
-                    tokenHolder1,
-                    dvp.address,
-                    token1Amount,
-                    tradeProposalData,
-                    MOCK_CERTIFICATE
-                  );
-                assert.equal((await dvp.getNbTrades()).eq(2), true);
-              });
+  // TOKENSRECEIVED (HOOK)
+
+  describe('tokensReceived', function () {
+    let dvp: Swaps;
+    let security1400: ERC1400;
+    let emoney1400: ERC1400;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
+
+      security1400 = await new ERC1400__factory(signer).deploy(
+        'ERC1400Token',
+        'DAU',
+        1,
+        [owner],
+        partitions
+      );
+      await security1400.issueByPartition(
+        partition1,
+        tokenHolder1,
+        issuanceAmount,
+        MOCK_CERTIFICATE
+      );
+
+      emoney1400 = await new ERC1400__factory(signer).deploy(
+        'ERC1400Token',
+        'DAU',
+        1,
+        [owner],
+        partitions
+      );
+      await emoney1400.issueByPartition(
+        partition1,
+        recipient1,
+        issuanceAmount,
+        MOCK_CERTIFICATE
+      );
+    });
+    describe('when hook is called from ERC1400 contract', function () {
+      describe('when recipient is the DVP contract', function () {
+        describe('when data field is valid', function () {
+          describe('when received tokens correspond to a new trade proposal', function () {
+            it('creates and accepts the trade request', async function () {
+              assert.equal((await dvp.getNbTrades()).eq(0), true);
+              // await createTradeRequestWithoutCallingDVP(
+              //   dvp,
+              //   security1400,
+              //   emoney1400,
+              //   ERC1400STANDARD,
+              //   partition1,
+              //   tokenHolder1Signer,
+              //   recipient1,
+              //   executer,
+              //   true,
+              //   token1Amount,
+              //   token2Amount
+              // );
+              // assert.equal((await dvp.getNbTrades()).eq(1), true);
             });
-            describe('when received tokens correspond to an existing trade acceptance', function () {
-              describe('when trade state is PENDING', function () {
-                describe('when trade recipient is defined', function () {
-                  describe('when token sender is the holder registered in the trade', function () {
-                    describe('when token is the correct token', function () {
-                      describe('when partition is the correct partition', function () {
-                        describe('when token standard for the trade is ERC1400', function () {
-                          describe('when token amount is correct', function () {
-                            describe('when there is an executer', function () {
-                              it('accepts the trade request', async function () {
-                                await createTradeRequestWithoutCallingDVP(
-                                  dvp,
-                                  security1400,
-                                  emoney1400,
-                                  ERC1400STANDARD,
-                                  partition1,
-                                  tokenHolder1,
-                                  recipient1,
-                                  executer,
-                                  true,
-                                  token1Amount,
-                                  token2Amount
-                                );
-                                await acceptTradeRequestWithoutCallingDVP(
-                                  dvp,
-                                  security1400,
-                                  emoney1400,
-                                  1,
-                                  recipient1,
-                                  STATE_PENDING,
-                                  ACCEPTED_TRUE
-                                );
-                              });
-                            });
-                            describe('when there is no executer', function () {
-                              it('accepts and executes the trade request [USE CASE - ATOMIC DELIVERY VS PAYMENT IN 2 TRANSACTIONS ONLY]', async function () {
-                                await createTradeRequestWithoutCallingDVP(
-                                  dvp,
-                                  security1400,
-                                  emoney1400,
-                                  ERC1400STANDARD,
-                                  partition1,
-                                  tokenHolder1,
-                                  recipient1,
-                                  ZERO_ADDRESS,
-                                  true,
-                                  token1Amount,
-                                  token2Amount
-                                );
-                                await acceptTradeRequestWithoutCallingDVP(
-                                  dvp,
-                                  security1400,
-                                  emoney1400,
-                                  1,
-                                  recipient1,
-                                  STATE_EXECUTED,
-                                  ACCEPTED_TRUE
-                                );
-                              });
+            it('creates and accepts a second trade request', async function () {
+              assert.equal((await dvp.getNbTrades()).eq(0), true);
+              await createTradeRequestWithoutCallingDVP(
+                dvp,
+                security1400,
+                emoney1400,
+                ERC1400STANDARD,
+                partition1,
+                tokenHolder1Signer,
+                recipient1,
+                executer,
+                true,
+                token1Amount,
+                token2Amount
+              );
+
+              const chainTime = (await ethers.provider.getBlock('latest'))
+                .timestamp;
+              const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
+              const tradeProposalData = getTradeProposalData(
+                recipient1,
+                executer,
+                expirationDate,
+                0,
+                emoney1400.address,
+                token2Amount,
+                partition1,
+                ERC1400STANDARD,
+                TYPE_ESCROW
+              );
+              await security1400
+                .connect(tokenHolder1Signer)
+                .operatorTransferByPartition(
+                  partition1,
+                  tokenHolder1,
+                  dvp.address,
+                  token1Amount,
+                  tradeProposalData,
+                  MOCK_CERTIFICATE
+                );
+              assert.equal((await dvp.getNbTrades()).eq(2), true);
+            });
+          });
+          describe('when received tokens correspond to an existing trade acceptance', function () {
+            describe('when trade state is PENDING', function () {
+              describe('when trade recipient is defined', function () {
+                describe('when token sender is the holder registered in the trade', function () {
+                  describe('when token is the correct token', function () {
+                    describe('when partition is the correct partition', function () {
+                      describe('when token standard for the trade is ERC1400', function () {
+                        describe('when token amount is correct', function () {
+                          describe('when there is an executer', function () {
+                            it('accepts the trade request', async function () {
+                              await createTradeRequestWithoutCallingDVP(
+                                dvp,
+                                security1400,
+                                emoney1400,
+                                ERC1400STANDARD,
+                                partition1,
+                                tokenHolder1Signer,
+                                recipient1,
+                                executer,
+                                true,
+                                token1Amount,
+                                token2Amount
+                              );
+                              await acceptTradeRequestWithoutCallingDVP(
+                                dvp,
+                                security1400,
+                                emoney1400,
+                                1,
+                                recipient1Signer,
+                                STATE_PENDING,
+                                ACCEPTED_TRUE
+                              );
                             });
                           });
-                          describe('when token amount is not correct', function () {
-                            describe('when there is no executer', function () {
-                              it('reverts', async function () {
-                                await createTradeRequestWithoutCallingDVP(
-                                  dvp,
-                                  security1400,
-                                  emoney1400,
-                                  ERC1400STANDARD,
-                                  partition1,
-                                  tokenHolder1,
-                                  recipient1,
-                                  ZERO_ADDRESS,
-                                  true,
-                                  token1Amount,
-                                  token2Amount
-                                );
-                                const tradeAcceptanceData =
-                                  getTradeAcceptanceData(1);
-                                await expectRevert.unspecified(
-                                  emoney1400
-                                    .connect(await ethers.getSigner(recipient1))
-                                    .operatorTransferByPartition(
-                                      partition1,
-                                      recipient1,
-                                      dvp.address,
-                                      token2Amount + 1,
-                                      tradeAcceptanceData,
-                                      MOCK_CERTIFICATE
-                                    )
-                                );
-                              });
+                          describe('when there is no executer', function () {
+                            it('accepts and executes the trade request [USE CASE - ATOMIC DELIVERY VS PAYMENT IN 2 TRANSACTIONS ONLY]', async function () {
+                              await createTradeRequestWithoutCallingDVP(
+                                dvp,
+                                security1400,
+                                emoney1400,
+                                ERC1400STANDARD,
+                                partition1,
+                                tokenHolder1Signer,
+                                recipient1,
+                                ZERO_ADDRESS,
+                                true,
+                                token1Amount,
+                                token2Amount
+                              );
+                              await acceptTradeRequestWithoutCallingDVP(
+                                dvp,
+                                security1400,
+                                emoney1400,
+                                1,
+                                recipient1Signer,
+                                STATE_EXECUTED,
+                                ACCEPTED_TRUE
+                              );
                             });
                           });
                         });
-                        describe('when token standard for the trade is not ERC1400', function () {
-                          it('reverts', async function () {
-                            await createTradeRequestWithoutCallingDVP(
-                              dvp,
-                              security1400,
-                              emoney1400,
-                              ERC20STANDARD,
-                              partition1,
-                              tokenHolder1,
-                              recipient1,
-                              executer,
-                              true,
-                              token1Amount,
-                              token2Amount
-                            );
-                            const tradeAcceptanceData =
-                              getTradeAcceptanceData(1);
-                            await expectRevert.unspecified(
-                              emoney1400
-                                .connect(await ethers.getSigner(recipient1))
-                                .operatorTransferByPartition(
-                                  partition1,
-                                  recipient1,
-                                  dvp.address,
-                                  token2Amount,
-                                  tradeAcceptanceData,
-                                  MOCK_CERTIFICATE
-                                )
-                            );
+                        describe('when token amount is not correct', function () {
+                          describe('when there is no executer', function () {
+                            it('reverts', async function () {
+                              await createTradeRequestWithoutCallingDVP(
+                                dvp,
+                                security1400,
+                                emoney1400,
+                                ERC1400STANDARD,
+                                partition1,
+                                tokenHolder1Signer,
+                                recipient1,
+                                ZERO_ADDRESS,
+                                true,
+                                token1Amount,
+                                token2Amount
+                              );
+                              const tradeAcceptanceData =
+                                getTradeAcceptanceData(1);
+                              await expectRevert.unspecified(
+                                emoney1400
+                                  .connect(recipient1Signer)
+                                  .operatorTransferByPartition(
+                                    partition1,
+                                    recipient1,
+                                    dvp.address,
+                                    token2Amount + 1,
+                                    tradeAcceptanceData,
+                                    MOCK_CERTIFICATE
+                                  )
+                              );
+                            });
                           });
                         });
                       });
-                      describe('when partition is not the correct partition', function () {
-                        beforeEach(async function () {
-                          await emoney1400.issueByPartition(
-                            partition2,
-                            recipient1,
-                            issuanceAmount,
-                            MOCK_CERTIFICATE
-                          );
-                        });
+                      describe('when token standard for the trade is not ERC1400', function () {
                         it('reverts', async function () {
                           await createTradeRequestWithoutCallingDVP(
                             dvp,
                             security1400,
                             emoney1400,
-                            ERC1400STANDARD,
+                            ERC20STANDARD,
                             partition1,
-                            tokenHolder1,
+                            tokenHolder1Signer,
                             recipient1,
                             executer,
                             true,
@@ -1273,9 +1243,9 @@ contract(
                           const tradeAcceptanceData = getTradeAcceptanceData(1);
                           await expectRevert.unspecified(
                             emoney1400
-                              .connect(await ethers.getSigner(recipient1))
+                              .connect(recipient1Signer)
                               .operatorTransferByPartition(
-                                partition2,
+                                partition1,
                                 recipient1,
                                 dvp.address,
                                 token2Amount,
@@ -1286,14 +1256,10 @@ contract(
                         });
                       });
                     });
-                    describe('when token is not the correct token', function () {
-                      let wrongEmoney1400: ERC1400;
+                    describe('when partition is not the correct partition', function () {
                       beforeEach(async function () {
-                        wrongEmoney1400 = await new ERC1400__factory(
-                          signer
-                        ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
-                        await wrongEmoney1400.issueByPartition(
-                          partition1,
+                        await emoney1400.issueByPartition(
+                          partition2,
                           recipient1,
                           issuanceAmount,
                           MOCK_CERTIFICATE
@@ -1306,7 +1272,7 @@ contract(
                           emoney1400,
                           ERC1400STANDARD,
                           partition1,
-                          tokenHolder1,
+                          tokenHolder1Signer,
                           recipient1,
                           executer,
                           true,
@@ -1315,10 +1281,10 @@ contract(
                         );
                         const tradeAcceptanceData = getTradeAcceptanceData(1);
                         await expectRevert.unspecified(
-                          wrongEmoney1400
-                            .connect(await ethers.getSigner(recipient1))
+                          emoney1400
+                            .connect(recipient1Signer)
                             .operatorTransferByPartition(
-                              partition1,
+                              partition2,
                               recipient1,
                               dvp.address,
                               token2Amount,
@@ -1329,11 +1295,15 @@ contract(
                       });
                     });
                   });
-                  describe('when token sender is not the holder registered in the trade', function () {
+                  describe('when token is not the correct token', function () {
+                    let wrongEmoney1400: ERC1400;
                     beforeEach(async function () {
-                      await emoney1400.issueByPartition(
+                      wrongEmoney1400 = await new ERC1400__factory(
+                        signer
+                      ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
+                      await wrongEmoney1400.issueByPartition(
                         partition1,
-                        recipient2,
+                        recipient1,
                         issuanceAmount,
                         MOCK_CERTIFICATE
                       );
@@ -1345,7 +1315,7 @@ contract(
                         emoney1400,
                         ERC1400STANDARD,
                         partition1,
-                        tokenHolder1,
+                        tokenHolder1Signer,
                         recipient1,
                         executer,
                         true,
@@ -1354,11 +1324,11 @@ contract(
                       );
                       const tradeAcceptanceData = getTradeAcceptanceData(1);
                       await expectRevert.unspecified(
-                        emoney1400
-                          .connect(await ethers.getSigner(recipient2))
+                        wrongEmoney1400
+                          .connect(recipient1Signer)
                           .operatorTransferByPartition(
                             partition1,
-                            recipient2,
+                            recipient1,
                             dvp.address,
                             token2Amount,
                             tradeAcceptanceData,
@@ -1368,160 +1338,166 @@ contract(
                     });
                   });
                 });
-                describe('when trade recipient is not defined', function () {
-                  describe('when there is an executer', function () {
-                    it('accepts and executes the trade request [USE CASE - ATOMIC DELIVERY VS PAYMENT IN 2 TRANSACTIONS ONLY - MARKETPLACE]', async function () {
-                      await createTradeRequestWithoutCallingDVP(
-                        dvp,
-                        security1400,
-                        emoney1400,
-                        ERC1400STANDARD,
-                        partition1,
-                        tokenHolder1,
-                        recipient1,
-                        ZERO_ADDRESS,
-                        true,
-                        token1Amount,
-                        token2Amount,
-                        true
-                      );
-                      await acceptTradeRequestWithoutCallingDVP(
-                        dvp,
-                        security1400,
-                        emoney1400,
-                        1,
-                        recipient1,
-                        STATE_EXECUTED,
-                        ACCEPTED_TRUE
-                      );
-                    });
+                describe('when token sender is not the holder registered in the trade', function () {
+                  beforeEach(async function () {
+                    await emoney1400.issueByPartition(
+                      partition1,
+                      recipient2,
+                      issuanceAmount,
+                      MOCK_CERTIFICATE
+                    );
+                  });
+                  it('reverts', async function () {
+                    await createTradeRequestWithoutCallingDVP(
+                      dvp,
+                      security1400,
+                      emoney1400,
+                      ERC1400STANDARD,
+                      partition1,
+                      tokenHolder1Signer,
+                      recipient1,
+                      executer,
+                      true,
+                      token1Amount,
+                      token2Amount
+                    );
+                    const tradeAcceptanceData = getTradeAcceptanceData(1);
+                    await expectRevert.unspecified(
+                      emoney1400
+                        .connect(recipient2Signer)
+                        .operatorTransferByPartition(
+                          partition1,
+                          recipient2,
+                          dvp.address,
+                          token2Amount,
+                          tradeAcceptanceData,
+                          MOCK_CERTIFICATE
+                        )
+                    );
                   });
                 });
               });
-              describe('when trade state is not PENDING', function () {
-                it('reverts', async function () {
-                  await createTradeRequestWithoutCallingDVP(
-                    dvp,
-                    security1400,
-                    emoney1400,
-                    ERC1400STANDARD,
-                    partition1,
-                    tokenHolder1,
-                    recipient1,
-                    executer,
-                    true,
-                    token1Amount,
-                    token2Amount
-                  );
-                  await acceptTradeRequestWithoutCallingDVP(
-                    dvp,
-                    security1400,
-                    emoney1400,
-                    1,
-                    recipient1,
-                    STATE_PENDING,
-                    ACCEPTED_TRUE
-                  );
-                  const tradeAcceptanceData = getTradeAcceptanceData(1);
-                  await expectRevert.unspecified(
-                    emoney1400
-                      .connect(await ethers.getSigner(recipient1))
-                      .operatorTransferByPartition(
-                        partition1,
-                        recipient1,
-                        dvp.address,
-                        token2Amount,
-                        tradeAcceptanceData,
-                        MOCK_CERTIFICATE
-                      )
-                  );
+              describe('when trade recipient is not defined', function () {
+                describe('when there is an executer', function () {
+                  it('accepts and executes the trade request [USE CASE - ATOMIC DELIVERY VS PAYMENT IN 2 TRANSACTIONS ONLY - MARKETPLACE]', async function () {
+                    await createTradeRequestWithoutCallingDVP(
+                      dvp,
+                      security1400,
+                      emoney1400,
+                      ERC1400STANDARD,
+                      partition1,
+                      tokenHolder1Signer,
+                      recipient1,
+                      ZERO_ADDRESS,
+                      true,
+                      token1Amount,
+                      token2Amount,
+                      true
+                    );
+                    await acceptTradeRequestWithoutCallingDVP(
+                      dvp,
+                      security1400,
+                      emoney1400,
+                      1,
+                      recipient1Signer,
+                      STATE_EXECUTED,
+                      ACCEPTED_TRUE
+                    );
+                  });
                 });
               });
             });
-          });
-          describe('when data field is not valid', function () {
-            it('reverts', async function () {
-              await createTradeRequestWithoutCallingDVP(
-                dvp,
-                security1400,
-                emoney1400,
-                ERC1400STANDARD,
-                partition1,
-                tokenHolder1,
-                recipient1,
-                executer,
-                true,
-                token1Amount,
-                token2Amount
-              );
-              const fakeTradeAcceptanceData = getTradeAcceptanceData(1, true);
-              await expectRevert.unspecified(
-                emoney1400
-                  .connect(await ethers.getSigner(recipient1))
-                  .operatorTransferByPartition(
-                    partition1,
-                    recipient1,
-                    dvp.address,
-                    token2Amount,
-                    fakeTradeAcceptanceData,
-                    MOCK_CERTIFICATE
-                  )
-              );
+            describe('when trade state is not PENDING', function () {
+              it('reverts', async function () {
+                await createTradeRequestWithoutCallingDVP(
+                  dvp,
+                  security1400,
+                  emoney1400,
+                  ERC1400STANDARD,
+                  partition1,
+                  tokenHolder1Signer,
+                  recipient1,
+                  executer,
+                  true,
+                  token1Amount,
+                  token2Amount
+                );
+                await acceptTradeRequestWithoutCallingDVP(
+                  dvp,
+                  security1400,
+                  emoney1400,
+                  1,
+                  recipient1Signer,
+                  STATE_PENDING,
+                  ACCEPTED_TRUE
+                );
+                const tradeAcceptanceData = getTradeAcceptanceData(1);
+                await expectRevert.unspecified(
+                  emoney1400
+                    .connect(recipient1Signer)
+                    .operatorTransferByPartition(
+                      partition1,
+                      recipient1,
+                      dvp.address,
+                      token2Amount,
+                      tradeAcceptanceData,
+                      MOCK_CERTIFICATE
+                    )
+                );
+              });
             });
           });
         });
-        describe('when recipient is not the DVP contract', function () {
-          let fakeSecurity1400: FakeERC1400Mock;
-          beforeEach(async function () {
-            fakeSecurity1400 = await new FakeERC1400Mock__factory(
-              signer
-            ).deploy(
-              'ERC1400Token',
-              'DAU20',
-              1,
-              [owner],
-              partitions,
-              ZERO_ADDRESS,
-              ZERO_ADDRESS
-            );
-            await fakeSecurity1400.issueByPartition(
-              partition1,
-              tokenHolder1,
-              issuanceAmount,
-              MOCK_CERTIFICATE
-            );
-          });
+        describe('when data field is not valid', function () {
           it('reverts', async function () {
-            const chainTime = (await ethers.provider.getBlock('latest'))
-              .timestamp;
-            const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
-            const tradeProposalData = getTradeProposalData(
+            await createTradeRequestWithoutCallingDVP(
+              dvp,
+              security1400,
+              emoney1400,
+              ERC1400STANDARD,
+              partition1,
+              tokenHolder1Signer,
               recipient1,
               executer,
-              expirationDate,
-              0,
-              emoney1400.address,
-              token2Amount,
-              partition1,
-              ERC1400STANDARD,
-              TYPE_ESCROW
+              true,
+              token1Amount,
+              token2Amount
             );
+            const fakeTradeAcceptanceData = getTradeAcceptanceData(1, true);
             await expectRevert.unspecified(
-              fakeSecurity1400
-                .connect(await ethers.getSigner(tokenHolder1))
+              emoney1400
+                .connect(recipient1Signer)
                 .operatorTransferByPartition(
                   partition1,
-                  tokenHolder1,
+                  recipient1,
                   dvp.address,
-                  token1Amount,
-                  tradeProposalData,
+                  token2Amount,
+                  fakeTradeAcceptanceData,
                   MOCK_CERTIFICATE
                 )
             );
           });
         });
       });
-      describe('when hook is not called from ERC1400 contract', function () {
+      describe('when recipient is not the DVP contract', function () {
+        let fakeSecurity1400: FakeERC1400Mock;
+        beforeEach(async function () {
+          fakeSecurity1400 = await new FakeERC1400Mock__factory(signer).deploy(
+            'ERC1400Token',
+            'DAU20',
+            1,
+            [owner],
+            partitions,
+            ZERO_ADDRESS,
+            ZERO_ADDRESS
+          );
+          await fakeSecurity1400.issueByPartition(
+            partition1,
+            tokenHolder1,
+            issuanceAmount,
+            MOCK_CERTIFICATE
+          );
+        });
         it('reverts', async function () {
           const chainTime = (await ethers.provider.getBlock('latest'))
             .timestamp;
@@ -1538,12 +1514,10 @@ contract(
             TYPE_ESCROW
           );
           await expectRevert.unspecified(
-            dvp
-              .connect(await ethers.getSigner(tokenHolder1))
-              .tokensReceived(
-                ZERO_BYTE,
+            fakeSecurity1400
+              .connect(tokenHolder1Signer)
+              .operatorTransferByPartition(
                 partition1,
-                tokenHolder1,
                 tokenHolder1,
                 dvp.address,
                 token1Amount,
@@ -1554,281 +1528,74 @@ contract(
         });
       });
     });
-
-    // REQUESTTRADE
-
-    describe('requestTrade', function () {
-      let dvp: Swaps;
-      let security20: ERC20Token;
-      let emoney20: ERC20Token;
-
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
-
-        security20 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
+    describe('when hook is not called from ERC1400 contract', function () {
+      it('reverts', async function () {
+        const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
+        const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
+        const tradeProposalData = getTradeProposalData(
+          recipient1,
+          executer,
+          expirationDate,
+          0,
+          emoney1400.address,
+          token2Amount,
+          partition1,
+          ERC1400STANDARD,
+          TYPE_ESCROW
         );
-        emoney20 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
+        await expectRevert.unspecified(
+          dvp
+            .connect(tokenHolder1Signer)
+            .tokensReceived(
+              ZERO_BYTE,
+              partition1,
+              tokenHolder1,
+              tokenHolder1,
+              dvp.address,
+              token1Amount,
+              tradeProposalData,
+              MOCK_CERTIFICATE
+            )
         );
-
-        await security20
-          .connect(await ethers.getSigner(owner))
-          .mint(tokenHolder1, issuanceAmount);
-        await emoney20.mint(recipient1, issuanceAmount);
       });
-      describe('when none of the 2 tokens is ETH', function () {
-        describe('when the DVP contract is not controllable', function () {
-          describe('when escrowable is not forbidden', function () {
-            describe('when expiration date is defined', function () {
-              describe('when sender is holder 1', function () {
-                describe('when DVP request is of type Escrow', function () {
-                  describe('when token standard is ERC20', function () {
-                    it('creates and accepts the trade request', async function () {
-                      await security20
-                        .connect(await ethers.getSigner(tokenHolder1))
-                        .approve(dvp.address, token1Amount);
-                      await createTradeRequest(
-                        dvp,
-                        security20,
-                        emoney20,
-                        ERC20STANDARD,
-                        ERC20STANDARD,
-                        tokenHolder1,
-                        recipient1,
-                        ZERO_ADDRESS,
-                        tokenHolder1,
-                        true,
-                        TYPE_ESCROW,
-                        token1Amount,
-                        token2Amount
-                      );
-                    });
-                  });
-                  describe('when token standard is ERC721', function () {
-                    it('creates and accepts the trade request', async function () {
-                      const security721 = await new ERC721Token__factory(
-                        signer
-                      ).deploy('ERC721Token', 'DAU721', '', '');
-                      await security721
-                        .connect(await ethers.getSigner(owner))
-                        .mint(tokenHolder1, issuanceTokenId);
-                      await security721
-                        .connect(await ethers.getSigner(tokenHolder1))
-                        .approve(dvp.address, issuanceTokenId);
+    });
+  });
 
-                      await createTradeRequest(
-                        dvp,
-                        security721,
-                        emoney20,
-                        ERC721STANDARD,
-                        ERC20STANDARD,
-                        tokenHolder1,
-                        recipient1,
-                        ZERO_ADDRESS,
-                        tokenHolder1,
-                        true,
-                        TYPE_ESCROW,
-                        token1Amount,
-                        token2Amount
-                      );
-                    });
-                  });
-                  describe('when token standard is ERC1400', function () {
-                    it('creates and accepts the trade request', async function () {
-                      const security1400 = await new ERC1400__factory(
-                        signer
-                      ).deploy('ERC1400Token', 'DAU', 1, [], partitions);
+  // REQUESTTRADE
 
-                      await security1400.issueByPartition(
-                        partition1,
-                        tokenHolder1,
-                        issuanceAmount,
-                        VALID_CERTIFICATE
-                      );
-                      await security1400
-                        .connect(await ethers.getSigner(tokenHolder1))
-                        .approveByPartition(
-                          partition1,
-                          dvp.address,
-                          token1Amount
-                        );
+  describe('requestTrade', function () {
+    let dvp: Swaps;
+    let security20: ERC20Token;
+    let emoney20: ERC20Token;
 
-                      await createTradeRequest(
-                        dvp,
-                        security1400,
-                        emoney20,
-                        ERC1400STANDARD,
-                        ERC20STANDARD,
-                        tokenHolder1,
-                        recipient1,
-                        ZERO_ADDRESS,
-                        tokenHolder1,
-                        true,
-                        TYPE_ESCROW,
-                        token1Amount,
-                        token2Amount
-                      );
-                    });
-                  });
-                  describe('when payment is made off-chain', function () {
-                    it('creates and accepts the trade request', async function () {
-                      await createTradeRequest(
-                        dvp,
-                        security20,
-                        undefined,
-                        ERC20STANDARD,
-                        OFFCHAIN,
-                        tokenHolder1,
-                        recipient1,
-                        ZERO_ADDRESS,
-                        recipient1,
-                        true,
-                        TYPE_ESCROW,
-                        token1Amount,
-                        token2Amount
-                      );
-                    });
-                  });
-                });
-                describe('when DVP request is of type Swap', function () {
-                  describe('when token standard is ERC20', function () {
-                    it('creates and accepts the trade request', async function () {
-                      await security20
-                        .connect(await ethers.getSigner(tokenHolder1))
-                        .approve(dvp.address, token1Amount);
-                      await createTradeRequest(
-                        dvp,
-                        security20,
-                        emoney20,
-                        ERC20STANDARD,
-                        ERC20STANDARD,
-                        tokenHolder1,
-                        recipient1,
-                        ZERO_ADDRESS,
-                        tokenHolder1,
-                        true,
-                        TYPE_SWAP,
-                        token1Amount,
-                        token2Amount
-                      );
-                    });
-                  });
-                  describe('when token standard is ERC721', function () {
-                    it('creates and accepts the trade request', async function () {
-                      const security721 = await new ERC721Token__factory(
-                        signer
-                      ).deploy('ERC721Token', 'DAU721', '', '');
-                      await security721
-                        .connect(await ethers.getSigner(owner))
-                        .mint(tokenHolder1, issuanceTokenId);
-                      await security721
-                        .connect(await ethers.getSigner(tokenHolder1))
-                        .approve(dvp.address, issuanceTokenId);
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
 
-                      await createTradeRequest(
-                        dvp,
-                        security721,
-                        emoney20,
-                        ERC721STANDARD,
-                        ERC20STANDARD,
-                        tokenHolder1,
-                        recipient1,
-                        ZERO_ADDRESS,
-                        tokenHolder1,
-                        true,
-                        TYPE_SWAP,
-                        token1Amount,
-                        token2Amount
-                      );
-                    });
-                  });
-                  describe('when token standard is ERC1400', function () {
-                    it('creates and accepts the trade request', async function () {
-                      const security1400 = await new ERC1400__factory(
-                        signer
-                      ).deploy('ERC1400Token', 'DAU', 1, [], partitions);
-                      await security1400.issueByPartition(
-                        partition1,
-                        tokenHolder1,
-                        issuanceAmount,
-                        VALID_CERTIFICATE
-                      );
-                      await security1400
-                        .connect(await ethers.getSigner(tokenHolder1))
-                        .approveByPartition(
-                          partition1,
-                          dvp.address,
-                          token1Amount
-                        );
+      security20 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+      emoney20 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
 
-                      await createTradeRequest(
-                        dvp,
-                        security1400,
-                        emoney20,
-                        ERC1400STANDARD,
-                        ERC20STANDARD,
-                        tokenHolder1,
-                        recipient1,
-                        ZERO_ADDRESS,
-                        tokenHolder1,
-                        true,
-                        TYPE_SWAP,
-                        token1Amount,
-                        token2Amount
-                      );
-                    });
-                  });
-                  describe('when payment is made off-chain', function () {
-                    it('creates and accepts the trade request', async function () {
-                      await createTradeRequest(
-                        dvp,
-                        security20,
-                        undefined,
-                        ERC20STANDARD,
-                        OFFCHAIN,
-                        tokenHolder1,
-                        recipient1,
-                        ZERO_ADDRESS,
-                        recipient1,
-                        true,
-                        TYPE_SWAP,
-                        token1Amount,
-                        token2Amount
-                      );
-                    });
-                  });
-                });
-              });
-              describe('when sender is holder 2', function () {
-                it('creates and accepts the trade request', async function () {
-                  await emoney20
-                    .connect(await ethers.getSigner(recipient1))
-                    .approve(dvp.address, token2Amount);
-                  await createTradeRequest(
-                    dvp,
-                    security20,
-                    emoney20,
-                    ERC20STANDARD,
-                    ERC20STANDARD,
-                    tokenHolder1,
-                    recipient1,
-                    ZERO_ADDRESS,
-                    recipient1,
-                    true,
-                    TYPE_ESCROW,
-                    token1Amount,
-                    token2Amount
-                  );
-                });
-              });
-              describe('when sender is neither holder 1 nor holder 2', function () {
-                describe('when the holder 1 is not the zero address', function () {
-                  it('creates the trade request', async function () {
+      await security20.connect(signer).mint(tokenHolder1, issuanceAmount);
+      await emoney20.mint(recipient1, issuanceAmount);
+    });
+    describe('when none of the 2 tokens is ETH', function () {
+      describe('when the DVP contract is not controllable', function () {
+        describe('when escrowable is not forbidden', function () {
+          describe('when expiration date is defined', function () {
+            describe('when sender is holder 1', function () {
+              describe('when DVP request is of type Escrow', function () {
+                describe('when token standard is ERC20', function () {
+                  it('creates and accepts the trade request', async function () {
+                    await security20
+                      .connect(tokenHolder1Signer)
+                      .approve(dvp.address, token1Amount);
                     await createTradeRequest(
                       dvp,
                       security20,
@@ -1838,7 +1605,7 @@ contract(
                       tokenHolder1,
                       recipient1,
                       ZERO_ADDRESS,
-                      unknown,
+                      tokenHolder1Signer,
                       true,
                       TYPE_ESCROW,
                       token1Amount,
@@ -1846,12 +1613,249 @@ contract(
                     );
                   });
                 });
-                describe('when the holder 1 is the zero address', function () {
-                  it('reverts', async function () {
-                    const chainTime = (await ethers.provider.getBlock('latest'))
-                      .timestamp;
-                    const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
-                    /*
+                describe('when token standard is ERC721', function () {
+                  it('creates and accepts the trade request', async function () {
+                    const security721 = await new ERC721Token__factory(
+                      signer
+                    ).deploy('ERC721Token', 'DAU721', '', '');
+                    await security721
+                      .connect(signer)
+                      .mint(tokenHolder1, issuanceTokenId);
+                    await security721
+                      .connect(tokenHolder1Signer)
+                      .approve(dvp.address, issuanceTokenId);
+
+                    await createTradeRequest(
+                      dvp,
+                      security721,
+                      emoney20,
+                      ERC721STANDARD,
+                      ERC20STANDARD,
+                      tokenHolder1,
+                      recipient1,
+                      ZERO_ADDRESS,
+                      tokenHolder1Signer,
+                      true,
+                      TYPE_ESCROW,
+                      token1Amount,
+                      token2Amount
+                    );
+                  });
+                });
+                describe('when token standard is ERC1400', function () {
+                  it('creates and accepts the trade request', async function () {
+                    const security1400 = await new ERC1400__factory(
+                      signer
+                    ).deploy('ERC1400Token', 'DAU', 1, [], partitions);
+
+                    await security1400.issueByPartition(
+                      partition1,
+                      tokenHolder1,
+                      issuanceAmount,
+                      VALID_CERTIFICATE
+                    );
+                    await security1400
+                      .connect(tokenHolder1Signer)
+                      .approveByPartition(
+                        partition1,
+                        dvp.address,
+                        token1Amount
+                      );
+
+                    await createTradeRequest(
+                      dvp,
+                      security1400,
+                      emoney20,
+                      ERC1400STANDARD,
+                      ERC20STANDARD,
+                      tokenHolder1,
+                      recipient1,
+                      ZERO_ADDRESS,
+                      tokenHolder1Signer,
+                      true,
+                      TYPE_ESCROW,
+                      token1Amount,
+                      token2Amount
+                    );
+                  });
+                });
+                describe('when payment is made off-chain', function () {
+                  it('creates and accepts the trade request', async function () {
+                    await createTradeRequest(
+                      dvp,
+                      security20,
+                      undefined,
+                      ERC20STANDARD,
+                      OFFCHAIN,
+                      tokenHolder1,
+                      recipient1,
+                      ZERO_ADDRESS,
+                      recipient1Signer,
+                      true,
+                      TYPE_ESCROW,
+                      token1Amount,
+                      token2Amount
+                    );
+                  });
+                });
+              });
+              describe('when DVP request is of type Swap', function () {
+                describe('when token standard is ERC20', function () {
+                  it('creates and accepts the trade request', async function () {
+                    await security20
+                      .connect(tokenHolder1Signer)
+                      .approve(dvp.address, token1Amount);
+                    await createTradeRequest(
+                      dvp,
+                      security20,
+                      emoney20,
+                      ERC20STANDARD,
+                      ERC20STANDARD,
+                      tokenHolder1,
+                      recipient1,
+                      ZERO_ADDRESS,
+                      tokenHolder1Signer,
+                      true,
+                      TYPE_SWAP,
+                      token1Amount,
+                      token2Amount
+                    );
+                  });
+                });
+                describe('when token standard is ERC721', function () {
+                  it('creates and accepts the trade request', async function () {
+                    const security721 = await new ERC721Token__factory(
+                      signer
+                    ).deploy('ERC721Token', 'DAU721', '', '');
+                    await security721
+                      .connect(signer)
+                      .mint(tokenHolder1, issuanceTokenId);
+                    await security721
+                      .connect(tokenHolder1Signer)
+                      .approve(dvp.address, issuanceTokenId);
+
+                    await createTradeRequest(
+                      dvp,
+                      security721,
+                      emoney20,
+                      ERC721STANDARD,
+                      ERC20STANDARD,
+                      tokenHolder1,
+                      recipient1,
+                      ZERO_ADDRESS,
+                      tokenHolder1Signer,
+                      true,
+                      TYPE_SWAP,
+                      token1Amount,
+                      token2Amount
+                    );
+                  });
+                });
+                describe('when token standard is ERC1400', function () {
+                  it('creates and accepts the trade request', async function () {
+                    const security1400 = await new ERC1400__factory(
+                      signer
+                    ).deploy('ERC1400Token', 'DAU', 1, [], partitions);
+                    await security1400.issueByPartition(
+                      partition1,
+                      tokenHolder1,
+                      issuanceAmount,
+                      VALID_CERTIFICATE
+                    );
+                    await security1400
+                      .connect(tokenHolder1Signer)
+                      .approveByPartition(
+                        partition1,
+                        dvp.address,
+                        token1Amount
+                      );
+
+                    await createTradeRequest(
+                      dvp,
+                      security1400,
+                      emoney20,
+                      ERC1400STANDARD,
+                      ERC20STANDARD,
+                      tokenHolder1,
+                      recipient1,
+                      ZERO_ADDRESS,
+                      tokenHolder1Signer,
+                      true,
+                      TYPE_SWAP,
+                      token1Amount,
+                      token2Amount
+                    );
+                  });
+                });
+                describe('when payment is made off-chain', function () {
+                  it('creates and accepts the trade request', async function () {
+                    await createTradeRequest(
+                      dvp,
+                      security20,
+                      undefined,
+                      ERC20STANDARD,
+                      OFFCHAIN,
+                      tokenHolder1,
+                      recipient1,
+                      ZERO_ADDRESS,
+                      recipient1Signer,
+                      true,
+                      TYPE_SWAP,
+                      token1Amount,
+                      token2Amount
+                    );
+                  });
+                });
+              });
+            });
+            describe('when sender is holder 2', function () {
+              it('creates and accepts the trade request', async function () {
+                await emoney20
+                  .connect(recipient1Signer)
+                  .approve(dvp.address, token2Amount);
+                await createTradeRequest(
+                  dvp,
+                  security20,
+                  emoney20,
+                  ERC20STANDARD,
+                  ERC20STANDARD,
+                  tokenHolder1,
+                  recipient1,
+                  ZERO_ADDRESS,
+                  recipient1Signer,
+                  true,
+                  TYPE_ESCROW,
+                  token1Amount,
+                  token2Amount
+                );
+              });
+            });
+            describe('when sender is neither holder 1 nor holder 2', function () {
+              describe('when the holder 1 is not the zero address', function () {
+                it('creates the trade request', async function () {
+                  await createTradeRequest(
+                    dvp,
+                    security20,
+                    emoney20,
+                    ERC20STANDARD,
+                    ERC20STANDARD,
+                    tokenHolder1,
+                    recipient1,
+                    ZERO_ADDRESS,
+                    unknownSigner,
+                    true,
+                    TYPE_ESCROW,
+                    token1Amount,
+                    token2Amount
+                  );
+                });
+              });
+              describe('when the holder 1 is the zero address', function () {
+                it('reverts', async function () {
+                  const chainTime = (await ethers.provider.getBlock('latest'))
+                    .timestamp;
+                  const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
+                  /*
                   struct TradeRequestInput {
                     address holder1;
                     address holder2;
@@ -1868,65 +1872,36 @@ contract(
                     TradeType tradeType;
                   }
                   */
-                    const tradeInputData = {
-                      holder1: ZERO_ADDRESS,
-                      holder2: recipient1,
-                      executer: ZERO_ADDRESS,
-                      expirationDate: expirationDate,
-                      settlementDate: 0,
-                      tokenAddress1: security20.address,
-                      tokenValue1: token1Amount,
-                      tokenId1: ZERO_BYTES32,
-                      tokenStandard1: ERC20STANDARD,
-                      tokenAddress2: emoney20.address,
-                      tokenValue2: token2Amount,
-                      tokenId2: ZERO_BYTES32,
-                      tokenStandard2: ERC20STANDARD,
-                      tradeType1: HEX_TYPE_SWAP,
-                      tradeType2: HEX_TYPE_SWAP
-                    };
-                    await expectRevert.unspecified(
-                      dvp
-                        .connect(await ethers.getSigner(unknown))
-                        .requestTrade(tradeInputData, ZERO_BYTES32)
-                    );
-                  });
+                  const tradeInputData = {
+                    holder1: ZERO_ADDRESS,
+                    holder2: recipient1,
+                    executer: ZERO_ADDRESS,
+                    expirationDate: expirationDate,
+                    settlementDate: 0,
+                    tokenAddress1: security20.address,
+                    tokenValue1: token1Amount,
+                    tokenId1: ZERO_BYTES32,
+                    tokenStandard1: ERC20STANDARD,
+                    tokenAddress2: emoney20.address,
+                    tokenValue2: token2Amount,
+                    tokenId2: ZERO_BYTES32,
+                    tokenStandard2: ERC20STANDARD,
+                    tradeType1: HEX_TYPE_SWAP,
+                    tradeType2: HEX_TYPE_SWAP
+                  };
+                  await expectRevert.unspecified(
+                    dvp
+                      .connect(unknownSigner)
+                      .requestTrade(tradeInputData, ZERO_BYTES32)
+                  );
                 });
               });
             });
-            describe('when expiration date is not defined', function () {
-              it('creates the trade request', async function () {
-                await security20
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  security20,
-                  emoney20,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  ZERO_ADDRESS,
-                  tokenHolder1,
-                  false,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-              });
-            });
           });
-        });
-        describe('when the DVP contract is owned', function () {
-          let dvp: Swaps;
-          beforeEach(async function () {
-            dvp = await new Swaps__factory(signer).deploy(true);
-          });
-          describe('when a valid trade executer is defined', function () {
+          describe('when expiration date is not defined', function () {
             it('creates the trade request', async function () {
               await security20
-                .connect(await ethers.getSigner(tokenHolder1))
+                .connect(tokenHolder1Signer)
                 .approve(dvp.address, token1Amount);
               await createTradeRequest(
                 dvp,
@@ -1936,243 +1911,199 @@ contract(
                 ERC20STANDARD,
                 tokenHolder1,
                 recipient1,
-                owner,
-                tokenHolder1,
-                true,
+                ZERO_ADDRESS,
+                tokenHolder1Signer,
+                false,
                 TYPE_ESCROW,
                 token1Amount,
-                token2Amount
-              );
-            });
-          });
-          describe('when no valid trade executer is defined', function () {
-            describe('when proposed executer for the trade is not in the list of DVP trade executers', function () {
-              it('reverts', async function () {
-                await security20
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await expectRevert.unspecified(
-                  createTradeRequest(
-                    dvp,
-                    security20,
-                    emoney20,
-                    ERC20STANDARD,
-                    ERC20STANDARD,
-                    tokenHolder1,
-                    recipient1,
-                    tokenHolder1,
-                    tokenHolder1,
-                    true,
-                    TYPE_ESCROW,
-                    token1Amount,
-                    token2Amount
-                  )
-                );
-              });
-            });
-            describe('when proposed trade executer is zero address', function () {
-              it('reverts', async function () {
-                await security20
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await expectRevert.unspecified(
-                  createTradeRequest(
-                    dvp,
-                    security20,
-                    emoney20,
-                    ERC20STANDARD,
-                    ERC20STANDARD,
-                    tokenHolder1,
-                    recipient1,
-                    ZERO_ADDRESS,
-                    tokenHolder1,
-                    true,
-                    TYPE_ESCROW,
-                    token1Amount,
-                    token2Amount
-                  )
-                );
-              });
-            });
-          });
-        });
-      });
-      describe('when one of the 2 tokens is ETH', function () {
-        describe('when proposed trade type is Escrow', function () {
-          describe('when sender is holder 1', function () {
-            it('creates the trade request', async function () {
-              // const createTradeRequest(dvp, token1, token2, tokenStandard1, tokenStandard2, holder1, holder2, executer, requester, realExpirationDate, tradeType, tokenAmount1, tokenAmount2)
-              await createTradeRequest(
-                dvp,
-                undefined,
-                emoney20,
-                ETHSTANDARD,
-                ERC20STANDARD,
-                tokenHolder1,
-                recipient1,
-                ZERO_ADDRESS,
-                tokenHolder1,
-                true,
-                TYPE_ESCROW,
-                token1Amount,
-                0
-              );
-            });
-          });
-          describe('when sender is holder 2', function () {
-            it('creates the trade request', async function () {
-              await createTradeRequest(
-                dvp,
-                security20,
-                undefined,
-                ERC20STANDARD,
-                ETHSTANDARD,
-                tokenHolder1,
-                recipient1,
-                ZERO_ADDRESS,
-                recipient1,
-                true,
-                TYPE_ESCROW,
-                0,
                 token2Amount
               );
             });
           });
         });
-        describe('when proposed trade type is Swap', function () {
+      });
+      describe('when the DVP contract is owned', function () {
+        let dvp: Swaps;
+        beforeEach(async function () {
+          dvp = await new Swaps__factory(signer).deploy(true);
+        });
+        describe('when a valid trade executer is defined', function () {
           it('creates the trade request', async function () {
-            await expectRevert.unspecified(
-              createTradeRequest(
-                dvp,
-                security20,
-                emoney20,
-                ETHSTANDARD,
-                ERC20STANDARD,
-                tokenHolder1,
-                recipient1,
-                ZERO_ADDRESS,
-                tokenHolder1,
-                true,
-                TYPE_SWAP,
-                token1Amount,
-                0
-              )
+            await security20
+              .connect(tokenHolder1Signer)
+              .approve(dvp.address, token1Amount);
+            await createTradeRequest(
+              dvp,
+              security20,
+              emoney20,
+              ERC20STANDARD,
+              ERC20STANDARD,
+              tokenHolder1,
+              recipient1,
+              owner,
+              tokenHolder1Signer,
+              true,
+              TYPE_ESCROW,
+              token1Amount,
+              token2Amount
             );
+          });
+        });
+        describe('when no valid trade executer is defined', function () {
+          describe('when proposed executer for the trade is not in the list of DVP trade executers', function () {
+            it('reverts', async function () {
+              await security20
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await expectRevert.unspecified(
+                createTradeRequest(
+                  dvp,
+                  security20,
+                  emoney20,
+                  ERC20STANDARD,
+                  ERC20STANDARD,
+                  tokenHolder1,
+                  recipient1,
+                  tokenHolder1,
+                  tokenHolder1Signer,
+                  true,
+                  TYPE_ESCROW,
+                  token1Amount,
+                  token2Amount
+                )
+              );
+            });
+          });
+          describe('when proposed trade executer is zero address', function () {
+            it('reverts', async function () {
+              await security20
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await expectRevert.unspecified(
+                createTradeRequest(
+                  dvp,
+                  security20,
+                  emoney20,
+                  ERC20STANDARD,
+                  ERC20STANDARD,
+                  tokenHolder1,
+                  recipient1,
+                  ZERO_ADDRESS,
+                  tokenHolder1Signer,
+                  true,
+                  TYPE_ESCROW,
+                  token1Amount,
+                  token2Amount
+                )
+              );
+            });
           });
         });
       });
     });
 
-    // ACCEPT TRADE
-
-    describe('acceptTrade', function () {
-      let dvp: Swaps;
-      let security20: ERC20Token;
-      let token1: ERC20Token;
-      let emoney20, token2: ERC20Token;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
-
-        security20 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
-        );
-        emoney20 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
-        );
-
-        await security20
-          .connect(await ethers.getSigner(owner))
-          .mint(tokenHolder1, issuanceAmount);
-        await emoney20.mint(recipient1, issuanceAmount);
-
-        token1 = security20;
-        token2 = emoney20;
+    describe('when one of the 2 tokens is ETH', function () {
+      describe('when proposed trade type is Escrow', function () {
+        describe('when sender is holder 1', function () {
+          it('creates the trade request', async function () {
+            // const createTradeRequest(dvp, token1, token2, tokenStandard1, tokenStandard2, holder1, holder2, executer, requester, realExpirationDate, tradeType, tokenAmount1, tokenAmount2)
+            await createTradeRequest(
+              dvp,
+              undefined,
+              emoney20,
+              ETHSTANDARD,
+              ERC20STANDARD,
+              tokenHolder1,
+              recipient1,
+              ZERO_ADDRESS,
+              tokenHolder1Signer,
+              true,
+              TYPE_ESCROW,
+              token1Amount,
+              0
+            );
+          });
+        });
+        describe('when sender is holder 2', function () {
+          it('creates the trade request', async function () {
+            await createTradeRequest(
+              dvp,
+              security20,
+              undefined,
+              ERC20STANDARD,
+              ETHSTANDARD,
+              tokenHolder1,
+              recipient1,
+              ZERO_ADDRESS,
+              recipient1Signer,
+              true,
+              TYPE_ESCROW,
+              0,
+              token2Amount
+            );
+          });
+        });
       });
-      describe('when trade index is valid', function () {
-        describe('when tokens need to be escrowed', function () {
-          describe('when tokens are available', function () {
-            describe('when trade has no predefined executer', function () {
-              describe('when there are no token controllers', function () {
-                describe('when trade gets executed', function () {
-                  it('accepts and executes the trade', async function () {
-                    await token1
-                      .connect(await ethers.getSigner(tokenHolder1))
-                      .approve(dvp.address, token1Amount);
-                    await createTradeRequest(
-                      dvp,
-                      token1,
-                      token2,
-                      ERC20STANDARD,
-                      ERC20STANDARD,
-                      tokenHolder1,
-                      recipient1,
-                      ZERO_ADDRESS,
-                      tokenHolder1,
-                      true,
-                      TYPE_ESCROW,
-                      token1Amount,
-                      token2Amount
-                    );
-                    await token2
-                      .connect(await ethers.getSigner(recipient1))
-                      .approve(dvp.address, token2Amount);
-                    await acceptTradeRequest(
-                      dvp,
-                      token1,
-                      token2,
-                      1,
-                      recipient1,
-                      STATE_EXECUTED,
-                      ACCEPTED_TRUE
-                    );
-                  });
-                });
-                describe('when trade doesnt get executed', function () {
-                  it('accepts the trade', async function () {
-                    // await token1.connect(await ethers.getSigner(tokenHolder1)).approve(dvp.address, token1Amount);
-                    await createTradeRequest(
-                      dvp,
-                      token1,
-                      token2,
-                      ERC20STANDARD,
-                      ERC20STANDARD,
-                      tokenHolder1,
-                      recipient1,
-                      ZERO_ADDRESS,
-                      unknown,
-                      true,
-                      TYPE_ESCROW,
-                      token1Amount,
-                      token2Amount
-                    );
-                    await token2
-                      .connect(await ethers.getSigner(recipient1))
-                      .approve(dvp.address, token2Amount);
-                    await acceptTradeRequest(
-                      dvp,
-                      token1,
-                      token2,
-                      1,
-                      recipient1,
-                      STATE_PENDING,
-                      ACCEPTED_FALSE
-                    );
-                  });
-                });
-              });
-              describe('when there are token controllers', function () {
-                beforeEach(async function () {
-                  await dvp.setTokenControllers(security20.address, [
-                    tokenController1
-                  ]);
-                });
-                it('accepts the trade', async function () {
+      describe('when proposed trade type is Swap', function () {
+        it('creates the trade request', async function () {
+          await expectRevert.unspecified(
+            createTradeRequest(
+              dvp,
+              security20,
+              emoney20,
+              ETHSTANDARD,
+              ERC20STANDARD,
+              tokenHolder1,
+              recipient1,
+              ZERO_ADDRESS,
+              tokenHolder1Signer,
+              true,
+              TYPE_SWAP,
+              token1Amount,
+              0
+            )
+          );
+        });
+      });
+    });
+  });
+
+  // ACCEPT TRADE
+
+  describe('acceptTrade', function () {
+    let dvp: Swaps;
+    let security20: ERC20Token;
+    let token1: ERC20Token;
+    let emoney20, token2: ERC20Token;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
+
+      security20 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+      emoney20 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+
+      await security20.connect(signer).mint(tokenHolder1, issuanceAmount);
+      await emoney20.mint(recipient1, issuanceAmount);
+
+      token1 = security20;
+      token2 = emoney20;
+    });
+    describe('when trade index is valid', function () {
+      describe('when tokens need to be escrowed', function () {
+        describe('when tokens are available', function () {
+          describe('when trade has no predefined executer', function () {
+            describe('when there are no token controllers', function () {
+              describe('when trade gets executed', function () {
+                it('accepts and executes the trade', async function () {
                   await token1
-                    .connect(await ethers.getSigner(tokenHolder1))
+                    .connect(tokenHolder1Signer)
                     .approve(dvp.address, token1Amount);
                   await createTradeRequest(
                     dvp,
@@ -2183,31 +2114,68 @@ contract(
                     tokenHolder1,
                     recipient1,
                     ZERO_ADDRESS,
-                    tokenHolder1,
+                    tokenHolder1Signer,
                     true,
                     TYPE_ESCROW,
                     token1Amount,
                     token2Amount
                   );
                   await token2
-                    .connect(await ethers.getSigner(recipient1))
+                    .connect(recipient1Signer)
                     .approve(dvp.address, token2Amount);
                   await acceptTradeRequest(
                     dvp,
                     token1,
                     token2,
                     1,
-                    recipient1,
-                    STATE_PENDING,
+                    recipient1Signer,
+                    STATE_EXECUTED,
                     ACCEPTED_TRUE
                   );
                 });
               });
+              describe('when trade doesnt get executed', function () {
+                it('accepts the trade', async function () {
+                  // await token1.connect(tokenHolder1Signer).approve(dvp.address, token1Amount);
+                  await createTradeRequest(
+                    dvp,
+                    token1,
+                    token2,
+                    ERC20STANDARD,
+                    ERC20STANDARD,
+                    tokenHolder1,
+                    recipient1,
+                    ZERO_ADDRESS,
+                    unknownSigner,
+                    true,
+                    TYPE_ESCROW,
+                    token1Amount,
+                    token2Amount
+                  );
+                  await token2
+                    .connect(recipient1Signer)
+                    .approve(dvp.address, token2Amount);
+                  await acceptTradeRequest(
+                    dvp,
+                    token1,
+                    token2,
+                    1,
+                    recipient1Signer,
+                    STATE_PENDING,
+                    ACCEPTED_FALSE
+                  );
+                });
+              });
             });
-            describe('when trade has predefined executer', function () {
+            describe('when there are token controllers', function () {
+              beforeEach(async function () {
+                await dvp.setTokenControllers(security20.address, [
+                  tokenController1
+                ]);
+              });
               it('accepts the trade', async function () {
                 await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
+                  .connect(tokenHolder1Signer)
                   .approve(dvp.address, token1Amount);
                 await createTradeRequest(
                   dvp,
@@ -2217,302 +2185,129 @@ contract(
                   ERC20STANDARD,
                   tokenHolder1,
                   recipient1,
-                  executer,
-                  tokenHolder1,
+                  ZERO_ADDRESS,
+                  tokenHolder1Signer,
                   true,
                   TYPE_ESCROW,
                   token1Amount,
                   token2Amount
                 );
                 await token2
-                  .connect(await ethers.getSigner(recipient1))
+                  .connect(recipient1Signer)
                   .approve(dvp.address, token2Amount);
                 await acceptTradeRequest(
                   dvp,
                   token1,
                   token2,
                   1,
-                  recipient1,
+                  recipient1Signer,
                   STATE_PENDING,
                   ACCEPTED_TRUE
                 );
               });
             });
           });
-          describe('when tokens are not available', function () {
-            describe('when token standard is ETH', function () {
-              it('reverts', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  undefined,
-                  ERC20STANDARD,
-                  ETHSTANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  ZERO_ADDRESS,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await expectRevert.unspecified(
-                  dvp
-                    .connect(await ethers.getSigner(recipient1))
-                    .acceptTrade(1, ZERO_BYTES32, {
-                      value: token2Amount - 1
-                    })
-                );
-              });
-            });
-            describe('when token standard is ERC20', function () {
-              it('reverts', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  ZERO_ADDRESS,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount - 1);
-                await expectRevert.unspecified(
-                  acceptTradeRequest(
-                    dvp,
-                    token1,
-                    token2,
-                    1,
-                    recipient1,
-                    STATE_EXECUTED,
-                    ACCEPTED_TRUE
-                  )
-                );
-              });
-            });
-            describe('when token standard is ERC1400', function () {
-              let security1400: ERC1400;
-              beforeEach(async function () {
-                security1400 = await new ERC1400__factory(signer).deploy(
-                  'ERC1400Token',
-                  'DAU',
-                  1,
-                  [],
-                  partitions
-                );
-                await security1400.issueByPartition(
-                  partition1,
-                  recipient1,
-                  issuanceAmount,
-                  VALID_CERTIFICATE
-                );
-              });
-              it('reverts', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  security1400,
-                  ERC20STANDARD,
-                  ERC1400STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  ZERO_ADDRESS,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await security1400
-                  .connect(await ethers.getSigner(recipient1))
-                  .approveByPartition(
-                    partition1,
-                    dvp.address,
-                    token2Amount - 1
-                  );
-                await expectRevert.unspecified(
-                  dvp
-                    .connect(await ethers.getSigner(recipient1))
-                    .acceptTrade(1, ZERO_BYTES32)
-                );
-              });
+          describe('when trade has predefined executer', function () {
+            it('accepts the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_TRUE
+              );
             });
           });
         });
-        describe('when tokens do not need to be escrowed', function () {
-          describe('when token standard is ERC20', function () {
-            describe('when tokens have been reserved before', function () {
-              it('accepts and executes the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  ZERO_ADDRESS,
-                  tokenHolder1,
-                  true,
-                  TYPE_SWAP,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_EXECUTED,
-                  ACCEPTED_TRUE
-                );
-              });
-            });
-            describe('when tokens have not been reserved before', function () {
-              it('reverts', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  ZERO_ADDRESS,
-                  tokenHolder1,
-                  true,
-                  TYPE_SWAP,
-                  token1Amount,
-                  token2Amount
-                );
-                // await token2.connect(await ethers.getSigner(recipient1)).approve(dvp.address, token2Amount, );
-                await expectRevert.unspecified(
-                  acceptTradeRequest(
-                    dvp,
-                    token1,
-                    token2,
-                    1,
-                    recipient1,
-                    STATE_EXECUTED,
-                    ACCEPTED_TRUE
-                  )
-                );
-              });
+        describe('when tokens are not available', function () {
+          describe('when token standard is ETH', function () {
+            it('reverts', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                undefined,
+                ERC20STANDARD,
+                ETHSTANDARD,
+                tokenHolder1,
+                recipient1,
+                ZERO_ADDRESS,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await expectRevert.unspecified(
+                dvp.connect(recipient1Signer).acceptTrade(1, ZERO_BYTES32, {
+                  value: token2Amount - 1
+                })
+              );
             });
           });
-          describe('when token standard is ERC721', function () {
-            let security721, token2: ERC721Token;
-            beforeEach(async function () {
-              security721 = await new ERC721Token__factory(signer).deploy(
-                'ERC721Token',
-                'DAU721',
-                '',
-                ''
+          describe('when token standard is ERC20', function () {
+            it('reverts', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                ZERO_ADDRESS,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
               );
-              token2 = security721;
               await token2
-                .connect(await ethers.getSigner(owner))
-                .mint(recipient1, issuanceTokenId);
-            });
-            describe('when tokens have been reserved before', function () {
-              it('accepts and executes the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC721STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  ZERO_ADDRESS,
-                  tokenHolder1,
-                  true,
-                  TYPE_SWAP,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, issuanceTokenId);
-                await acceptTradeRequest(
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount - 1);
+              await expectRevert.unspecified(
+                acceptTradeRequest(
                   dvp,
                   token1,
                   token2,
                   1,
-                  recipient1,
+                  recipient1Signer,
                   STATE_EXECUTED,
                   ACCEPTED_TRUE
-                );
-              });
-            });
-            describe('when tokens have not been reserved before', function () {
-              it('reverts', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC721STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  ZERO_ADDRESS,
-                  tokenHolder1,
-                  true,
-                  TYPE_SWAP,
-                  token1Amount,
-                  token2Amount
-                );
-                // await token2.connect(await ethers.getSigner(recipient1)).approve(dvp.address, issuanceTokenId, );
-                await expectRevert.unspecified(
-                  acceptTradeRequest(
-                    dvp,
-                    token1,
-                    token2,
-                    1,
-                    recipient1,
-                    STATE_EXECUTED,
-                    ACCEPTED_TRUE
-                  )
-                );
-              });
+                )
+              );
             });
           });
           describe('when token standard is ERC1400', function () {
-            let security1400, token2: ERC1400;
+            let security1400: ERC1400;
             beforeEach(async function () {
               security1400 = await new ERC1400__factory(signer).deploy(
                 'ERC1400Token',
@@ -2527,780 +2322,865 @@ contract(
                 issuanceAmount,
                 VALID_CERTIFICATE
               );
-              token2 = security1400;
             });
-            describe('when tokens have been reserved before', function () {
-              it('accepts and executes the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC1400STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  ZERO_ADDRESS,
-                  tokenHolder1,
-                  true,
-                  TYPE_SWAP,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approveByPartition(partition1, dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_EXECUTED,
-                  ACCEPTED_TRUE
-                );
-              });
-            });
-            describe('when tokens have not been reserved before', function () {
-              it('reverts', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC1400STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  ZERO_ADDRESS,
-                  tokenHolder1,
-                  true,
-                  TYPE_SWAP,
-                  token1Amount,
-                  token2Amount
-                );
-                // await token2.connect(await ethers.getSigner(recipient1)).approveByPartition(partition1, dvp.address, token2Amount, );
-                await expectRevert.unspecified(
-                  acceptTradeRequest(
-                    dvp,
-                    token1,
-                    token2,
-                    1,
-                    recipient1,
-                    STATE_EXECUTED,
-                    ACCEPTED_TRUE
-                  )
-                );
-              });
+            it('reverts', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                security1400,
+                ERC20STANDARD,
+                ERC1400STANDARD,
+                tokenHolder1,
+                recipient1,
+                ZERO_ADDRESS,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await security1400
+                .connect(recipient1Signer)
+                .approveByPartition(partition1, dvp.address, token2Amount - 1);
+              await expectRevert.unspecified(
+                dvp.connect(recipient1Signer).acceptTrade(1, ZERO_BYTES32)
+              );
             });
           });
-          describe('when payment is made off-chain', function () {
+        });
+      });
+      describe('when tokens do not need to be escrowed', function () {
+        describe('when token standard is ERC20', function () {
+          describe('when tokens have been reserved before', function () {
             it('accepts and executes the trade', async function () {
               await token1
-                .connect(await ethers.getSigner(tokenHolder1))
+                .connect(tokenHolder1Signer)
                 .approve(dvp.address, token1Amount);
               await createTradeRequest(
                 dvp,
                 token1,
                 token2,
                 ERC20STANDARD,
-                OFFCHAIN,
+                ERC20STANDARD,
                 tokenHolder1,
                 recipient1,
                 ZERO_ADDRESS,
-                tokenHolder1,
+                tokenHolder1Signer,
                 true,
                 TYPE_SWAP,
                 token1Amount,
                 token2Amount
               );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
               await acceptTradeRequest(
                 dvp,
                 token1,
                 token2,
                 1,
-                recipient1,
+                recipient1Signer,
                 STATE_EXECUTED,
                 ACCEPTED_TRUE
               );
             });
           });
-        });
-      });
-      describe('when trade index is not valid', function () {
-        describe('when trade with indicated index doesn t exist', function () {
-          it('reverts', async function () {
-            await token1
-              .connect(await ethers.getSigner(tokenHolder1))
-              .approve(dvp.address, token1Amount);
-            await createTradeRequest(
-              dvp,
-              token1,
-              token2,
-              ERC20STANDARD,
-              ERC20STANDARD,
-              tokenHolder1,
-              recipient1,
-              ZERO_ADDRESS,
-              tokenHolder1,
-              true,
-              TYPE_ESCROW,
-              token1Amount,
-              token2Amount
-            );
-            await token2
-              .connect(await ethers.getSigner(recipient1))
-              .approve(dvp.address, token2Amount);
-            await expectRevert.unspecified(
-              dvp
-                .connect(await ethers.getSigner(recipient1))
-                .acceptTrade(999, ZERO_BYTES32)
-            );
+          describe('when tokens have not been reserved before', function () {
+            it('reverts', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                ZERO_ADDRESS,
+                tokenHolder1Signer,
+                true,
+                TYPE_SWAP,
+                token1Amount,
+                token2Amount
+              );
+              // await token2.connect(recipient1Signer).approve(dvp.address, token2Amount, );
+              await expectRevert.unspecified(
+                acceptTradeRequest(
+                  dvp,
+                  token1,
+                  token2,
+                  1,
+                  recipient1Signer,
+                  STATE_EXECUTED,
+                  ACCEPTED_TRUE
+                )
+              );
+            });
           });
         });
-        describe('when trade with indicated index is not in state pending', function () {
-          it('reverts', async function () {
+        describe('when token standard is ERC721', function () {
+          let security721, token2: ERC721Token;
+          beforeEach(async function () {
+            security721 = await new ERC721Token__factory(signer).deploy(
+              'ERC721Token',
+              'DAU721',
+              '',
+              ''
+            );
+            token2 = security721;
+            await token2.connect(signer).mint(recipient1, issuanceTokenId);
+          });
+          describe('when tokens have been reserved before', function () {
+            it('accepts and executes the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC721STANDARD,
+                tokenHolder1,
+                recipient1,
+                ZERO_ADDRESS,
+                tokenHolder1Signer,
+                true,
+                TYPE_SWAP,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, issuanceTokenId);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_EXECUTED,
+                ACCEPTED_TRUE
+              );
+            });
+          });
+          describe('when tokens have not been reserved before', function () {
+            it('reverts', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC721STANDARD,
+                tokenHolder1,
+                recipient1,
+                ZERO_ADDRESS,
+                tokenHolder1Signer,
+                true,
+                TYPE_SWAP,
+                token1Amount,
+                token2Amount
+              );
+              // await token2.connect(recipient1Signer).approve(dvp.address, issuanceTokenId, );
+              await expectRevert.unspecified(
+                acceptTradeRequest(
+                  dvp,
+                  token1,
+                  token2,
+                  1,
+                  recipient1Signer,
+                  STATE_EXECUTED,
+                  ACCEPTED_TRUE
+                )
+              );
+            });
+          });
+        });
+        describe('when token standard is ERC1400', function () {
+          let security1400, token2: ERC1400;
+          beforeEach(async function () {
+            security1400 = await new ERC1400__factory(signer).deploy(
+              'ERC1400Token',
+              'DAU',
+              1,
+              [],
+              partitions
+            );
+            await security1400.issueByPartition(
+              partition1,
+              recipient1,
+              issuanceAmount,
+              VALID_CERTIFICATE
+            );
+            token2 = security1400;
+          });
+          describe('when tokens have been reserved before', function () {
+            it('accepts and executes the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC1400STANDARD,
+                tokenHolder1,
+                recipient1,
+                ZERO_ADDRESS,
+                tokenHolder1Signer,
+                true,
+                TYPE_SWAP,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approveByPartition(partition1, dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_EXECUTED,
+                ACCEPTED_TRUE
+              );
+            });
+          });
+          describe('when tokens have not been reserved before', function () {
+            it('reverts', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC1400STANDARD,
+                tokenHolder1,
+                recipient1,
+                ZERO_ADDRESS,
+                tokenHolder1Signer,
+                true,
+                TYPE_SWAP,
+                token1Amount,
+                token2Amount
+              );
+              // await token2.connect(recipient1Signer).approveByPartition(partition1, dvp.address, token2Amount, );
+              await expectRevert.unspecified(
+                acceptTradeRequest(
+                  dvp,
+                  token1,
+                  token2,
+                  1,
+                  recipient1Signer,
+                  STATE_EXECUTED,
+                  ACCEPTED_TRUE
+                )
+              );
+            });
+          });
+        });
+        describe('when payment is made off-chain', function () {
+          it('accepts and executes the trade', async function () {
             await token1
-              .connect(await ethers.getSigner(tokenHolder1))
+              .connect(tokenHolder1Signer)
               .approve(dvp.address, token1Amount);
             await createTradeRequest(
               dvp,
               token1,
               token2,
               ERC20STANDARD,
-              ERC20STANDARD,
+              OFFCHAIN,
               tokenHolder1,
               recipient1,
               ZERO_ADDRESS,
-              tokenHolder1,
+              tokenHolder1Signer,
               true,
-              TYPE_ESCROW,
+              TYPE_SWAP,
               token1Amount,
               token2Amount
             );
-            await token2
-              .connect(await ethers.getSigner(recipient1))
-              .approve(dvp.address, token2Amount);
-            await dvp
-              .connect(await ethers.getSigner(recipient1))
-              .acceptTrade(1, ZERO_BYTES32);
-            await expectRevert.unspecified(
-              dvp
-                .connect(await ethers.getSigner(recipient1))
-                .acceptTrade(1, ZERO_BYTES32)
+            await acceptTradeRequest(
+              dvp,
+              token1,
+              token2,
+              1,
+              recipient1Signer,
+              STATE_EXECUTED,
+              ACCEPTED_TRUE
             );
           });
         });
       });
     });
-
-    // APPROVE TRADE
-
-    describe('approveTrade', function () {
-      let dvp: Swaps;
-      let security20: ERC20Token;
-      let token1: ERC20Token;
-      let emoney20: ERC20Token;
-      let token2: ERC20Token;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
-
-        security20 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
-        );
-        emoney20 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
-        );
-
-        await security20
-          .connect(await ethers.getSigner(owner))
-          .mint(tokenHolder1, issuanceAmount);
-        await emoney20.mint(recipient1, issuanceAmount);
-
-        token1 = security20;
-        token2 = emoney20;
-
-        await dvp
-          .connect(await ethers.getSigner(owner))
-          .setTokenControllers(token1.address, [tokenController1]);
-      });
-      describe('when trade index is valid', function () {
-        describe('when sender is token controller', function () {
-          describe('when one single approval is required', function () {
-            describe('when trade is executed', function () {
-              it('approves and executes the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  ZERO_ADDRESS,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_TRUE
-                );
-
-                await approveTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  tokenController1,
-                  STATE_EXECUTED,
-                  APPROVED_TRUE
-                );
-              });
-            });
-            describe('when trade is not executed', function () {
-              it('approves the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_TRUE
-                );
-
-                await approveTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  tokenController1,
-                  STATE_PENDING,
-                  APPROVED_TRUE
-                );
-              });
-              it('approves, disapproves and re-approves the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_TRUE
-                );
-
-                assert.equal(await dvp.getTradeApprovalStatus(1), false);
-
-                await dvp
-                  .connect(await ethers.getSigner(tokenController1))
-                  .approveTrade(1, true);
-                assert.equal(await dvp.getTradeApprovalStatus(1), true);
-
-                await dvp
-                  .connect(await ethers.getSigner(tokenController1))
-                  .approveTrade(1, false);
-                assert.equal(await dvp.getTradeApprovalStatus(1), false);
-
-                await approveTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  tokenController1,
-                  STATE_PENDING,
-                  APPROVED_TRUE
-                );
-              });
-            });
-          });
-          describe('when two approvals are required', function () {
-            beforeEach(async function () {
-              await dvp.setTokenControllers(token2.address, [tokenController2]);
-            });
-            describe('when trade is executed', function () {
-              it('approves and executes the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  ZERO_ADDRESS,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_TRUE
-                );
-
-                await approveTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  tokenController1,
-                  STATE_PENDING,
-                  APPROVED_FALSE
-                );
-                await approveTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  tokenController2,
-                  STATE_EXECUTED,
-                  APPROVED_TRUE
-                );
-              });
-            });
-            describe('when trade is not executed', function () {
-              it('approves the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_TRUE
-                );
-
-                await approveTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  tokenController1,
-                  STATE_PENDING,
-                  APPROVED_FALSE
-                );
-                await approveTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  tokenController2,
-                  STATE_PENDING,
-                  APPROVED_TRUE
-                );
-              });
-            });
-          });
-        });
-        describe('when sender is not token controller', function () {
-          it('reverts', async function () {
-            await token1
-              .connect(await ethers.getSigner(tokenHolder1))
-              .approve(dvp.address, token1Amount);
-            await createTradeRequest(
-              dvp,
-              token1,
-              token2,
-              ERC20STANDARD,
-              ERC20STANDARD,
-              tokenHolder1,
-              recipient1,
-              ZERO_ADDRESS,
-              tokenHolder1,
-              true,
-              TYPE_ESCROW,
-              token1Amount,
-              token2Amount
-            );
-            await token2
-              .connect(await ethers.getSigner(recipient1))
-              .approve(dvp.address, token2Amount);
-            await acceptTradeRequest(
-              dvp,
-              token1,
-              token2,
-              1,
-              recipient1,
-              STATE_PENDING,
-              ACCEPTED_TRUE
-            );
-
-            assert.equal(await dvp.getTradeApprovalStatus(1), false);
-
-            await expectRevert.unspecified(
-              dvp.connect(await ethers.getSigner(unknown)).approveTrade(1, true)
-            );
-          });
+    describe('when trade index is not valid', function () {
+      describe('when trade with indicated index doesn t exist', function () {
+        it('reverts', async function () {
+          await token1
+            .connect(tokenHolder1Signer)
+            .approve(dvp.address, token1Amount);
+          await createTradeRequest(
+            dvp,
+            token1,
+            token2,
+            ERC20STANDARD,
+            ERC20STANDARD,
+            tokenHolder1,
+            recipient1,
+            ZERO_ADDRESS,
+            tokenHolder1Signer,
+            true,
+            TYPE_ESCROW,
+            token1Amount,
+            token2Amount
+          );
+          await token2
+            .connect(recipient1Signer)
+            .approve(dvp.address, token2Amount);
+          await expectRevert.unspecified(
+            dvp.connect(recipient1Signer).acceptTrade(999, ZERO_BYTES32)
+          );
         });
       });
-      describe('when trade index is not valid', function () {
-        describe('when trade with indicated index doesn t exist', function () {
-          it('reverts', async function () {
-            await token1
-              .connect(await ethers.getSigner(tokenHolder1))
-              .approve(dvp.address, token1Amount);
-            await createTradeRequest(
-              dvp,
-              token1,
-              token2,
-              ERC20STANDARD,
-              ERC20STANDARD,
-              tokenHolder1,
-              recipient1,
-              ZERO_ADDRESS,
-              tokenHolder1,
-              true,
-              TYPE_ESCROW,
-              token1Amount,
-              token2Amount
-            );
-            await token2
-              .connect(await ethers.getSigner(recipient1))
-              .approve(dvp.address, token2Amount);
-            await acceptTradeRequest(
-              dvp,
-              token1,
-              token2,
-              1,
-              recipient1,
-              STATE_PENDING,
-              ACCEPTED_TRUE
-            );
-
-            assert.equal(await dvp.getTradeApprovalStatus(1), false);
-
-            await expectRevert.unspecified(
-              dvp
-                .connect(await ethers.getSigner(tokenController1))
-                .approveTrade(999, true)
-            );
-          });
-        });
-        describe('when trade with indicated index is not in state pending', function () {
-          it('reverts', async function () {
-            await token1
-              .connect(await ethers.getSigner(tokenHolder1))
-              .approve(dvp.address, token1Amount);
-            await createTradeRequest(
-              dvp,
-              token1,
-              token2,
-              ERC20STANDARD,
-              ERC20STANDARD,
-              tokenHolder1,
-              recipient1,
-              ZERO_ADDRESS,
-              tokenHolder1,
-              true,
-              TYPE_ESCROW,
-              token1Amount,
-              token2Amount
-            );
-            await token2
-              .connect(await ethers.getSigner(recipient1))
-              .approve(dvp.address, token2Amount);
-            await acceptTradeRequest(
-              dvp,
-              token1,
-              token2,
-              1,
-              recipient1,
-              STATE_PENDING,
-              ACCEPTED_TRUE
-            );
-
-            assert.equal(await dvp.getTradeApprovalStatus(1), false);
-
-            await dvp
-              .connect(await ethers.getSigner(tokenController1))
-              .approveTrade(1, true);
-            await assertTradeState(dvp, 1, STATE_EXECUTED);
-
-            await expectRevert.unspecified(
-              dvp
-                .connect(await ethers.getSigner(tokenController1))
-                .approveTrade(1, true)
-            );
-          });
+      describe('when trade with indicated index is not in state pending', function () {
+        it('reverts', async function () {
+          await token1
+            .connect(tokenHolder1Signer)
+            .approve(dvp.address, token1Amount);
+          await createTradeRequest(
+            dvp,
+            token1,
+            token2,
+            ERC20STANDARD,
+            ERC20STANDARD,
+            tokenHolder1,
+            recipient1,
+            ZERO_ADDRESS,
+            tokenHolder1Signer,
+            true,
+            TYPE_ESCROW,
+            token1Amount,
+            token2Amount
+          );
+          await token2
+            .connect(recipient1Signer)
+            .approve(dvp.address, token2Amount);
+          await dvp.connect(recipient1Signer).acceptTrade(1, ZERO_BYTES32);
+          await expectRevert.unspecified(
+            dvp.connect(recipient1Signer).acceptTrade(1, ZERO_BYTES32)
+          );
         });
       });
     });
+  });
 
-    // EXECUTE TRADE
+  // APPROVE TRADE
 
-    describe('executeTrade', function () {
-      let dvp: Swaps;
-      let security20: ERC20Token;
-      let token1: ERC20Token;
-      let emoney20: ERC20Token;
-      let token2: ERC20Token;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
+  describe('approveTrade', function () {
+    let dvp: Swaps;
+    let security20: ERC20Token;
+    let token1: ERC20Token;
+    let emoney20: ERC20Token;
+    let token2: ERC20Token;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
 
-        security20 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
-        );
-        emoney20 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
-        );
+      security20 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+      emoney20 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
 
-        await security20
-          .connect(await ethers.getSigner(owner))
-          .mint(tokenHolder1, issuanceAmount);
-        await emoney20.mint(recipient1, issuanceAmount);
+      await security20.connect(signer).mint(tokenHolder1, issuanceAmount);
+      await emoney20.mint(recipient1, issuanceAmount);
 
-        token1 = security20;
-        token2 = emoney20;
+      token1 = security20;
+      token2 = emoney20;
+
+      await dvp
+        .connect(signer)
+        .setTokenControllers(token1.address, [tokenController1]);
+    });
+    describe('when trade index is valid', function () {
+      describe('when sender is token controller', function () {
+        describe('when one single approval is required', function () {
+          describe('when trade is executed', function () {
+            it('approves and executes the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                ZERO_ADDRESS,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_TRUE
+              );
+
+              await approveTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                tokenController1Signer,
+                STATE_EXECUTED,
+                APPROVED_TRUE
+              );
+            });
+          });
+          describe('when trade is not executed', function () {
+            it('approves the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_TRUE
+              );
+
+              await approveTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                tokenController1Signer,
+                STATE_PENDING,
+                APPROVED_TRUE
+              );
+            });
+            it('approves, disapproves and re-approves the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_TRUE
+              );
+
+              assert.equal(await dvp.getTradeApprovalStatus(1), false);
+
+              await dvp.connect(tokenController1Signer).approveTrade(1, true);
+              assert.equal(await dvp.getTradeApprovalStatus(1), true);
+
+              await dvp.connect(tokenController1Signer).approveTrade(1, false);
+              assert.equal(await dvp.getTradeApprovalStatus(1), false);
+
+              await approveTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                tokenController1Signer,
+                STATE_PENDING,
+                APPROVED_TRUE
+              );
+            });
+          });
+        });
+        describe('when two approvals are required', function () {
+          beforeEach(async function () {
+            await dvp.setTokenControllers(token2.address, [tokenController2]);
+          });
+          describe('when trade is executed', function () {
+            it('approves and executes the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                ZERO_ADDRESS,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_TRUE
+              );
+
+              await approveTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                tokenController1Signer,
+                STATE_PENDING,
+                APPROVED_FALSE
+              );
+              await approveTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                tokenController2Signer,
+                STATE_EXECUTED,
+                APPROVED_TRUE
+              );
+            });
+          });
+          describe('when trade is not executed', function () {
+            it('approves the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_TRUE
+              );
+
+              await approveTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                tokenController1Signer,
+                STATE_PENDING,
+                APPROVED_FALSE
+              );
+              await approveTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                tokenController2Signer,
+                STATE_PENDING,
+                APPROVED_TRUE
+              );
+            });
+          });
+        });
       });
-      describe('when trade index is valid', function () {
-        describe('when caller is executer defined at trade creation', function () {
-          describe('when trade has been approved', function () {
-            describe('when trade has been accepted', function () {
-              describe('when trade is executed at initially defined price', function () {
-                describe('when expiration date is not past', function () {
-                  describe('when token standard is ERC20 vs ERC20', function () {
-                    describe('when trade type is Escrow', function () {
-                      it('executes the trade', async function () {
-                        await token1
-                          .connect(await ethers.getSigner(tokenHolder1))
-                          .approve(dvp.address, token1Amount);
-                        await createTradeRequest(
-                          dvp,
-                          token1,
-                          token2,
-                          ERC20STANDARD,
-                          ERC20STANDARD,
-                          tokenHolder1,
-                          recipient1,
-                          executer,
-                          tokenHolder1,
-                          true,
-                          TYPE_ESCROW,
-                          token1Amount,
-                          token2Amount
-                        );
-                        await token2
-                          .connect(await ethers.getSigner(recipient1))
-                          .approve(dvp.address, token2Amount);
-                        await acceptTradeRequest(
-                          dvp,
-                          token1,
-                          token2,
-                          1,
-                          recipient1,
-                          STATE_PENDING,
-                          ACCEPTED_TRUE
-                        );
-                        await executeTradeRequest(
-                          dvp,
-                          token1,
-                          token2,
-                          1,
-                          executer
-                        );
-                      });
+      describe('when sender is not token controller', function () {
+        it('reverts', async function () {
+          await token1
+            .connect(tokenHolder1Signer)
+            .approve(dvp.address, token1Amount);
+          await createTradeRequest(
+            dvp,
+            token1,
+            token2,
+            ERC20STANDARD,
+            ERC20STANDARD,
+            tokenHolder1,
+            recipient1,
+            ZERO_ADDRESS,
+            tokenHolder1Signer,
+            true,
+            TYPE_ESCROW,
+            token1Amount,
+            token2Amount
+          );
+          await token2
+            .connect(recipient1Signer)
+            .approve(dvp.address, token2Amount);
+          await acceptTradeRequest(
+            dvp,
+            token1,
+            token2,
+            1,
+            recipient1Signer,
+            STATE_PENDING,
+            ACCEPTED_TRUE
+          );
+
+          assert.equal(await dvp.getTradeApprovalStatus(1), false);
+
+          await expectRevert.unspecified(
+            dvp.connect(unknownSigner).approveTrade(1, true)
+          );
+        });
+      });
+    });
+    describe('when trade index is not valid', function () {
+      describe('when trade with indicated index doesn t exist', function () {
+        it('reverts', async function () {
+          await token1
+            .connect(tokenHolder1Signer)
+            .approve(dvp.address, token1Amount);
+          await createTradeRequest(
+            dvp,
+            token1,
+            token2,
+            ERC20STANDARD,
+            ERC20STANDARD,
+            tokenHolder1,
+            recipient1,
+            ZERO_ADDRESS,
+            tokenHolder1Signer,
+            true,
+            TYPE_ESCROW,
+            token1Amount,
+            token2Amount
+          );
+          await token2
+            .connect(recipient1Signer)
+            .approve(dvp.address, token2Amount);
+          await acceptTradeRequest(
+            dvp,
+            token1,
+            token2,
+            1,
+            recipient1Signer,
+            STATE_PENDING,
+            ACCEPTED_TRUE
+          );
+
+          assert.equal(await dvp.getTradeApprovalStatus(1), false);
+
+          await expectRevert.unspecified(
+            dvp.connect(tokenController1Signer).approveTrade(999, true)
+          );
+        });
+      });
+      describe('when trade with indicated index is not in state pending', function () {
+        it('reverts', async function () {
+          await token1
+            .connect(tokenHolder1Signer)
+            .approve(dvp.address, token1Amount);
+          await createTradeRequest(
+            dvp,
+            token1,
+            token2,
+            ERC20STANDARD,
+            ERC20STANDARD,
+            tokenHolder1,
+            recipient1,
+            ZERO_ADDRESS,
+            tokenHolder1Signer,
+            true,
+            TYPE_ESCROW,
+            token1Amount,
+            token2Amount
+          );
+          await token2
+            .connect(recipient1Signer)
+            .approve(dvp.address, token2Amount);
+          await acceptTradeRequest(
+            dvp,
+            token1,
+            token2,
+            1,
+            recipient1Signer,
+            STATE_PENDING,
+            ACCEPTED_TRUE
+          );
+
+          assert.equal(await dvp.getTradeApprovalStatus(1), false);
+
+          await dvp.connect(tokenController1Signer).approveTrade(1, true);
+          await assertTradeState(dvp, 1, STATE_EXECUTED);
+
+          await expectRevert.unspecified(
+            dvp.connect(tokenController1Signer).approveTrade(1, true)
+          );
+        });
+      });
+    });
+  });
+
+  // EXECUTE TRADE
+
+  describe('executeTrade', function () {
+    let dvp: Swaps;
+    let security20: ERC20Token;
+    let token1: ERC20Token;
+    let emoney20: ERC20Token;
+    let token2: ERC20Token;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
+
+      security20 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+      emoney20 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+
+      await security20.connect(signer).mint(tokenHolder1, issuanceAmount);
+      await emoney20.mint(recipient1, issuanceAmount);
+
+      token1 = security20;
+      token2 = emoney20;
+    });
+    describe('when trade index is valid', function () {
+      describe('when caller is executer defined at trade creation', function () {
+        describe('when trade has been approved', function () {
+          describe('when trade has been accepted', function () {
+            describe('when trade is executed at initially defined price', function () {
+              describe('when expiration date is not past', function () {
+                describe('when token standard is ERC20 vs ERC20', function () {
+                  describe('when trade type is Escrow', function () {
+                    it('executes the trade', async function () {
+                      await token1
+                        .connect(tokenHolder1Signer)
+                        .approve(dvp.address, token1Amount);
+                      await createTradeRequest(
+                        dvp,
+                        token1,
+                        token2,
+                        ERC20STANDARD,
+                        ERC20STANDARD,
+                        tokenHolder1,
+                        recipient1,
+                        executer,
+                        tokenHolder1Signer,
+                        true,
+                        TYPE_ESCROW,
+                        token1Amount,
+                        token2Amount
+                      );
+                      await token2
+                        .connect(recipient1Signer)
+                        .approve(dvp.address, token2Amount);
+                      await acceptTradeRequest(
+                        dvp,
+                        token1,
+                        token2,
+                        1,
+                        recipient1Signer,
+                        STATE_PENDING,
+                        ACCEPTED_TRUE
+                      );
+                      await executeTradeRequest(
+                        dvp,
+                        token1,
+                        token2,
+                        1,
+                        executerSigner
+                      );
                     });
-                    describe('when trade type is Swap', function () {
-                      describe('when trade is executed by an executer', function () {
-                        describe('when tokens are available', function () {
-                          it('executes the trade', async function () {
-                            await token1
-                              .connect(await ethers.getSigner(tokenHolder1))
-                              .approve(dvp.address, token1Amount);
-                            await createTradeRequest(
-                              dvp,
-                              token1,
-                              token2,
-                              ERC20STANDARD,
-                              ERC20STANDARD,
-                              tokenHolder1,
-                              recipient1,
-                              executer,
-                              tokenHolder1,
-                              true,
-                              TYPE_SWAP,
-                              token1Amount,
-                              token2Amount
-                            );
-                            await token2
-                              .connect(await ethers.getSigner(recipient1))
-                              .approve(dvp.address, token2Amount);
-                            await acceptTradeRequest(
-                              dvp,
-                              token1,
-                              token2,
-                              1,
-                              recipient1,
-                              STATE_PENDING,
-                              ACCEPTED_TRUE
-                            );
-                            await executeTradeRequest(
-                              dvp,
-                              token1,
-                              token2,
-                              1,
-                              executer
-                            );
-                          });
-                        });
-                        describe('when tokens are not available', function () {
-                          it('executes the trade', async function () {
-                            await token1
-                              .connect(await ethers.getSigner(tokenHolder1))
-                              .approve(dvp.address, token1Amount);
-                            await createTradeRequest(
-                              dvp,
-                              token1,
-                              token2,
-                              ERC20STANDARD,
-                              ERC20STANDARD,
-                              tokenHolder1,
-                              recipient1,
-                              executer,
-                              tokenHolder1,
-                              true,
-                              TYPE_SWAP,
-                              token1Amount,
-                              token2Amount
-                            );
-                            await token2
-                              .connect(await ethers.getSigner(recipient1))
-                              .approve(dvp.address, token2Amount);
-                            await acceptTradeRequest(
-                              dvp,
-                              token1,
-                              token2,
-                              1,
-                              recipient1,
-                              STATE_PENDING,
-                              ACCEPTED_TRUE
-                            );
-                            await token2
-                              .connect(await ethers.getSigner(recipient1))
-                              .approve(dvp.address, 0);
-                            await expectRevert.unspecified(
-                              executeTradeRequest(
-                                dvp,
-                                token1,
-                                token2,
-                                1,
-                                executer
-                              )
-                            );
-                          });
-                        });
-                      });
-                      describe('when trade is executed by a holder', function () {
-                        beforeEach(async function () {
-                          await dvp.setTokenControllers(token1.address, [
-                            tokenController1
-                          ]);
-                        });
+                  });
+                  describe('when trade type is Swap', function () {
+                    describe('when trade is executed by an executer', function () {
+                      describe('when tokens are available', function () {
                         it('executes the trade', async function () {
                           await token1
-                            .connect(await ethers.getSigner(tokenHolder1))
+                            .connect(tokenHolder1Signer)
                             .approve(dvp.address, token1Amount);
                           await createTradeRequest(
                             dvp,
@@ -3310,370 +3190,465 @@ contract(
                             ERC20STANDARD,
                             tokenHolder1,
                             recipient1,
-                            ZERO_ADDRESS,
-                            tokenHolder1,
+                            executer,
+                            tokenHolder1Signer,
                             true,
                             TYPE_SWAP,
                             token1Amount,
                             token2Amount
                           );
                           await token2
-                            .connect(await ethers.getSigner(recipient1))
+                            .connect(recipient1Signer)
                             .approve(dvp.address, token2Amount);
                           await acceptTradeRequest(
                             dvp,
                             token1,
                             token2,
                             1,
-                            recipient1,
+                            recipient1Signer,
                             STATE_PENDING,
                             ACCEPTED_TRUE
                           );
-                          await token1
-                            .connect(await ethers.getSigner(tokenHolder1))
-                            .decreaseAllowance(dvp.address, token1Amount);
-                          await dvp
-                            .connect(await ethers.getSigner(tokenController1))
-                            .approveTrade(1, true);
-                          // -- trade doesn't get executed because allowance had been decreased
-                          await token1
-                            .connect(await ethers.getSigner(tokenHolder1))
-                            .increaseAllowance(dvp.address, token1Amount);
                           await executeTradeRequest(
                             dvp,
                             token1,
                             token2,
                             1,
-                            tokenHolder1
+                            executerSigner
+                          );
+                        });
+                      });
+                      describe('when tokens are not available', function () {
+                        it('executes the trade', async function () {
+                          await token1
+                            .connect(tokenHolder1Signer)
+                            .approve(dvp.address, token1Amount);
+                          await createTradeRequest(
+                            dvp,
+                            token1,
+                            token2,
+                            ERC20STANDARD,
+                            ERC20STANDARD,
+                            tokenHolder1,
+                            recipient1,
+                            executer,
+                            tokenHolder1Signer,
+                            true,
+                            TYPE_SWAP,
+                            token1Amount,
+                            token2Amount
+                          );
+                          await token2
+                            .connect(recipient1Signer)
+                            .approve(dvp.address, token2Amount);
+                          await acceptTradeRequest(
+                            dvp,
+                            token1,
+                            token2,
+                            1,
+                            recipient1Signer,
+                            STATE_PENDING,
+                            ACCEPTED_TRUE
+                          );
+                          await token2
+                            .connect(recipient1Signer)
+                            .approve(dvp.address, 0);
+                          await expectRevert.unspecified(
+                            executeTradeRequest(
+                              dvp,
+                              token1,
+                              token2,
+                              1,
+                              executerSigner
+                            )
                           );
                         });
                       });
                     });
-                  });
-                  describe('when token standard is ERC20 vs ETH', function () {
-                    describe('when trade type is Escrow', function () {
-                      it('executes the trade', async function () {
-                        const token0Amount = '0x6F05B59D3B20000'; // 5 * 10**18
-
-                        const initialEthBalance1 = +ethers.utils.formatEther(
-                          await ethers.provider.getBalance(tokenHolder1)
-                        );
-                        const initialEthBalance2 = +ethers.utils.formatEther(
-                          await ethers.provider.getBalance(recipient1)
-                        );
-
-                        await createTradeRequest(
-                          dvp,
-                          undefined,
-                          token2,
-                          ETHSTANDARD,
-                          ERC20STANDARD,
-                          tokenHolder1,
-                          recipient1,
-                          executer,
-                          tokenHolder1,
-                          true,
-                          TYPE_ESCROW,
-                          token0Amount,
-                          token2Amount
-                        );
-                        await token2
-                          .connect(await ethers.getSigner(recipient1))
-                          .approve(dvp.address, token2Amount);
-                        await acceptTradeRequest(
-                          dvp,
-                          undefined,
-                          token2,
-                          1,
-                          recipient1,
-                          STATE_PENDING,
-                          ACCEPTED_TRUE
-                        );
-                        await executeTradeRequest(
-                          dvp,
-                          undefined,
-                          token2,
-                          1,
-                          executer
-                        );
-
-                        const finalEthBalance1 = parseInt(
-                          ethers.utils.formatEther(
-                            await ethers.provider.getBalance(tokenHolder1)
-                          )
-                        );
-                        const finalEthBalance2 = parseInt(
-                          ethers.utils.formatEther(
-                            await ethers.provider.getBalance(recipient1)
-                          )
-                        );
-
-                        await assertEtherBalance(dvp.address, 0, true);
-
-                        assert.equal(
-                          Math.abs(
-                            initialEthBalance1 - finalEthBalance1 - 0.5
-                          ) > 0.1,
-                          true
-                        );
-                        assert.equal(
-                          Math.abs(
-                            finalEthBalance2 - initialEthBalance2 - 0.5
-                          ) > 0.1,
-                          true
-                        );
+                    describe('when trade is executed by a holder', function () {
+                      beforeEach(async function () {
+                        await dvp.setTokenControllers(token1.address, [
+                          tokenController1
+                        ]);
                       });
-                    });
-                  });
-                  describe('when token standard is ERC20 vs off-chain payment', function () {
-                    describe('when trade type is Escrow', function () {
                       it('executes the trade', async function () {
                         await token1
-                          .connect(await ethers.getSigner(tokenHolder1))
+                          .connect(tokenHolder1Signer)
                           .approve(dvp.address, token1Amount);
                         await createTradeRequest(
                           dvp,
                           token1,
-                          undefined,
-                          ERC20STANDARD,
-                          OFFCHAIN,
-                          tokenHolder1,
-                          recipient1,
-                          executer,
-                          tokenHolder1,
-                          true,
-                          TYPE_ESCROW,
-                          token1Amount,
-                          token2Amount
-                        );
-                        await acceptTradeRequest(
-                          dvp,
-                          token1,
-                          undefined,
-                          1,
-                          recipient1,
-                          STATE_PENDING,
-                          ACCEPTED_TRUE
-                        );
-                        await executeTradeRequest(
-                          dvp,
-                          token1,
-                          undefined,
-                          1,
-                          executer
-                        );
-                      });
-                    });
-                  });
-                  describe('when token standard is ERC721 vs ERC20', function () {
-                    let security721: ERC721Token;
-                    beforeEach(async function () {
-                      security721 = await new ERC721Token__factory(
-                        signer
-                      ).deploy('ERC721Token', 'DAU721', '', '');
-                      await security721
-                        .connect(await ethers.getSigner(owner))
-                        .mint(tokenHolder1, issuanceTokenId);
-                    });
-                    it('setTokenURI sets the URI for the tokenId', async function () {
-                      await security721.setTokenURI(
-                        issuanceTokenId,
-                        'https://consensys.org/' + issuanceTokenId
-                      );
-                      const uri = await security721.tokenURI(issuanceTokenId);
-
-                      assert.equal(
-                        uri,
-                        'https://consensys.org/' + issuanceTokenId
-                      );
-                    });
-                    describe('when trade type is Escrow', function () {
-                      it('executes the trade', async function () {
-                        await security721
-                          .connect(await ethers.getSigner(tokenHolder1))
-                          .approve(dvp.address, issuanceTokenId);
-                        await createTradeRequest(
-                          dvp,
-                          security721,
                           token2,
-                          ERC721STANDARD,
+                          ERC20STANDARD,
                           ERC20STANDARD,
                           tokenHolder1,
                           recipient1,
-                          executer,
-                          tokenHolder1,
+                          ZERO_ADDRESS,
+                          tokenHolder1Signer,
                           true,
-                          TYPE_ESCROW,
-                          0,
-                          token2Amount
-                        );
-                        await token2
-                          .connect(await ethers.getSigner(recipient1))
-                          .approve(dvp.address, token2Amount);
-                        await acceptTradeRequest(
-                          dvp,
-                          security721,
-                          token2,
-                          1,
-                          recipient1,
-                          STATE_PENDING,
-                          ACCEPTED_TRUE
-                        );
-                        await executeTradeRequest(
-                          dvp,
-                          security721,
-                          token2,
-                          1,
-                          executer
-                        );
-                      });
-                    });
-                  });
-                  describe('when token standard is ERC1400 vs ERC20', function () {
-                    describe('when trade type is Escrow', function () {
-                      let security1400: ERC1400;
-                      beforeEach(async function () {
-                        security1400 = await new ERC1400__factory(
-                          signer
-                        ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
-                        await security1400.issueByPartition(
-                          partition1,
-                          tokenHolder1,
-                          issuanceAmount,
-                          MOCK_CERTIFICATE
-                        );
-                      });
-                      it('executes the trade', async function () {
-                        await security1400
-                          .connect(await ethers.getSigner(tokenHolder1))
-                          .approveByPartition(
-                            partition1,
-                            dvp.address,
-                            token1Amount
-                          );
-                        await createTradeRequest(
-                          dvp,
-                          security1400,
-                          token2,
-                          ERC1400STANDARD,
-                          ERC20STANDARD,
-                          tokenHolder1,
-                          recipient1,
-                          executer,
-                          tokenHolder1,
-                          true,
-                          TYPE_ESCROW,
+                          TYPE_SWAP,
                           token1Amount,
                           token2Amount
                         );
                         await token2
-                          .connect(await ethers.getSigner(recipient1))
+                          .connect(recipient1Signer)
                           .approve(dvp.address, token2Amount);
                         await acceptTradeRequest(
                           dvp,
-                          security1400,
+                          token1,
                           token2,
                           1,
-                          recipient1,
+                          recipient1Signer,
                           STATE_PENDING,
                           ACCEPTED_TRUE
                         );
+                        await token1
+                          .connect(tokenHolder1Signer)
+                          .decreaseAllowance(dvp.address, token1Amount);
+                        await dvp
+                          .connect(tokenController1Signer)
+                          .approveTrade(1, true);
+                        // -- trade doesn't get executed because allowance had been decreased
+                        await token1
+                          .connect(tokenHolder1Signer)
+                          .increaseAllowance(dvp.address, token1Amount);
                         await executeTradeRequest(
                           dvp,
-                          security1400,
+                          token1,
                           token2,
                           1,
-                          executer
+                          tokenHolder1Signer
                         );
                       });
                     });
                   });
                 });
-                describe('when expiration date is past', function () {
-                  it('reverts', async function () {
-                    await token1
-                      .connect(await ethers.getSigner(tokenHolder1))
-                      .approve(dvp.address, token1Amount);
-                    await createTradeRequest(
-                      dvp,
-                      token1,
-                      token2,
-                      ERC20STANDARD,
-                      ERC20STANDARD,
-                      tokenHolder1,
-                      recipient1,
-                      executer,
-                      tokenHolder1,
-                      true,
-                      TYPE_ESCROW,
-                      token1Amount,
-                      token2Amount
-                    );
-                    await token2
-                      .connect(await ethers.getSigner(recipient1))
-                      .approve(dvp.address, token2Amount);
-                    await acceptTradeRequest(
-                      dvp,
-                      token1,
-                      token2,
-                      1,
-                      recipient1,
-                      STATE_PENDING,
-                      ACCEPTED_TRUE
-                    );
+                describe('when token standard is ERC20 vs ETH', function () {
+                  describe('when trade type is Escrow', function () {
+                    it('executes the trade', async function () {
+                      const token0Amount = '0x6F05B59D3B20000'; // 5 * 10**18
 
-                    // Wait for 1 hour
-                    await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
+                      const initialEthBalance1 = +ethers.utils.formatEther(
+                        await ethers.provider.getBalance(tokenHolder1)
+                      );
+                      const initialEthBalance2 = +ethers.utils.formatEther(
+                        await ethers.provider.getBalance(recipient1)
+                      );
 
-                    await expectRevert.unspecified(
-                      executeTradeRequest(dvp, token1, token2, 1, executer)
+                      await createTradeRequest(
+                        dvp,
+                        undefined,
+                        token2,
+                        ETHSTANDARD,
+                        ERC20STANDARD,
+                        tokenHolder1,
+                        recipient1,
+                        executer,
+                        tokenHolder1Signer,
+                        true,
+                        TYPE_ESCROW,
+                        token0Amount,
+                        token2Amount
+                      );
+                      await token2
+                        .connect(recipient1Signer)
+                        .approve(dvp.address, token2Amount);
+                      await acceptTradeRequest(
+                        dvp,
+                        undefined,
+                        token2,
+                        1,
+                        recipient1Signer,
+                        STATE_PENDING,
+                        ACCEPTED_TRUE
+                      );
+                      await executeTradeRequest(
+                        dvp,
+                        undefined,
+                        token2,
+                        1,
+                        executerSigner
+                      );
+
+                      const finalEthBalance1 = parseInt(
+                        ethers.utils.formatEther(
+                          await ethers.provider.getBalance(tokenHolder1)
+                        )
+                      );
+                      const finalEthBalance2 = parseInt(
+                        ethers.utils.formatEther(
+                          await ethers.provider.getBalance(recipient1)
+                        )
+                      );
+
+                      await assertEtherBalance(dvp.address, 0, true);
+
+                      assert.equal(
+                        Math.abs(initialEthBalance1 - finalEthBalance1 - 0.5) >
+                          0.1,
+                        true
+                      );
+                      assert.equal(
+                        Math.abs(finalEthBalance2 - initialEthBalance2 - 0.5) >
+                          0.1,
+                        true
+                      );
+                    });
+                  });
+                });
+                describe('when token standard is ERC20 vs off-chain payment', function () {
+                  describe('when trade type is Escrow', function () {
+                    it('executes the trade', async function () {
+                      await token1
+                        .connect(tokenHolder1Signer)
+                        .approve(dvp.address, token1Amount);
+                      await createTradeRequest(
+                        dvp,
+                        token1,
+                        undefined,
+                        ERC20STANDARD,
+                        OFFCHAIN,
+                        tokenHolder1,
+                        recipient1,
+                        executer,
+                        tokenHolder1Signer,
+                        true,
+                        TYPE_ESCROW,
+                        token1Amount,
+                        token2Amount
+                      );
+                      await acceptTradeRequest(
+                        dvp,
+                        token1,
+                        undefined,
+                        1,
+                        recipient1Signer,
+                        STATE_PENDING,
+                        ACCEPTED_TRUE
+                      );
+                      await executeTradeRequest(
+                        dvp,
+                        token1,
+                        undefined,
+                        1,
+                        executerSigner
+                      );
+                    });
+                  });
+                });
+                describe('when token standard is ERC721 vs ERC20', function () {
+                  let security721: ERC721Token;
+                  beforeEach(async function () {
+                    security721 = await new ERC721Token__factory(signer).deploy(
+                      'ERC721Token',
+                      'DAU721',
+                      '',
+                      ''
                     );
+                    await security721
+                      .connect(signer)
+                      .mint(tokenHolder1, issuanceTokenId);
+                  });
+                  it('setTokenURI sets the URI for the tokenId', async function () {
+                    await security721.setTokenURI(
+                      issuanceTokenId,
+                      'https://consensys.org/' + issuanceTokenId
+                    );
+                    const uri = await security721.tokenURI(issuanceTokenId);
+
+                    assert.equal(
+                      uri,
+                      'https://consensys.org/' + issuanceTokenId
+                    );
+                  });
+                  describe('when trade type is Escrow', function () {
+                    it('executes the trade', async function () {
+                      await security721
+                        .connect(tokenHolder1Signer)
+                        .approve(dvp.address, issuanceTokenId);
+                      await createTradeRequest(
+                        dvp,
+                        security721,
+                        token2,
+                        ERC721STANDARD,
+                        ERC20STANDARD,
+                        tokenHolder1,
+                        recipient1,
+                        executer,
+                        tokenHolder1Signer,
+                        true,
+                        TYPE_ESCROW,
+                        0,
+                        token2Amount
+                      );
+                      await token2
+                        .connect(recipient1Signer)
+                        .approve(dvp.address, token2Amount);
+                      await acceptTradeRequest(
+                        dvp,
+                        security721,
+                        token2,
+                        1,
+                        recipient1Signer,
+                        STATE_PENDING,
+                        ACCEPTED_TRUE
+                      );
+                      await executeTradeRequest(
+                        dvp,
+                        security721,
+                        token2,
+                        1,
+                        executerSigner
+                      );
+                    });
+                  });
+                });
+                describe('when token standard is ERC1400 vs ERC20', function () {
+                  describe('when trade type is Escrow', function () {
+                    let security1400: ERC1400;
+                    beforeEach(async function () {
+                      security1400 = await new ERC1400__factory(signer).deploy(
+                        'ERC1400Token',
+                        'DAU',
+                        1,
+                        [owner],
+                        partitions
+                      );
+                      await security1400.issueByPartition(
+                        partition1,
+                        tokenHolder1,
+                        issuanceAmount,
+                        MOCK_CERTIFICATE
+                      );
+                    });
+                    it('executes the trade', async function () {
+                      await security1400
+                        .connect(tokenHolder1Signer)
+                        .approveByPartition(
+                          partition1,
+                          dvp.address,
+                          token1Amount
+                        );
+                      await createTradeRequest(
+                        dvp,
+                        security1400,
+                        token2,
+                        ERC1400STANDARD,
+                        ERC20STANDARD,
+                        tokenHolder1,
+                        recipient1,
+                        executer,
+                        tokenHolder1Signer,
+                        true,
+                        TYPE_ESCROW,
+                        token1Amount,
+                        token2Amount
+                      );
+                      await token2
+                        .connect(recipient1Signer)
+                        .approve(dvp.address, token2Amount);
+                      await acceptTradeRequest(
+                        dvp,
+                        security1400,
+                        token2,
+                        1,
+                        recipient1Signer,
+                        STATE_PENDING,
+                        ACCEPTED_TRUE
+                      );
+                      await executeTradeRequest(
+                        dvp,
+                        security1400,
+                        token2,
+                        1,
+                        executerSigner
+                      );
+                    });
                   });
                 });
               });
-              describe('when trade is not executed at initially defined price', function () {
-                it('creates and accepts the trade request', async function () {
-                  await dvp
-                    .connect(await ethers.getSigner(owner))
-                    .setPriceOracles(token1.address, [oracle]);
-                  let chainTime = (await ethers.provider.getBlock('latest'))
-                    .timestamp;
-                  let variablePriceStartDate =
-                    chainTime + SECONDS_IN_A_WEEK + 10;
-                  await dvp
-                    .connect(await ethers.getSigner(oracle))
-                    .setVariablePriceStartDate(
-                      token1.address,
-                      variablePriceStartDate
-                    );
-                  assert.equal(
-                    (
-                      await dvp.variablePriceStartDate(token1.address)
-                    ).toNumber(),
+              describe('when expiration date is past', function () {
+                it('reverts', async function () {
+                  await token1
+                    .connect(tokenHolder1Signer)
+                    .approve(dvp.address, token1Amount);
+                  await createTradeRequest(
+                    dvp,
+                    token1,
+                    token2,
+                    ERC20STANDARD,
+                    ERC20STANDARD,
+                    tokenHolder1,
+                    recipient1,
+                    executer,
+                    tokenHolder1Signer,
+                    true,
+                    TYPE_ESCROW,
+                    token1Amount,
+                    token2Amount
+                  );
+                  await token2
+                    .connect(recipient1Signer)
+                    .approve(dvp.address, token2Amount);
+                  await acceptTradeRequest(
+                    dvp,
+                    token1,
+                    token2,
+                    1,
+                    recipient1Signer,
+                    STATE_PENDING,
+                    ACCEPTED_TRUE
+                  );
+
+                  // Wait for 1 hour
+                  await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
+
+                  await expectRevert.unspecified(
+                    executeTradeRequest(dvp, token1, token2, 1, executerSigner)
+                  );
+                });
+              });
+            });
+            describe('when trade is not executed at initially defined price', function () {
+              it('creates and accepts the trade request', async function () {
+                await dvp
+                  .connect(signer)
+                  .setPriceOracles(token1.address, [oracle]);
+                let chainTime = (await ethers.provider.getBlock('latest'))
+                  .timestamp;
+                let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
+                await dvp
+                  .connect(oracleSigner)
+                  .setVariablePriceStartDate(
+                    token1.address,
                     variablePriceStartDate
                   );
-                  // Wait for 1 week
-                  await advanceTimeAndBlock(SECONDS_IN_A_WEEK + 100);
+                assert.equal(
+                  (await dvp.variablePriceStartDate(token1.address)).toNumber(),
+                  variablePriceStartDate
+                );
+                // Wait for 1 week
+                await advanceTimeAndBlock(SECONDS_IN_A_WEEK + 100);
 
-                  await dvp
-                    .connect(await ethers.getSigner(oracle))
-                    .setPriceOwnership(token1.address, token2.address, true);
-                  const multiple2 = 2;
-                  await dvp
-                    .connect(await ethers.getSigner(oracle))
-                    .setTokenPrice(
-                      token1.address,
-                      token2.address,
-                      ALL_PARTITIONS,
-                      ALL_PARTITIONS,
-                      multiple2
-                    );
+                await dvp
+                  .connect(oracleSigner)
+                  .setPriceOwnership(token1.address, token2.address, true);
+                const multiple2 = 2;
+                await dvp
+                  .connect(oracleSigner)
+                  .setTokenPrice(
+                    token1.address,
+                    token2.address,
+                    ALL_PARTITIONS,
+                    ALL_PARTITIONS,
+                    multiple2
+                  );
 
-                  await token1
-                    .connect(await ethers.getSigner(tokenHolder1))
-                    .approve(dvp.address, token1Amount);
-                  const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
-                  /*
+                await token1
+                  .connect(tokenHolder1Signer)
+                  .approve(dvp.address, token1Amount);
+                const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
+                /*
                 struct TradeRequestInput {
                   address holder1;
                   address holder2;
@@ -3690,73 +3665,40 @@ contract(
                   TradeType tradeType;
                 }
                 */
-                  const tradeInputData = {
-                    holder1: tokenHolder1,
-                    holder2: recipient1,
-                    executer: ZERO_ADDRESS,
-                    expirationDate: expirationDate,
-                    settlementDate: 0,
-                    tokenAddress1: token1.address,
-                    tokenValue1: token1Amount,
-                    tokenId1: ZERO_BYTES32,
-                    tokenStandard1: ERC20STANDARD,
-                    tokenAddress2: token2.address,
-                    tokenValue2: token2Amount,
-                    tokenId2: ZERO_BYTES32,
-                    tokenStandard2: ERC20STANDARD,
-                    tradeType1: HEX_TYPE_SWAP,
-                    tradeType2: HEX_TYPE_SWAP
-                  };
-                  await dvp
-                    .connect(await ethers.getSigner(tokenHolder1))
-                    .requestTrade(tradeInputData, ZERO_BYTES32);
+                const tradeInputData = {
+                  holder1: tokenHolder1,
+                  holder2: recipient1,
+                  executer: ZERO_ADDRESS,
+                  expirationDate: expirationDate,
+                  settlementDate: 0,
+                  tokenAddress1: token1.address,
+                  tokenValue1: token1Amount,
+                  tokenId1: ZERO_BYTES32,
+                  tokenStandard1: ERC20STANDARD,
+                  tokenAddress2: token2.address,
+                  tokenValue2: token2Amount,
+                  tokenId2: ZERO_BYTES32,
+                  tokenStandard2: ERC20STANDARD,
+                  tradeType1: HEX_TYPE_SWAP,
+                  tradeType2: HEX_TYPE_SWAP
+                };
+                await dvp
+                  .connect(tokenHolder1Signer)
+                  .requestTrade(tradeInputData, ZERO_BYTES32);
 
-                  await token2
-                    .connect(await ethers.getSigner(recipient1))
-                    .approve(dvp.address, token2Amount);
-                  await dvp
-                    .connect(await ethers.getSigner(recipient1))
-                    .acceptTrade(1, ZERO_BYTES32);
-                });
-              });
-            });
-            describe('when trade has not been accepted', function () {
-              it('reverts', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
                 await token2
-                  .connect(await ethers.getSigner(recipient1))
+                  .connect(recipient1Signer)
                   .approve(dvp.address, token2Amount);
-                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
-                await expectRevert.unspecified(
-                  executeTradeRequest(dvp, token1, token2, 1, executer)
-                );
+                await dvp
+                  .connect(recipient1Signer)
+                  .acceptTrade(1, ZERO_BYTES32);
               });
             });
           });
-          describe('when trade has not been approved', function () {
-            beforeEach(async function () {
-              await dvp.setTokenControllers(token1.address, [tokenController1]);
-            });
+          describe('when trade has not been accepted', function () {
             it('reverts', async function () {
               await token1
-                .connect(await ethers.getSigner(tokenHolder1))
+                .connect(tokenHolder1Signer)
                 .approve(dvp.address, token1Amount);
               await createTradeRequest(
                 dvp,
@@ -3767,34 +3709,29 @@ contract(
                 tokenHolder1,
                 recipient1,
                 executer,
-                tokenHolder1,
+                tokenHolder1Signer,
                 true,
                 TYPE_ESCROW,
                 token1Amount,
                 token2Amount
               );
               await token2
-                .connect(await ethers.getSigner(recipient1))
+                .connect(recipient1Signer)
                 .approve(dvp.address, token2Amount);
-              await acceptTradeRequest(
-                dvp,
-                token1,
-                token2,
-                1,
-                recipient1,
-                STATE_PENDING,
-                ACCEPTED_TRUE
-              );
+              // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
               await expectRevert.unspecified(
-                executeTradeRequest(dvp, token1, token2, 1, executer)
+                executeTradeRequest(dvp, token1, token2, 1, executerSigner)
               );
             });
           });
         });
-        describe('when caller is not executer defined at trade creation', function () {
+        describe('when trade has not been approved', function () {
+          beforeEach(async function () {
+            await dvp.setTokenControllers(token1.address, [tokenController1]);
+          });
           it('reverts', async function () {
             await token1
-              .connect(await ethers.getSigner(tokenHolder1))
+              .connect(tokenHolder1Signer)
               .approve(dvp.address, token1Amount);
             await createTradeRequest(
               dvp,
@@ -3805,182 +3742,116 @@ contract(
               tokenHolder1,
               recipient1,
               executer,
-              tokenHolder1,
+              tokenHolder1Signer,
               true,
               TYPE_ESCROW,
               token1Amount,
               token2Amount
             );
             await token2
-              .connect(await ethers.getSigner(recipient1))
+              .connect(recipient1Signer)
               .approve(dvp.address, token2Amount);
             await acceptTradeRequest(
               dvp,
               token1,
               token2,
               1,
-              recipient1,
+              recipient1Signer,
               STATE_PENDING,
               ACCEPTED_TRUE
             );
             await expectRevert.unspecified(
-              executeTradeRequest(dvp, token1, token2, 1, unknown)
+              executeTradeRequest(dvp, token1, token2, 1, executerSigner)
             );
           });
         });
       });
-      describe('when trade index is not valid', function () {
+      describe('when caller is not executer defined at trade creation', function () {
         it('reverts', async function () {
+          await token1
+            .connect(tokenHolder1Signer)
+            .approve(dvp.address, token1Amount);
+          await createTradeRequest(
+            dvp,
+            token1,
+            token2,
+            ERC20STANDARD,
+            ERC20STANDARD,
+            tokenHolder1,
+            recipient1,
+            executer,
+            tokenHolder1Signer,
+            true,
+            TYPE_ESCROW,
+            token1Amount,
+            token2Amount
+          );
+          await token2
+            .connect(recipient1Signer)
+            .approve(dvp.address, token2Amount);
+          await acceptTradeRequest(
+            dvp,
+            token1,
+            token2,
+            1,
+            recipient1Signer,
+            STATE_PENDING,
+            ACCEPTED_TRUE
+          );
           await expectRevert.unspecified(
-            dvp.connect(await ethers.getSigner(executer)).executeTrade(999)
+            executeTradeRequest(dvp, token1, token2, 1, unknownSigner)
           );
         });
       });
     });
-
-    // FORCE TRADE
-
-    describe('forceTrade', function () {
-      let dvp: Swaps;
-      let security20: ERC20Token;
-      let token1: ERC20Token;
-      let emoney20: ERC20Token;
-      let token2: ERC20Token;
-
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
-
-        security20 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
+    describe('when trade index is not valid', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          dvp.connect(executerSigner).executeTrade(999)
         );
-        emoney20 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
-        );
-
-        await security20
-          .connect(await ethers.getSigner(owner))
-          .mint(tokenHolder1, issuanceAmount);
-        await emoney20.mint(recipient1, issuanceAmount);
-
-        token1 = security20;
-        token2 = emoney20;
       });
-      describe('when trade index is valid', function () {
-        describe('when trade has not been accepted by both parties', function () {
-          describe('when traded tokens have no controllers', function () {
-            describe('when executer has not been defined at trade creation', function () {
-              describe('when trade has been accepted by holder1', function () {
-                describe('when sender is holder1', function () {
-                  it('forces the trade', async function () {
-                    await token1
-                      .connect(await ethers.getSigner(tokenHolder1))
-                      .approve(dvp.address, token1Amount);
-                    await createTradeRequest(
-                      dvp,
-                      token1,
-                      token2,
-                      ERC20STANDARD,
-                      ERC20STANDARD,
-                      tokenHolder1,
-                      recipient1,
-                      ZERO_ADDRESS,
-                      tokenHolder1,
-                      true,
-                      TYPE_ESCROW,
-                      token1Amount,
-                      token2Amount
-                    );
-                    await forceTradeRequest(
-                      dvp,
-                      token1,
-                      token2,
-                      1,
-                      tokenHolder1
-                    );
-                  });
-                });
-                describe('when sender is not holder1', function () {
-                  it('reverts', async function () {
-                    await token1
-                      .connect(await ethers.getSigner(tokenHolder1))
-                      .approve(dvp.address, token1Amount);
-                    await createTradeRequest(
-                      dvp,
-                      token1,
-                      token2,
-                      ERC20STANDARD,
-                      ERC20STANDARD,
-                      tokenHolder1,
-                      recipient1,
-                      ZERO_ADDRESS,
-                      tokenHolder1,
-                      true,
-                      TYPE_ESCROW,
-                      token1Amount,
-                      token2Amount
-                    );
-                    await expectRevert.unspecified(
-                      forceTradeRequest(dvp, token1, token2, 1, recipient1)
-                    );
-                  });
-                });
-              });
-              describe('when trade has been accepted by holder2', function () {
-                describe('when sender is holder2', function () {
-                  it('forces the trade', async function () {
-                    await token2
-                      .connect(await ethers.getSigner(recipient1))
-                      .approve(dvp.address, token2Amount);
-                    await createTradeRequest(
-                      dvp,
-                      token1,
-                      token2,
-                      ERC20STANDARD,
-                      ERC20STANDARD,
-                      tokenHolder1,
-                      recipient1,
-                      ZERO_ADDRESS,
-                      recipient1,
-                      true,
-                      TYPE_ESCROW,
-                      token1Amount,
-                      token2Amount
-                    );
-                    await forceTradeRequest(dvp, token1, token2, 1, recipient1);
-                  });
-                });
-                describe('when sender is not holder2', function () {
-                  it('reverts', async function () {
-                    await token2
-                      .connect(await ethers.getSigner(recipient1))
-                      .approve(dvp.address, token2Amount);
-                    await createTradeRequest(
-                      dvp,
-                      token1,
-                      token2,
-                      ERC20STANDARD,
-                      ERC20STANDARD,
-                      tokenHolder1,
-                      recipient1,
-                      ZERO_ADDRESS,
-                      recipient1,
-                      true,
-                      TYPE_ESCROW,
-                      token1Amount,
-                      token2Amount
-                    );
-                    await expectRevert.unspecified(
-                      forceTradeRequest(dvp, token1, token2, 1, tokenHolder1)
-                    );
-                  });
-                });
-              });
-              describe('when trade has been accepted neither by holder1, nor by holder2', function () {
-                it('reverts', async function () {
+    });
+  });
+
+  // FORCE TRADE
+
+  describe('forceTrade', function () {
+    let dvp: Swaps;
+    let security20: ERC20Token;
+    let token1: ERC20Token;
+    let emoney20: ERC20Token;
+    let token2: ERC20Token;
+
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
+
+      security20 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+      emoney20 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+
+      await security20.connect(signer).mint(tokenHolder1, issuanceAmount);
+      await emoney20.mint(recipient1, issuanceAmount);
+
+      token1 = security20;
+      token2 = emoney20;
+    });
+    describe('when trade index is valid', function () {
+      describe('when trade has not been accepted by both parties', function () {
+        describe('when traded tokens have no controllers', function () {
+          describe('when executer has not been defined at trade creation', function () {
+            describe('when trade has been accepted by holder1', function () {
+              describe('when sender is holder1', function () {
+                it('forces the trade', async function () {
+                  await token1
+                    .connect(tokenHolder1Signer)
+                    .approve(dvp.address, token1Amount);
                   await createTradeRequest(
                     dvp,
                     token1,
@@ -3990,24 +3861,53 @@ contract(
                     tokenHolder1,
                     recipient1,
                     ZERO_ADDRESS,
-                    unknown,
+                    tokenHolder1Signer,
+                    true,
+                    TYPE_ESCROW,
+                    token1Amount,
+                    token2Amount
+                  );
+                  await forceTradeRequest(
+                    dvp,
+                    token1,
+                    token2,
+                    1,
+                    tokenHolder1Signer
+                  );
+                });
+              });
+              describe('when sender is not holder1', function () {
+                it('reverts', async function () {
+                  await token1
+                    .connect(tokenHolder1Signer)
+                    .approve(dvp.address, token1Amount);
+                  await createTradeRequest(
+                    dvp,
+                    token1,
+                    token2,
+                    ERC20STANDARD,
+                    ERC20STANDARD,
+                    tokenHolder1,
+                    recipient1,
+                    ZERO_ADDRESS,
+                    tokenHolder1Signer,
                     true,
                     TYPE_ESCROW,
                     token1Amount,
                     token2Amount
                   );
                   await expectRevert.unspecified(
-                    forceTradeRequest(dvp, token1, token2, 1, unknown)
+                    forceTradeRequest(dvp, token1, token2, 1, recipient1Signer)
                   );
                 });
               });
             });
-            describe('when executer has been defined at trade creation', function () {
-              describe('when caller is executer defined at trade creation', function () {
-                it('executes the trade', async function () {
-                  await token1
-                    .connect(await ethers.getSigner(tokenHolder1))
-                    .approve(dvp.address, token1Amount);
+            describe('when trade has been accepted by holder2', function () {
+              describe('when sender is holder2', function () {
+                it('forces the trade', async function () {
+                  await token2
+                    .connect(recipient1Signer)
+                    .approve(dvp.address, token2Amount);
                   await createTradeRequest(
                     dvp,
                     token1,
@@ -4016,21 +3916,27 @@ contract(
                     ERC20STANDARD,
                     tokenHolder1,
                     recipient1,
-                    executer,
-                    tokenHolder1,
+                    ZERO_ADDRESS,
+                    recipient1Signer,
                     true,
                     TYPE_ESCROW,
                     token1Amount,
                     token2Amount
                   );
-                  await forceTradeRequest(dvp, token1, token2, 1, executer);
+                  await forceTradeRequest(
+                    dvp,
+                    token1,
+                    token2,
+                    1,
+                    recipient1Signer
+                  );
                 });
               });
-              describe('when caller is not executer defined at trade creation', function () {
-                it('executes the trade', async function () {
-                  await token1
-                    .connect(await ethers.getSigner(tokenHolder1))
-                    .approve(dvp.address, token1Amount);
+              describe('when sender is not holder2', function () {
+                it('reverts', async function () {
+                  await token2
+                    .connect(recipient1Signer)
+                    .approve(dvp.address, token2Amount);
                   await createTradeRequest(
                     dvp,
                     token1,
@@ -4039,53 +3945,106 @@ contract(
                     ERC20STANDARD,
                     tokenHolder1,
                     recipient1,
-                    executer,
-                    tokenHolder1,
+                    ZERO_ADDRESS,
+                    recipient1Signer,
                     true,
                     TYPE_ESCROW,
                     token1Amount,
                     token2Amount
                   );
                   await expectRevert.unspecified(
-                    forceTradeRequest(dvp, token1, token2, 1, tokenHolder1)
+                    forceTradeRequest(
+                      dvp,
+                      token1,
+                      token2,
+                      1,
+                      tokenHolder1Signer
+                    )
                   );
                 });
+              });
+            });
+            describe('when trade has been accepted neither by holder1, nor by holder2', function () {
+              it('reverts', async function () {
+                await createTradeRequest(
+                  dvp,
+                  token1,
+                  token2,
+                  ERC20STANDARD,
+                  ERC20STANDARD,
+                  tokenHolder1,
+                  recipient1,
+                  ZERO_ADDRESS,
+                  unknownSigner,
+                  true,
+                  TYPE_ESCROW,
+                  token1Amount,
+                  token2Amount
+                );
+                await expectRevert.unspecified(
+                  forceTradeRequest(dvp, token1, token2, 1, unknownSigner)
+                );
               });
             });
           });
-          describe('when at least one of traded tokens has controllers', function () {
-            beforeEach(async function () {
-              await dvp.setTokenControllers(token1.address, [tokenController1]);
+          describe('when executer has been defined at trade creation', function () {
+            describe('when caller is executer defined at trade creation', function () {
+              it('executes the trade', async function () {
+                await token1
+                  .connect(tokenHolder1Signer)
+                  .approve(dvp.address, token1Amount);
+                await createTradeRequest(
+                  dvp,
+                  token1,
+                  token2,
+                  ERC20STANDARD,
+                  ERC20STANDARD,
+                  tokenHolder1,
+                  recipient1,
+                  executer,
+                  tokenHolder1Signer,
+                  true,
+                  TYPE_ESCROW,
+                  token1Amount,
+                  token2Amount
+                );
+                await forceTradeRequest(dvp, token1, token2, 1, executerSigner);
+              });
             });
-            it('reverts', async function () {
-              await token1
-                .connect(await ethers.getSigner(tokenHolder1))
-                .approve(dvp.address, token1Amount);
-              await createTradeRequest(
-                dvp,
-                token1,
-                token2,
-                ERC20STANDARD,
-                ERC20STANDARD,
-                tokenHolder1,
-                recipient1,
-                ZERO_ADDRESS,
-                tokenHolder1,
-                true,
-                TYPE_ESCROW,
-                token1Amount,
-                token2Amount
-              );
-              await expectRevert.unspecified(
-                forceTradeRequest(dvp, token1, token2, 1, tokenHolder1)
-              );
+            describe('when caller is not executer defined at trade creation', function () {
+              it('executes the trade', async function () {
+                await token1
+                  .connect(tokenHolder1Signer)
+                  .approve(dvp.address, token1Amount);
+                await createTradeRequest(
+                  dvp,
+                  token1,
+                  token2,
+                  ERC20STANDARD,
+                  ERC20STANDARD,
+                  tokenHolder1,
+                  recipient1,
+                  executer,
+                  tokenHolder1Signer,
+                  true,
+                  TYPE_ESCROW,
+                  token1Amount,
+                  token2Amount
+                );
+                await expectRevert.unspecified(
+                  forceTradeRequest(dvp, token1, token2, 1, tokenHolder1Signer)
+                );
+              });
             });
           });
         });
-        describe('when trade has been accepted by both parties', function () {
+        describe('when at least one of traded tokens has controllers', function () {
+          beforeEach(async function () {
+            await dvp.setTokenControllers(token1.address, [tokenController1]);
+          });
           it('reverts', async function () {
             await token1
-              .connect(await ethers.getSigner(tokenHolder1))
+              .connect(tokenHolder1Signer)
               .approve(dvp.address, token1Amount);
             await createTradeRequest(
               dvp,
@@ -4095,1248 +4054,1278 @@ contract(
               ERC20STANDARD,
               tokenHolder1,
               recipient1,
-              executer,
-              tokenHolder1,
+              ZERO_ADDRESS,
+              tokenHolder1Signer,
               true,
               TYPE_ESCROW,
               token1Amount,
               token2Amount
             );
-            await token2
-              .connect(await ethers.getSigner(recipient1))
-              .approve(dvp.address, token2Amount);
-            await acceptTradeRequest(
+            await expectRevert.unspecified(
+              forceTradeRequest(dvp, token1, token2, 1, tokenHolder1Signer)
+            );
+          });
+        });
+      });
+      describe('when trade has been accepted by both parties', function () {
+        it('reverts', async function () {
+          await token1
+            .connect(tokenHolder1Signer)
+            .approve(dvp.address, token1Amount);
+          await createTradeRequest(
+            dvp,
+            token1,
+            token2,
+            ERC20STANDARD,
+            ERC20STANDARD,
+            tokenHolder1,
+            recipient1,
+            executer,
+            tokenHolder1Signer,
+            true,
+            TYPE_ESCROW,
+            token1Amount,
+            token2Amount
+          );
+          await token2
+            .connect(recipient1Signer)
+            .approve(dvp.address, token2Amount);
+          await acceptTradeRequest(
+            dvp,
+            token1,
+            token2,
+            1,
+            recipient1Signer,
+            STATE_PENDING,
+            ACCEPTED_TRUE
+          );
+          await expectRevert.unspecified(
+            forceTradeRequest(dvp, token1, token2, 1, executerSigner)
+          );
+        });
+      });
+    });
+    describe('when trade index is not valid', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          dvp.connect(executerSigner).forceTrade(999)
+        );
+      });
+    });
+  });
+
+  // CANCEL TRADE
+
+  describe('cancelTrade', function () {
+    let dvp: Swaps;
+    let security20: ERC20Token;
+    let token1: ERC20Token;
+    let emoney20: ERC20Token;
+    let token2: ERC20Token;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
+
+      security20 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+      emoney20 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+
+      await security20.connect(signer).mint(tokenHolder1, issuanceAmount);
+      await emoney20.mint(recipient1, issuanceAmount);
+
+      token1 = security20;
+      token2 = emoney20;
+    });
+    describe('when trade index is valid', function () {
+      describe('when trade has been accepted by both parties', function () {
+        describe('when caller is trade executer', function () {
+          describe('when trade type is Escrow', function () {
+            it('cancels the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_TRUE
+              );
+
+              await cancelTradeRequest(dvp, token1, token2, 1, executerSigner);
+            });
+          });
+          describe('when trade type is Swap', function () {
+            it('cancels the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_SWAP,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_TRUE
+              );
+
+              await cancelTradeRequest(dvp, token1, token2, 1, executerSigner);
+            });
+          });
+        });
+        describe('when caller is holder1', function () {
+          describe('when expiration date is past', function () {
+            it('cancels the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_TRUE
+              );
+
+              // Wait for 1 hour
+              await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
+
+              await cancelTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                tokenHolder1Signer
+              );
+            });
+          });
+          describe('when expiration date is not past', function () {
+            it('reverts', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_TRUE
+              );
+
+              await expectRevert.unspecified(
+                cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1Signer)
+              );
+            });
+          });
+        });
+        describe('when caller is holder2', function () {
+          describe('when expiration date is past', function () {
+            it('cancels the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_TRUE
+              );
+
+              // Wait for 1 hour
+              await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
+
+              await cancelTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer
+              );
+            });
+          });
+          describe('when expiration date is not past', function () {
+            it('reverts', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_TRUE
+              );
+
+              await expectRevert.unspecified(
+                cancelTradeRequest(dvp, token1, token2, 1, recipient1Signer)
+              );
+            });
+          });
+        });
+      });
+      describe('when trade has been accepted by holder1', function () {
+        describe('when caller is trade executer', function () {
+          describe('when trade type is Escrow', function () {
+            it('cancels the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              // await token2.connect(recipient1Signer).approve(dvp.address, token2Amount, );
+              // await acceptTradeRequest(dvp, token1, token2, 1, recipient1Signer, STATE_PENDING, ACCEPTED_TRUE);
+
+              await cancelTradeRequest(dvp, token1, token2, 1, executerSigner);
+            });
+          });
+          describe('when trade type is Swap', function () {
+            it('cancels the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_SWAP,
+                token1Amount,
+                token2Amount
+              );
+              // await token2.connect(recipient1Signer).approve(dvp.address, token2Amount, );
+              // await acceptTradeRequest(dvp, token1, token2, 1, recipient1Signer, STATE_PENDING, ACCEPTED_TRUE);
+
+              await cancelTradeRequest(dvp, token1, token2, 1, executerSigner);
+            });
+          });
+        });
+        describe('when caller is holder1', function () {
+          describe('when expiration date is past', function () {
+            it('cancels the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              // await token2.connect(recipient1Signer).approve(dvp.address, token2Amount, );
+              // await acceptTradeRequest(dvp, token1, token2, 1, recipient1Signer, STATE_PENDING, ACCEPTED_TRUE);
+
+              // Wait for 1 hour
+              await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
+
+              await cancelTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                tokenHolder1Signer
+              );
+            });
+          });
+          describe('when expiration date is not past', function () {
+            it('reverts', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              // await token2.connect(recipient1Signer).approve(dvp.address, token2Amount, );
+              // await acceptTradeRequest(dvp, token1, token2, 1, recipient1Signer, STATE_PENDING, ACCEPTED_TRUE);
+
+              await expectRevert.unspecified(
+                cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1Signer)
+              );
+            });
+          });
+        });
+        describe('when caller is holder2', function () {
+          describe('when expiration date is past', function () {
+            it('cancels the trade', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              // await token2.connect(recipient1Signer).approve(dvp.address, token2Amount, );
+              // await acceptTradeRequest(dvp, token1, token2, 1, recipient1Signer, STATE_PENDING, ACCEPTED_TRUE);
+
+              // Wait for 1 hour
+              await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
+
+              await expectRevert.unspecified(
+                cancelTradeRequest(dvp, token1, token2, 1, recipient1Signer)
+              );
+            });
+          });
+          describe('when expiration date is not past', function () {
+            it('reverts', async function () {
+              await token1
+                .connect(tokenHolder1Signer)
+                .approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                tokenHolder1Signer,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              // await token2.connect(recipient1Signer).approve(dvp.address, token2Amount, );
+              // await acceptTradeRequest(dvp, token1, token2, 1, recipient1Signer, STATE_PENDING, ACCEPTED_TRUE);
+
+              await expectRevert.unspecified(
+                cancelTradeRequest(dvp, token1, token2, 1, recipient1Signer)
+              );
+            });
+          });
+        });
+      });
+      describe('when trade has been accepted by holder2', function () {
+        describe('when caller is trade executer', function () {
+          describe('when trade type is Escrow', function () {
+            it('cancels the trade', async function () {
+              // await token1.connect(tokenHolder1Signer).approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                executerSigner,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_FALSE
+              );
+
+              await cancelTradeRequest(dvp, token1, token2, 1, executerSigner);
+            });
+          });
+          describe('when trade type is Swap', function () {
+            it('cancels the trade', async function () {
+              // await token1.connect(tokenHolder1Signer).approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                executerSigner,
+                true,
+                TYPE_SWAP,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_FALSE
+              );
+
+              await cancelTradeRequest(dvp, token1, token2, 1, executerSigner);
+            });
+          });
+        });
+        describe('when caller is holder1', function () {
+          describe('when expiration date is past', function () {
+            it('cancels the trade', async function () {
+              // await token1.connect(tokenHolder1Signer).approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                executerSigner,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_FALSE
+              );
+
+              // Wait for 1 hour
+              await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
+
+              await expectRevert.unspecified(
+                cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1Signer)
+              );
+            });
+          });
+          describe('when expiration date is not past', function () {
+            it('reverts', async function () {
+              // await token1.connect(tokenHolder1Signer).approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                executerSigner,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_FALSE
+              );
+
+              await expectRevert.unspecified(
+                cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1Signer)
+              );
+            });
+          });
+        });
+        describe('when caller is holder2', function () {
+          describe('when expiration date is past', function () {
+            it('cancels the trade', async function () {
+              // await token1.connect(tokenHolder1Signer).approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                executerSigner,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_FALSE
+              );
+
+              // Wait for 1 hour
+              await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
+
+              await cancelTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer
+              );
+            });
+          });
+          describe('when expiration date is not past', function () {
+            it('reverts', async function () {
+              // await token1.connect(tokenHolder1Signer).approve(dvp.address, token1Amount);
+              await createTradeRequest(
+                dvp,
+                token1,
+                token2,
+                ERC20STANDARD,
+                ERC20STANDARD,
+                tokenHolder1,
+                recipient1,
+                executer,
+                executerSigner,
+                true,
+                TYPE_ESCROW,
+                token1Amount,
+                token2Amount
+              );
+              await token2
+                .connect(recipient1Signer)
+                .approve(dvp.address, token2Amount);
+              await acceptTradeRequest(
+                dvp,
+                token1,
+                token2,
+                1,
+                recipient1Signer,
+                STATE_PENDING,
+                ACCEPTED_FALSE
+              );
+
+              await expectRevert.unspecified(
+                cancelTradeRequest(dvp, token1, token2, 1, recipient1Signer)
+              );
+            });
+          });
+        });
+      });
+      describe('when trade has been accepted by no one', function () {
+        describe('when caller is trade executer', function () {
+          it('cancels the trade', async function () {
+            await createTradeRequest(
+              dvp,
+              token1,
+              token2,
+              ERC20STANDARD,
+              ERC20STANDARD,
+              tokenHolder1,
+              recipient1,
+              executer,
+              executerSigner,
+              true,
+              TYPE_ESCROW,
+              token1Amount,
+              token2Amount
+            );
+
+            await cancelTradeRequest(dvp, token1, token2, 1, executerSigner);
+          });
+        });
+        describe('when caller is holder1', function () {
+          it('cancels the trade', async function () {
+            await createTradeRequest(
+              dvp,
+              token1,
+              token2,
+              ERC20STANDARD,
+              ERC20STANDARD,
+              tokenHolder1,
+              recipient1,
+              executer,
+              executerSigner,
+              true,
+              TYPE_ESCROW,
+              token1Amount,
+              token2Amount
+            );
+
+            await cancelTradeRequest(
               dvp,
               token1,
               token2,
               1,
+              tokenHolder1Signer
+            );
+          });
+        });
+        describe('when caller is holder2', function () {
+          it('cancels the trade', async function () {
+            await createTradeRequest(
+              dvp,
+              token1,
+              token2,
+              ERC20STANDARD,
+              ERC20STANDARD,
+              tokenHolder1,
               recipient1,
-              STATE_PENDING,
-              ACCEPTED_TRUE
+              executer,
+              executerSigner,
+              true,
+              TYPE_ESCROW,
+              token1Amount,
+              token2Amount
             );
+
+            await cancelTradeRequest(dvp, token1, token2, 1, recipient1Signer);
+          });
+        });
+        describe('when caller is neither the executer nor one of the 2 holders', function () {
+          it('cancels the trade', async function () {
+            await createTradeRequest(
+              dvp,
+              token1,
+              token2,
+              ERC20STANDARD,
+              ERC20STANDARD,
+              tokenHolder1,
+              recipient1,
+              executer,
+              executerSigner,
+              true,
+              TYPE_ESCROW,
+              token1Amount,
+              token2Amount
+            );
+
             await expectRevert.unspecified(
-              forceTradeRequest(dvp, token1, token2, 1, executer)
+              dvp.connect(unknownSigner).cancelTrade(1)
             );
           });
         });
       });
-      describe('when trade index is not valid', function () {
-        it('reverts', async function () {
-          await expectRevert.unspecified(
-            dvp.connect(await ethers.getSigner(executer)).forceTrade(999)
-          );
-        });
+    });
+    describe('when trade index is not valid', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          dvp.connect(executerSigner).cancelTrade(999)
+        );
       });
     });
+  });
 
-    // CANCEL TRADE
+  // RENOUNCE OWNERSHIP
 
-    describe('cancelTrade', function () {
-      let dvp: Swaps;
-      let security20: ERC20Token;
-      let token1: ERC20Token;
-      let emoney20: ERC20Token;
-      let token2: ERC20Token;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
+  describe('renounceOwnership', function () {
+    let dvp: Swaps;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(true);
+    });
+    describe('when the caller is the contract owner', function () {
+      it('renounces to ownership', async function () {
+        assert.equal(await dvp.owner(), owner);
 
-        security20 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
+        // can set trade executers
+        await dvp.setTradeExecuters([owner, executer]);
+
+        await dvp.renounceOwnership();
+        assert.equal(await dvp.owner(), ZERO_ADDRESS);
+
+        // can not set trade executers anymore
+        await expectRevert.unspecified(
+          dvp.setTradeExecuters([owner, executer])
         );
-        emoney20 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
-        );
-
-        await security20
-          .connect(await ethers.getSigner(owner))
-          .mint(tokenHolder1, issuanceAmount);
-        await emoney20.mint(recipient1, issuanceAmount);
-
-        token1 = security20;
-        token2 = emoney20;
-      });
-      describe('when trade index is valid', function () {
-        describe('when trade has been accepted by both parties', function () {
-          describe('when caller is trade executer', function () {
-            describe('when trade type is Escrow', function () {
-              it('cancels the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_TRUE
-                );
-
-                await cancelTradeRequest(dvp, token1, token2, 1, executer);
-              });
-            });
-            describe('when trade type is Swap', function () {
-              it('cancels the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_SWAP,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_TRUE
-                );
-
-                await cancelTradeRequest(dvp, token1, token2, 1, executer);
-              });
-            });
-          });
-          describe('when caller is holder1', function () {
-            describe('when expiration date is past', function () {
-              it('cancels the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_TRUE
-                );
-
-                // Wait for 1 hour
-                await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
-
-                await cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1);
-              });
-            });
-            describe('when expiration date is not past', function () {
-              it('reverts', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_TRUE
-                );
-
-                await expectRevert.unspecified(
-                  cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1)
-                );
-              });
-            });
-          });
-          describe('when caller is holder2', function () {
-            describe('when expiration date is past', function () {
-              it('cancels the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_TRUE
-                );
-
-                // Wait for 1 hour
-                await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
-
-                await cancelTradeRequest(dvp, token1, token2, 1, recipient1);
-              });
-            });
-            describe('when expiration date is not past', function () {
-              it('reverts', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_TRUE
-                );
-
-                await expectRevert.unspecified(
-                  cancelTradeRequest(dvp, token1, token2, 1, recipient1)
-                );
-              });
-            });
-          });
-        });
-        describe('when trade has been accepted by holder1', function () {
-          describe('when caller is trade executer', function () {
-            describe('when trade type is Escrow', function () {
-              it('cancels the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                // await token2.connect(await ethers.getSigner(recipient1)).approve(dvp.address, token2Amount, );
-                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
-
-                await cancelTradeRequest(dvp, token1, token2, 1, executer);
-              });
-            });
-            describe('when trade type is Swap', function () {
-              it('cancels the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_SWAP,
-                  token1Amount,
-                  token2Amount
-                );
-                // await token2.connect(await ethers.getSigner(recipient1)).approve(dvp.address, token2Amount, );
-                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
-
-                await cancelTradeRequest(dvp, token1, token2, 1, executer);
-              });
-            });
-          });
-          describe('when caller is holder1', function () {
-            describe('when expiration date is past', function () {
-              it('cancels the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                // await token2.connect(await ethers.getSigner(recipient1)).approve(dvp.address, token2Amount, );
-                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
-
-                // Wait for 1 hour
-                await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
-
-                await cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1);
-              });
-            });
-            describe('when expiration date is not past', function () {
-              it('reverts', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                // await token2.connect(await ethers.getSigner(recipient1)).approve(dvp.address, token2Amount, );
-                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
-
-                await expectRevert.unspecified(
-                  cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1)
-                );
-              });
-            });
-          });
-          describe('when caller is holder2', function () {
-            describe('when expiration date is past', function () {
-              it('cancels the trade', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                // await token2.connect(await ethers.getSigner(recipient1)).approve(dvp.address, token2Amount, );
-                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
-
-                // Wait for 1 hour
-                await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
-
-                await expectRevert.unspecified(
-                  cancelTradeRequest(dvp, token1, token2, 1, recipient1)
-                );
-              });
-            });
-            describe('when expiration date is not past', function () {
-              it('reverts', async function () {
-                await token1
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  tokenHolder1,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                // await token2.connect(await ethers.getSigner(recipient1)).approve(dvp.address, token2Amount, );
-                // await acceptTradeRequest(dvp, token1, token2, 1, recipient1, STATE_PENDING, ACCEPTED_TRUE);
-
-                await expectRevert.unspecified(
-                  cancelTradeRequest(dvp, token1, token2, 1, recipient1)
-                );
-              });
-            });
-          });
-        });
-        describe('when trade has been accepted by holder2', function () {
-          describe('when caller is trade executer', function () {
-            describe('when trade type is Escrow', function () {
-              it('cancels the trade', async function () {
-                // await token1.connect(await ethers.getSigner(tokenHolder1)).approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  executer,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_FALSE
-                );
-
-                await cancelTradeRequest(dvp, token1, token2, 1, executer);
-              });
-            });
-            describe('when trade type is Swap', function () {
-              it('cancels the trade', async function () {
-                // await token1.connect(await ethers.getSigner(tokenHolder1)).approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  executer,
-                  true,
-                  TYPE_SWAP,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_FALSE
-                );
-
-                await cancelTradeRequest(dvp, token1, token2, 1, executer);
-              });
-            });
-          });
-          describe('when caller is holder1', function () {
-            describe('when expiration date is past', function () {
-              it('cancels the trade', async function () {
-                // await token1.connect(await ethers.getSigner(tokenHolder1)).approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  executer,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_FALSE
-                );
-
-                // Wait for 1 hour
-                await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
-
-                await expectRevert.unspecified(
-                  cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1)
-                );
-              });
-            });
-            describe('when expiration date is not past', function () {
-              it('reverts', async function () {
-                // await token1.connect(await ethers.getSigner(tokenHolder1)).approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  executer,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_FALSE
-                );
-
-                await expectRevert.unspecified(
-                  cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1)
-                );
-              });
-            });
-          });
-          describe('when caller is holder2', function () {
-            describe('when expiration date is past', function () {
-              it('cancels the trade', async function () {
-                // await token1.connect(await ethers.getSigner(tokenHolder1)).approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  executer,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_FALSE
-                );
-
-                // Wait for 1 hour
-                await advanceTimeAndBlock(2 * SECONDS_IN_A_WEEK + 1);
-
-                await cancelTradeRequest(dvp, token1, token2, 1, recipient1);
-              });
-            });
-            describe('when expiration date is not past', function () {
-              it('reverts', async function () {
-                // await token1.connect(await ethers.getSigner(tokenHolder1)).approve(dvp.address, token1Amount);
-                await createTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  ERC20STANDARD,
-                  ERC20STANDARD,
-                  tokenHolder1,
-                  recipient1,
-                  executer,
-                  executer,
-                  true,
-                  TYPE_ESCROW,
-                  token1Amount,
-                  token2Amount
-                );
-                await token2
-                  .connect(await ethers.getSigner(recipient1))
-                  .approve(dvp.address, token2Amount);
-                await acceptTradeRequest(
-                  dvp,
-                  token1,
-                  token2,
-                  1,
-                  recipient1,
-                  STATE_PENDING,
-                  ACCEPTED_FALSE
-                );
-
-                await expectRevert.unspecified(
-                  cancelTradeRequest(dvp, token1, token2, 1, recipient1)
-                );
-              });
-            });
-          });
-        });
-        describe('when trade has been accepted by no one', function () {
-          describe('when caller is trade executer', function () {
-            it('cancels the trade', async function () {
-              await createTradeRequest(
-                dvp,
-                token1,
-                token2,
-                ERC20STANDARD,
-                ERC20STANDARD,
-                tokenHolder1,
-                recipient1,
-                executer,
-                executer,
-                true,
-                TYPE_ESCROW,
-                token1Amount,
-                token2Amount
-              );
-
-              await cancelTradeRequest(dvp, token1, token2, 1, executer);
-            });
-          });
-          describe('when caller is holder1', function () {
-            it('cancels the trade', async function () {
-              await createTradeRequest(
-                dvp,
-                token1,
-                token2,
-                ERC20STANDARD,
-                ERC20STANDARD,
-                tokenHolder1,
-                recipient1,
-                executer,
-                executer,
-                true,
-                TYPE_ESCROW,
-                token1Amount,
-                token2Amount
-              );
-
-              await cancelTradeRequest(dvp, token1, token2, 1, tokenHolder1);
-            });
-          });
-          describe('when caller is holder2', function () {
-            it('cancels the trade', async function () {
-              await createTradeRequest(
-                dvp,
-                token1,
-                token2,
-                ERC20STANDARD,
-                ERC20STANDARD,
-                tokenHolder1,
-                recipient1,
-                executer,
-                executer,
-                true,
-                TYPE_ESCROW,
-                token1Amount,
-                token2Amount
-              );
-
-              await cancelTradeRequest(dvp, token1, token2, 1, recipient1);
-            });
-          });
-          describe('when caller is neither the executer nor one of the 2 holders', function () {
-            it('cancels the trade', async function () {
-              await createTradeRequest(
-                dvp,
-                token1,
-                token2,
-                ERC20STANDARD,
-                ERC20STANDARD,
-                tokenHolder1,
-                recipient1,
-                executer,
-                executer,
-                true,
-                TYPE_ESCROW,
-                token1Amount,
-                token2Amount
-              );
-
-              await expectRevert.unspecified(
-                dvp.connect(await ethers.getSigner(unknown)).cancelTrade(1)
-              );
-            });
-          });
-        });
-      });
-      describe('when trade index is not valid', function () {
-        it('reverts', async function () {
-          await expectRevert.unspecified(
-            dvp.connect(await ethers.getSigner(executer)).cancelTrade(999)
-          );
-        });
       });
     });
-
-    // RENOUNCE OWNERSHIP
-
-    describe('renounceOwnership', function () {
-      let dvp: Swaps;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(true);
+    describe('when the caller is not the contract owner', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          dvp.connect(unknownSigner).renounceOwnership()
+        );
       });
-      describe('when the caller is the contract owner', function () {
-        it('renounces to ownership', async function () {
-          assert.equal(await dvp.owner(), owner);
+    });
+  });
 
-          // can set trade executers
-          await dvp.setTradeExecuters([owner, executer]);
+  // SET TRADE EXECUTER
 
-          await dvp.renounceOwnership();
-          assert.equal(await dvp.owner(), ZERO_ADDRESS);
-
-          // can not set trade executers anymore
+  describe('setTradeExecuters', function () {
+    let dvp: Swaps;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(true);
+    });
+    describe('when the caller is the contract owner', function () {
+      describe('when the dvp contract is owned', function () {
+        it('sets the operators as trade executers', async function () {
+          const tradeExecuters1 = await dvp.tradeExecuters();
+          assert.equal(tradeExecuters1.length, 1);
+          assert.equal(tradeExecuters1[0], owner);
+          await dvp.connect(signer).setTradeExecuters([owner, executer]);
+          const tradeExecuters2 = await dvp.tradeExecuters();
+          assert.equal(tradeExecuters2.length, 2);
+          assert.equal(tradeExecuters2[0], owner);
+          assert.equal(tradeExecuters2[1], executer);
+        });
+      });
+      describe('when the dvp contract is not owned', function () {
+        let dvp: Swaps;
+        beforeEach(async function () {
+          dvp = await new Swaps__factory(signer).deploy(false);
+        });
+        it('reverts', async function () {
           await expectRevert.unspecified(
             dvp.setTradeExecuters([owner, executer])
           );
         });
       });
-      describe('when the caller is not the contract owner', function () {
-        it('reverts', async function () {
-          await expectRevert.unspecified(
-            dvp.connect(await ethers.getSigner(unknown)).renounceOwnership()
-          );
-        });
+    });
+    describe('when the caller is not the contract owner', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          dvp.connect(executerSigner).setTradeExecuters([owner, executer])
+        );
       });
     });
+  });
 
-    // SET TRADE EXECUTER
+  // SET TOKEN CONTROLLERS
 
-    describe('setTradeExecuters', function () {
-      let dvp: Swaps;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(true);
-      });
-      describe('when the caller is the contract owner', function () {
-        describe('when the dvp contract is owned', function () {
-          it('sets the operators as trade executers', async function () {
-            const tradeExecuters1 = await dvp.tradeExecuters();
-            assert.equal(tradeExecuters1.length, 1);
-            assert.equal(tradeExecuters1[0], owner);
-            await dvp
-              .connect(await ethers.getSigner(owner))
-              .setTradeExecuters([owner, executer]);
-            const tradeExecuters2 = await dvp.tradeExecuters();
-            assert.equal(tradeExecuters2.length, 2);
-            assert.equal(tradeExecuters2[0], owner);
-            assert.equal(tradeExecuters2[1], executer);
-          });
-        });
-        describe('when the dvp contract is not owned', function () {
-          let dvp: Swaps;
-          beforeEach(async function () {
-            dvp = await new Swaps__factory(signer).deploy(false);
-          });
-          it('reverts', async function () {
-            await expectRevert.unspecified(
-              dvp.setTradeExecuters([owner, executer])
-            );
-          });
-        });
-      });
-      describe('when the caller is not the contract owner', function () {
-        it('reverts', async function () {
-          await expectRevert.unspecified(
-            dvp
-              .connect(await ethers.getSigner(executer))
-              .setTradeExecuters([owner, executer])
-          );
-        });
+  describe('setTokenControllers', function () {
+    let dvp: Swaps;
+    let token1: ERC20Token;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
+
+      token1 = await new ERC20Token__factory(tokenHolder1Signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+    });
+    describe('when the caller is the token contract owner', function () {
+      it('sets the operators as token controllers', async function () {
+        let tokenControllers = await dvp.tokenControllers(token1.address);
+        assert.equal(tokenControllers.length, 0);
+
+        await dvp
+          .connect(tokenHolder1Signer)
+          .setTokenControllers(token1.address, [
+            tokenController1,
+            tokenController2
+          ]);
+
+        tokenControllers = await dvp.tokenControllers(token1.address);
+        assert.equal(tokenControllers.length, 2);
+        assert.equal(tokenControllers[0], tokenController1);
+        assert.equal(tokenControllers[1], tokenController2);
       });
     });
+    describe('when the caller is an other token controller', function () {
+      it('sets the operators as token controllers', async function () {
+        let tokenControllers = await dvp.tokenControllers(token1.address);
+        assert.equal(tokenControllers.length, 0);
 
-    // SET TOKEN CONTROLLERS
+        await dvp
+          .connect(tokenHolder1Signer)
+          .setTokenControllers(token1.address, [tokenController2]);
 
-    describe('setTokenControllers', function () {
-      let dvp: Swaps;
-      let token1: ERC20Token;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
+        tokenControllers = await dvp.tokenControllers(token1.address);
+        assert.equal(tokenControllers.length, 1);
+        assert.equal(tokenControllers[0], tokenController2);
 
-        token1 = await new ERC20Token__factory(
-          await ethers.getSigner(tokenHolder1)
-        ).deploy('ERC20Token', 'DAU', 18);
+        await dvp
+          .connect(tokenController2Signer)
+          .setTokenControllers(token1.address, [tokenController1, unknown]);
+
+        tokenControllers = await dvp.tokenControllers(token1.address);
+        assert.equal(tokenControllers.length, 2);
+        assert.equal(tokenControllers[0], tokenController1);
+        assert.equal(tokenControllers[1], unknown);
       });
-      describe('when the caller is the token contract owner', function () {
-        it('sets the operators as token controllers', async function () {
-          let tokenControllers = await dvp.tokenControllers(token1.address);
-          assert.equal(tokenControllers.length, 0);
-
-          await dvp
-            .connect(await ethers.getSigner(tokenHolder1))
+    });
+    describe('when the caller is neither the token contract owner nor a token controller', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          dvp
+            .connect(tokenHolder2Signer)
             .setTokenControllers(token1.address, [
               tokenController1,
               tokenController2
-            ]);
-
-          tokenControllers = await dvp.tokenControllers(token1.address);
-          assert.equal(tokenControllers.length, 2);
-          assert.equal(tokenControllers[0], tokenController1);
-          assert.equal(tokenControllers[1], tokenController2);
-        });
-      });
-      describe('when the caller is an other token controller', function () {
-        it('sets the operators as token controllers', async function () {
-          let tokenControllers = await dvp.tokenControllers(token1.address);
-          assert.equal(tokenControllers.length, 0);
-
-          await dvp
-            .connect(await ethers.getSigner(tokenHolder1))
-            .setTokenControllers(token1.address, [tokenController2]);
-
-          tokenControllers = await dvp.tokenControllers(token1.address);
-          assert.equal(tokenControllers.length, 1);
-          assert.equal(tokenControllers[0], tokenController2);
-
-          await dvp
-            .connect(await ethers.getSigner(tokenController2))
-            .setTokenControllers(token1.address, [tokenController1, unknown]);
-
-          tokenControllers = await dvp.tokenControllers(token1.address);
-          assert.equal(tokenControllers.length, 2);
-          assert.equal(tokenControllers[0], tokenController1);
-          assert.equal(tokenControllers[1], unknown);
-        });
-      });
-      describe('when the caller is neither the token contract owner nor a token controller', function () {
-        it('reverts', async function () {
-          await expectRevert.unspecified(
-            dvp
-              .connect(await ethers.getSigner(tokenHolder2))
-              .setTokenControllers(token1.address, [
-                tokenController1,
-                tokenController2
-              ])
-          );
-        });
-      });
-    });
-
-    // SET PRICE ORACLES
-
-    describe('setPriceOracles', function () {
-      let dvp: Swaps;
-      let token1: ERC20Token;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
-
-        token1 = await new ERC20Token__factory(
-          await ethers.getSigner(tokenHolder1)
-        ).deploy('ERC20Token', 'DAU', 18);
-      });
-      describe('when the caller is the token contract owner', function () {
-        it('sets the operators as token price oracle', async function () {
-          let priceOracles = await dvp.priceOracles(token1.address);
-          assert.equal(priceOracles.length, 0);
-
-          await dvp
-            .connect(await ethers.getSigner(tokenHolder1))
-            .setPriceOracles(token1.address, [oracle, unknown]);
-
-          priceOracles = await dvp.priceOracles(token1.address);
-          assert.equal(priceOracles.length, 2);
-          assert.equal(priceOracles[0], oracle);
-          assert.equal(priceOracles[1], unknown);
-        });
-      });
-      describe('when the caller is an other price oracle', function () {
-        it('sets the operators as token price oracle', async function () {
-          let priceOracles = await dvp.priceOracles(token1.address);
-          assert.equal(priceOracles.length, 0);
-
-          await dvp
-            .connect(await ethers.getSigner(tokenHolder1))
-            .setPriceOracles(token1.address, [oracle]);
-
-          priceOracles = await dvp.priceOracles(token1.address);
-          assert.equal(priceOracles.length, 1);
-          assert.equal(priceOracles[0], oracle);
-
-          await dvp
-            .connect(await ethers.getSigner(oracle))
-            .setPriceOracles(token1.address, [oracle, unknown]);
-
-          priceOracles = await dvp.priceOracles(token1.address);
-          assert.equal(priceOracles.length, 2);
-          assert.equal(priceOracles[0], oracle);
-          assert.equal(priceOracles[1], unknown);
-        });
-      });
-      describe('when the caller is neither the token contract owner nor a token price oracle', function () {
-        it('reverts', async function () {
-          await expectRevert.unspecified(
-            dvp
-              .connect(await ethers.getSigner(tokenHolder2))
-              .setPriceOracles(token1.address, [oracle, unknown])
-          );
-        });
-      });
-    });
-
-    // SET PRICE OWNERSHIP
-    describe('setPriceOwnership', function () {
-      let dvp: Swaps;
-      let token1: ERC20Token;
-      let token2: ERC20Token;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
-
-        token1 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
+            ])
         );
+      });
+    });
+  });
+
+  // SET PRICE ORACLES
+
+  describe('setPriceOracles', function () {
+    let dvp: Swaps;
+    let token1: ERC20Token;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
+
+      token1 = await new ERC20Token__factory(tokenHolder1Signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+    });
+    describe('when the caller is the token contract owner', function () {
+      it('sets the operators as token price oracle', async function () {
+        let priceOracles = await dvp.priceOracles(token1.address);
+        assert.equal(priceOracles.length, 0);
+
         await dvp
-          .connect(await ethers.getSigner(owner))
+          .connect(tokenHolder1Signer)
+          .setPriceOracles(token1.address, [oracle, unknown]);
+
+        priceOracles = await dvp.priceOracles(token1.address);
+        assert.equal(priceOracles.length, 2);
+        assert.equal(priceOracles[0], oracle);
+        assert.equal(priceOracles[1], unknown);
+      });
+    });
+    describe('when the caller is an other price oracle', function () {
+      it('sets the operators as token price oracle', async function () {
+        let priceOracles = await dvp.priceOracles(token1.address);
+        assert.equal(priceOracles.length, 0);
+
+        await dvp
+          .connect(tokenHolder1Signer)
           .setPriceOracles(token1.address, [oracle]);
 
-        token2 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
-        );
+        priceOracles = await dvp.priceOracles(token1.address);
+        assert.equal(priceOracles.length, 1);
+        assert.equal(priceOracles[0], oracle);
+
         await dvp
-          .connect(await ethers.getSigner(owner))
-          .setPriceOracles(token2.address, [unknown]);
-      });
-      describe('when sender is price oracle of the token', function () {
-        it('takes the price ownership for a given token', async function () {
-          assert.equal(
-            await dvp.getPriceOwnership(token1.address, token2.address),
-            false
-          );
+          .connect(oracleSigner)
+          .setPriceOracles(token1.address, [oracle, unknown]);
 
-          await dvp
-            .connect(await ethers.getSigner(oracle))
-            .setPriceOwnership(token1.address, token2.address, true);
-          assert.equal(
-            await dvp.getPriceOwnership(token1.address, token2.address),
-            true
-          );
-
-          await dvp
-            .connect(await ethers.getSigner(oracle))
-            .setPriceOwnership(token1.address, token2.address, false);
-          assert.equal(
-            await dvp.getPriceOwnership(token1.address, token2.address),
-            false
-          );
-        });
-      });
-      describe('when sender is not price oracle of the token', function () {
-        it('reverts', async function () {
-          await expectRevert.unspecified(
-            dvp
-              .connect(await ethers.getSigner(unknown))
-              .setPriceOwnership(token1.address, token2.address, true)
-          );
-        });
+        priceOracles = await dvp.priceOracles(token1.address);
+        assert.equal(priceOracles.length, 2);
+        assert.equal(priceOracles[0], oracle);
+        assert.equal(priceOracles[1], unknown);
       });
     });
-
-    // SET TOKEN PRICE
-    describe('setTokenPrice', function () {
-      const newTokenPrice = 2;
-      let dvp: Swaps;
-      let token1: ERC20Token;
-      let token2: ERC20Token;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
-
-        token1 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
+    describe('when the caller is neither the token contract owner nor a token price oracle', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          dvp
+            .connect(tokenHolder2Signer)
+            .setPriceOracles(token1.address, [oracle, unknown])
         );
-        await dvp
-          .connect(await ethers.getSigner(owner))
-          .setPriceOracles(token1.address, [oracle]);
-
-        token2 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
-        );
-        await dvp
-          .connect(await ethers.getSigner(owner))
-          .setPriceOracles(token2.address, [unknown]);
       });
-      describe('when there is no competition on the price ownership', function () {
-        describe('when the price ownership is taken', function () {
-          describe('when the price ownership is taken by the right person', function () {
-            it('sets the price for token1', async function () {
-              await dvp
-                .connect(await ethers.getSigner(oracle))
-                .setPriceOwnership(token1.address, token2.address, true);
-              assert.equal(
-                await dvp.getPriceOwnership(token1.address, token2.address),
-                true
-              );
-              assert.equal(
-                await dvp.getPriceOwnership(token2.address, token1.address),
-                false
-              );
+    });
+  });
 
-              assert.equal(
-                (
-                  await dvp.getTokenPrice(
-                    token1.address,
-                    token2.address,
-                    partition1,
-                    partition2
-                  )
-                ).eq(0),
-                true
-              );
-              await dvp
-                .connect(await ethers.getSigner(oracle))
-                .setTokenPrice(
-                  token1.address,
-                  token2.address,
-                  partition1,
-                  partition2,
-                  newTokenPrice
-                );
-              assert.equal(
-                (
-                  await dvp.getTokenPrice(
-                    token1.address,
-                    token2.address,
-                    partition1,
-                    partition2
-                  )
-                ).eq(newTokenPrice),
-                true
-              );
-            });
-            it('sets the price for token2', async function () {
-              await dvp
-                .connect(await ethers.getSigner(unknown))
-                .setPriceOwnership(token2.address, token1.address, true);
-              assert.equal(
-                await dvp.getPriceOwnership(token1.address, token2.address),
-                false
-              );
-              assert.equal(
-                await dvp.getPriceOwnership(token2.address, token1.address),
-                true
-              );
+  // SET PRICE OWNERSHIP
+  describe('setPriceOwnership', function () {
+    let dvp: Swaps;
+    let token1: ERC20Token;
+    let token2: ERC20Token;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
 
-              assert.equal(
-                (
-                  await dvp.getTokenPrice(
-                    token1.address,
-                    token2.address,
-                    partition1,
-                    partition2
-                  )
-                ).eq(0),
-                true
-              );
-              await dvp
-                .connect(await ethers.getSigner(unknown))
-                .setTokenPrice(
-                  token1.address,
-                  token2.address,
-                  partition1,
-                  partition2,
-                  newTokenPrice
-                );
-              assert.equal(
-                (
-                  await dvp.getTokenPrice(
-                    token1.address,
-                    token2.address,
-                    partition1,
-                    partition2
-                  )
-                ).eq(newTokenPrice),
-                true
-              );
-            });
-          });
-          describe('when the price ownership is not taken by the right person', function () {
-            it('reverts', async function () {
-              await dvp
-                .connect(await ethers.getSigner(oracle))
-                .setPriceOwnership(token1.address, token2.address, true);
-              assert.equal(
-                await dvp.getPriceOwnership(token1.address, token2.address),
-                true
-              );
-              assert.equal(
-                await dvp.getPriceOwnership(token2.address, token1.address),
-                false
-              );
+      token1 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+      await dvp.connect(signer).setPriceOracles(token1.address, [oracle]);
 
-              await expectRevert.unspecified(
-                dvp
-                  .connect(await ethers.getSigner(unknown))
-                  .setTokenPrice(
-                    token1.address,
-                    token2.address,
-                    partition1,
-                    partition2,
-                    newTokenPrice
-                  )
-              );
-            });
-            it('reverts', async function () {
-              await dvp
-                .connect(await ethers.getSigner(unknown))
-                .setPriceOwnership(token2.address, token1.address, true);
-              assert.equal(
-                await dvp.getPriceOwnership(token1.address, token2.address),
-                false
-              );
-              assert.equal(
-                await dvp.getPriceOwnership(token2.address, token1.address),
-                true
-              );
+      token2 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+      await dvp.connect(signer).setPriceOracles(token2.address, [unknown]);
+    });
+    describe('when sender is price oracle of the token', function () {
+      it('takes the price ownership for a given token', async function () {
+        assert.equal(
+          await dvp.getPriceOwnership(token1.address, token2.address),
+          false
+        );
 
-              await expectRevert.unspecified(
-                dvp
-                  .connect(await ethers.getSigner(oracle))
-                  .setTokenPrice(
-                    token1.address,
-                    token2.address,
-                    partition1,
-                    partition2,
-                    newTokenPrice
-                  )
-              );
-            });
-          });
-        });
-        describe('when the price ownership is not taken', function () {
+        await dvp
+          .connect(oracleSigner)
+          .setPriceOwnership(token1.address, token2.address, true);
+        assert.equal(
+          await dvp.getPriceOwnership(token1.address, token2.address),
+          true
+        );
+
+        await dvp
+          .connect(oracleSigner)
+          .setPriceOwnership(token1.address, token2.address, false);
+        assert.equal(
+          await dvp.getPriceOwnership(token1.address, token2.address),
+          false
+        );
+      });
+    });
+    describe('when sender is not price oracle of the token', function () {
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          dvp
+            .connect(unknownSigner)
+            .setPriceOwnership(token1.address, token2.address, true)
+        );
+      });
+    });
+  });
+
+  // SET TOKEN PRICE
+  describe('setTokenPrice', function () {
+    const newTokenPrice = 2;
+    let dvp: Swaps;
+    let token1: ERC20Token;
+    let token2: ERC20Token;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
+
+      token1 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+      await dvp.connect(signer).setPriceOracles(token1.address, [oracle]);
+
+      token2 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+      await dvp.connect(signer).setPriceOracles(token2.address, [unknown]);
+    });
+    describe('when there is no competition on the price ownership', function () {
+      describe('when the price ownership is taken', function () {
+        describe('when the price ownership is taken by the right person', function () {
           it('sets the price for token1', async function () {
+            await dvp
+              .connect(oracleSigner)
+              .setPriceOwnership(token1.address, token2.address, true);
+            assert.equal(
+              await dvp.getPriceOwnership(token1.address, token2.address),
+              true
+            );
+            assert.equal(
+              await dvp.getPriceOwnership(token2.address, token1.address),
+              false
+            );
+
+            assert.equal(
+              (
+                await dvp.getTokenPrice(
+                  token1.address,
+                  token2.address,
+                  partition1,
+                  partition2
+                )
+              ).eq(0),
+              true
+            );
+            await dvp
+              .connect(oracleSigner)
+              .setTokenPrice(
+                token1.address,
+                token2.address,
+                partition1,
+                partition2,
+                newTokenPrice
+              );
+            assert.equal(
+              (
+                await dvp.getTokenPrice(
+                  token1.address,
+                  token2.address,
+                  partition1,
+                  partition2
+                )
+              ).eq(newTokenPrice),
+              true
+            );
+          });
+          it('sets the price for token2', async function () {
+            await dvp
+              .connect(unknownSigner)
+              .setPriceOwnership(token2.address, token1.address, true);
+            assert.equal(
+              await dvp.getPriceOwnership(token1.address, token2.address),
+              false
+            );
+            assert.equal(
+              await dvp.getPriceOwnership(token2.address, token1.address),
+              true
+            );
+
+            assert.equal(
+              (
+                await dvp.getTokenPrice(
+                  token1.address,
+                  token2.address,
+                  partition1,
+                  partition2
+                )
+              ).eq(0),
+              true
+            );
+            await dvp
+              .connect(unknownSigner)
+              .setTokenPrice(
+                token1.address,
+                token2.address,
+                partition1,
+                partition2,
+                newTokenPrice
+              );
+            assert.equal(
+              (
+                await dvp.getTokenPrice(
+                  token1.address,
+                  token2.address,
+                  partition1,
+                  partition2
+                )
+              ).eq(newTokenPrice),
+              true
+            );
+          });
+        });
+        describe('when the price ownership is not taken by the right person', function () {
+          it('reverts', async function () {
+            await dvp
+              .connect(oracleSigner)
+              .setPriceOwnership(token1.address, token2.address, true);
+            assert.equal(
+              await dvp.getPriceOwnership(token1.address, token2.address),
+              true
+            );
+            assert.equal(
+              await dvp.getPriceOwnership(token2.address, token1.address),
+              false
+            );
+
             await expectRevert.unspecified(
               dvp
-                .connect(await ethers.getSigner(oracle))
+                .connect(unknownSigner)
+                .setTokenPrice(
+                  token1.address,
+                  token2.address,
+                  partition1,
+                  partition2,
+                  newTokenPrice
+                )
+            );
+          });
+          it('reverts', async function () {
+            await dvp
+              .connect(unknownSigner)
+              .setPriceOwnership(token2.address, token1.address, true);
+            assert.equal(
+              await dvp.getPriceOwnership(token1.address, token2.address),
+              false
+            );
+            assert.equal(
+              await dvp.getPriceOwnership(token2.address, token1.address),
+              true
+            );
+
+            await expectRevert.unspecified(
+              dvp
+                .connect(oracleSigner)
                 .setTokenPrice(
                   token1.address,
                   token2.address,
@@ -5348,19 +5337,11 @@ contract(
           });
         });
       });
-      describe('when there is competition on the price ownership', function () {
-        beforeEach(async function () {
-          await dvp
-            .connect(await ethers.getSigner(oracle))
-            .setPriceOwnership(token1.address, token2.address, true);
-          await dvp
-            .connect(await ethers.getSigner(unknown))
-            .setPriceOwnership(token2.address, token1.address, true);
-        });
-        it('reverts', async function () {
+      describe('when the price ownership is not taken', function () {
+        it('sets the price for token1', async function () {
           await expectRevert.unspecified(
             dvp
-              .connect(await ethers.getSigner(oracle))
+              .connect(oracleSigner)
               .setTokenPrice(
                 token1.address,
                 token2.address,
@@ -5372,695 +5353,694 @@ contract(
         });
       });
     });
-
-    // SET VARIABLE PRICE START DATE
-    describe('setVariablePriceStartDate', function () {
-      let dvp: Swaps;
-      let token1: ERC20Token;
+    describe('when there is competition on the price ownership', function () {
       beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
-
-        token1 = await new ERC20Token__factory(signer).deploy(
-          'ERC20Token',
-          'DAU',
-          18
-        );
         await dvp
-          .connect(await ethers.getSigner(owner))
-          .setPriceOracles(token1.address, [oracle]);
+          .connect(oracleSigner)
+          .setPriceOwnership(token1.address, token2.address, true);
+        await dvp
+          .connect(unknownSigner)
+          .setPriceOwnership(token2.address, token1.address, true);
       });
-      describe('when sender is price oracle of the token', function () {
-        describe('when start date is further than a week', function () {
-          it('sets the variable price start date for a given token', async function () {
-            let chainTime = (await ethers.provider.getBlock('latest'))
-              .timestamp;
-            let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
-            assert.equal(
-              (await dvp.variablePriceStartDate(token1.address)).eq(0),
-              true
-            );
-
-            await dvp
-              .connect(await ethers.getSigner(oracle))
-              .setVariablePriceStartDate(
-                token1.address,
-                variablePriceStartDate
-              );
-            assert.equal(
-              (await dvp.variablePriceStartDate(token1.address)).eq(
-                variablePriceStartDate
-              ),
-              true
-            );
-
-            await dvp
-              .connect(await ethers.getSigner(oracle))
-              .setVariablePriceStartDate(token1.address, 0);
-            assert.equal(
-              (await dvp.variablePriceStartDate(token1.address)).eq(0),
-              true
-            );
-          });
-        });
-        describe('when start date is not further than a week', function () {
-          it('reverts', async function () {
-            let chainTime = (await ethers.provider.getBlock('latest'))
-              .timestamp;
-            let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK - 1;
-            await expectRevert.unspecified(
-              dvp
-                .connect(await ethers.getSigner(oracle))
-                .setVariablePriceStartDate(
-                  token1.address,
-                  variablePriceStartDate
-                )
-            );
-          });
-        });
+      it('reverts', async function () {
+        await expectRevert.unspecified(
+          dvp
+            .connect(oracleSigner)
+            .setTokenPrice(
+              token1.address,
+              token2.address,
+              partition1,
+              partition2,
+              newTokenPrice
+            )
+        );
       });
-      describe('when sender is not price oracle of the token', function () {
-        it('reverts', async function () {
+    });
+  });
+
+  // SET VARIABLE PRICE START DATE
+  describe('setVariablePriceStartDate', function () {
+    let dvp: Swaps;
+    let token1: ERC20Token;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
+
+      token1 = await new ERC20Token__factory(signer).deploy(
+        'ERC20Token',
+        'DAU',
+        18
+      );
+      await dvp.connect(signer).setPriceOracles(token1.address, [oracle]);
+    });
+    describe('when sender is price oracle of the token', function () {
+      describe('when start date is further than a week', function () {
+        it('sets the variable price start date for a given token', async function () {
           let chainTime = (await ethers.provider.getBlock('latest')).timestamp;
           let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
+          assert.equal(
+            (await dvp.variablePriceStartDate(token1.address)).eq(0),
+            true
+          );
+
+          await dvp
+            .connect(oracleSigner)
+            .setVariablePriceStartDate(token1.address, variablePriceStartDate);
+          assert.equal(
+            (await dvp.variablePriceStartDate(token1.address)).eq(
+              variablePriceStartDate
+            ),
+            true
+          );
+
+          await dvp
+            .connect(oracleSigner)
+            .setVariablePriceStartDate(token1.address, 0);
+          assert.equal(
+            (await dvp.variablePriceStartDate(token1.address)).eq(0),
+            true
+          );
+        });
+      });
+      describe('when start date is not further than a week', function () {
+        it('reverts', async function () {
+          let chainTime = (await ethers.provider.getBlock('latest')).timestamp;
+          let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK - 1;
           await expectRevert.unspecified(
             dvp
-              .connect(await ethers.getSigner(unknown))
+              .connect(oracleSigner)
               .setVariablePriceStartDate(token1.address, variablePriceStartDate)
           );
         });
       });
     });
-
-    // GET PRICE
-
-    /* const token1Amount = 10; */
-    /* const token2Amount = 400; */
-    /* const token3Amount = 400; */
-    /* const token4Amount = 10; */
-
-    describe('getPrice', function () {
-      const newTokenPrice = 2;
-      let dvp: Swaps;
-      let token1: ERC1400;
-      let token2: ERC1400;
-      beforeEach(async function () {
-        dvp = await new Swaps__factory(signer).deploy(false);
-
-        token1 = await new ERC1400__factory(signer).deploy(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [owner],
-          partitions
+    describe('when sender is not price oracle of the token', function () {
+      it('reverts', async function () {
+        let chainTime = (await ethers.provider.getBlock('latest')).timestamp;
+        let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
+        await expectRevert.unspecified(
+          dvp
+            .connect(unknownSigner)
+            .setVariablePriceStartDate(token1.address, variablePriceStartDate)
         );
-        await token1.issueByPartition(
+      });
+    });
+  });
+
+  // GET PRICE
+
+  /* const token1Amount = 10; */
+  /* const token2Amount = 400; */
+  /* const token3Amount = 400; */
+  /* const token4Amount = 10; */
+
+  describe('getPrice', function () {
+    const newTokenPrice = 2;
+    let dvp: Swaps;
+    let token1: ERC1400;
+    let token2: ERC1400;
+    beforeEach(async function () {
+      dvp = await new Swaps__factory(signer).deploy(false);
+
+      token1 = await new ERC1400__factory(signer).deploy(
+        'ERC1400Token',
+        'DAU',
+        1,
+        [owner],
+        partitions
+      );
+      await token1.issueByPartition(
+        partition1,
+        tokenHolder1,
+        issuanceAmount,
+        MOCK_CERTIFICATE
+      );
+      await dvp.connect(signer).setPriceOracles(token1.address, [oracle]);
+
+      token2 = await new ERC1400__factory(signer).deploy(
+        'ERC1400Token',
+        'DAU',
+        1,
+        [owner],
+        partitions
+      );
+      await token2.issueByPartition(
+        partition2,
+        recipient1,
+        issuanceAmount,
+        MOCK_CERTIFICATE
+      );
+      await dvp.connect(signer).setPriceOracles(token2.address, [unknown]);
+
+      // Create and accept a first trade
+      let chainTime = (await ethers.provider.getBlock('latest')).timestamp;
+      let expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
+      let tradeProposalData = getTradeProposalData(
+        recipient1,
+        executer,
+        expirationDate,
+        0,
+        token2.address,
+        token2Amount,
+        partition2,
+        ERC1400STANDARD,
+        TYPE_ESCROW
+      );
+      await token1
+        .connect(tokenHolder1Signer)
+        .operatorTransferByPartition(
           partition1,
           tokenHolder1,
-          issuanceAmount,
+          dvp.address,
+          token1Amount,
+          tradeProposalData,
           MOCK_CERTIFICATE
         );
-        await dvp
-          .connect(await ethers.getSigner(owner))
-          .setPriceOracles(token1.address, [oracle]);
-
-        token2 = await new ERC1400__factory(signer).deploy(
-          'ERC1400Token',
-          'DAU',
-          1,
-          [owner],
-          partitions
-        );
-        await token2.issueByPartition(
+      let tradeAcceptanceData = getTradeAcceptanceData(1);
+      await token2
+        .connect(recipient1Signer)
+        .operatorTransferByPartition(
           partition2,
           recipient1,
-          issuanceAmount,
-          MOCK_CERTIFICATE
-        );
-        await dvp
-          .connect(await ethers.getSigner(owner))
-          .setPriceOracles(token2.address, [unknown]);
-
-        // Create and accept a first trade
-        let chainTime = (await ethers.provider.getBlock('latest')).timestamp;
-        let expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
-        let tradeProposalData = getTradeProposalData(
-          recipient1,
-          executer,
-          expirationDate,
-          0,
-          token2.address,
+          dvp.address,
           token2Amount,
-          partition2,
-          ERC1400STANDARD,
-          TYPE_ESCROW
+          tradeAcceptanceData,
+          MOCK_CERTIFICATE
         );
-        await token1
-          .connect(await ethers.getSigner(tokenHolder1))
-          .operatorTransferByPartition(
-            partition1,
-            tokenHolder1,
-            dvp.address,
-            token1Amount,
-            tradeProposalData,
-            MOCK_CERTIFICATE
-          );
-        let tradeAcceptanceData = getTradeAcceptanceData(1);
-        await token2
-          .connect(await ethers.getSigner(recipient1))
-          .operatorTransferByPartition(
-            partition2,
-            recipient1,
-            dvp.address,
-            token2Amount,
-            tradeAcceptanceData,
-            MOCK_CERTIFICATE
-          );
 
+      let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
+      assert.equal(
+        (await dvp.variablePriceStartDate(token1.address)).eq(0),
+        true
+      );
+
+      await dvp
+        .connect(oracleSigner)
+        .setVariablePriceStartDate(token1.address, variablePriceStartDate);
+    });
+    describe('when the variable price start date has been set', function () {
+      beforeEach(async function () {
+        let chainTime = (await ethers.provider.getBlock('latest')).timestamp;
         let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
-        assert.equal(
-          (await dvp.variablePriceStartDate(token1.address)).eq(0),
-          true
-        );
-
         await dvp
-          .connect(await ethers.getSigner(oracle))
+          .connect(oracleSigner)
           .setVariablePriceStartDate(token1.address, variablePriceStartDate);
+        // Wait for 1 week
+        await advanceTimeAndBlock(SECONDS_IN_A_WEEK + 100);
       });
-      describe('when the variable price start date has been set', function () {
-        beforeEach(async function () {
-          let chainTime = (await ethers.provider.getBlock('latest')).timestamp;
-          let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
-          await dvp
-            .connect(await ethers.getSigner(oracle))
-            .setVariablePriceStartDate(token1.address, variablePriceStartDate);
-          // Wait for 1 week
-          await advanceTimeAndBlock(SECONDS_IN_A_WEEK + 100);
-        });
-        describe('when there is no competition on the price ownership', function () {
-          describe('when the price ownership is taken', function () {
-            describe('when the first token has more value than the second token', function () {
-              describe('when the price ownership is taken for the first token', function () {
+      describe('when there is no competition on the price ownership', function () {
+        describe('when the price ownership is taken', function () {
+          describe('when the first token has more value than the second token', function () {
+            describe('when the price ownership is taken for the first token', function () {
+              beforeEach(async function () {
+                await dvp
+                  .connect(oracleSigner)
+                  .setPriceOwnership(token1.address, token2.address, true);
+              });
+              describe('when the price is set (case 1)', function () {
+                const multiple2 = 2;
                 beforeEach(async function () {
                   await dvp
-                    .connect(await ethers.getSigner(oracle))
-                    .setPriceOwnership(token1.address, token2.address, true);
+                    .connect(oracleSigner)
+                    .setTokenPrice(
+                      token1.address,
+                      token2.address,
+                      ALL_PARTITIONS,
+                      ALL_PARTITIONS,
+                      multiple2
+                    );
                 });
-                describe('when the price is set (case 1)', function () {
-                  const multiple2 = 2;
+
+                it('returns the updatedprice', async function () {
+                  assert.equal(
+                    (await dvp.getPrice(1)).eq(multiple2 * token1Amount),
+                    true
+                  );
+                });
+
+                describe('when the price is set (case 2)', function () {
+                  const multiple3 = 3;
                   beforeEach(async function () {
                     await dvp
-                      .connect(await ethers.getSigner(oracle))
+                      .connect(oracleSigner)
                       .setTokenPrice(
                         token1.address,
                         token2.address,
                         ALL_PARTITIONS,
-                        ALL_PARTITIONS,
-                        multiple2
+                        partition2,
+                        multiple3
                       );
                   });
                   it('returns the updatedprice', async function () {
                     assert.equal(
-                      (await dvp.getPrice(1)).eq(multiple2 * token1Amount),
+                      (await dvp.getPrice(1)).eq(multiple3 * token1Amount),
                       true
                     );
                   });
-                  describe('when the price is set (case 2)', function () {
-                    const multiple3 = 3;
+                  describe('when the price is set (case 3)', function () {
+                    const multiple4 = 4;
                     beforeEach(async function () {
                       await dvp
-                        .connect(await ethers.getSigner(oracle))
+                        .connect(oracleSigner)
                         .setTokenPrice(
                           token1.address,
                           token2.address,
+                          partition1,
                           ALL_PARTITIONS,
-                          partition2,
-                          multiple3
+                          multiple4
                         );
                     });
                     it('returns the updatedprice', async function () {
                       assert.equal(
-                        (await dvp.getPrice(1)).eq(multiple3 * token1Amount),
+                        (await dvp.getPrice(1)).eq(multiple4 * token1Amount),
                         true
                       );
                     });
-                    describe('when the price is set (case 3)', function () {
-                      const multiple4 = 4;
+                    describe('when the price is set (case 4)', function () {
+                      const multiple5 = 5;
                       beforeEach(async function () {
                         await dvp
-                          .connect(await ethers.getSigner(oracle))
+                          .connect(oracleSigner)
                           .setTokenPrice(
                             token1.address,
                             token2.address,
                             partition1,
-                            ALL_PARTITIONS,
-                            multiple4
+                            partition2,
+                            multiple5
                           );
                       });
                       it('returns the updatedprice', async function () {
                         assert.equal(
-                          (await dvp.getPrice(1)).eq(multiple4 * token1Amount),
+                          (await dvp.getPrice(1)).eq(multiple5 * token1Amount),
                           true
                         );
                       });
-                      describe('when the price is set (case 4)', function () {
-                        const multiple5 = 5;
-                        beforeEach(async function () {
-                          await dvp
-                            .connect(await ethers.getSigner(oracle))
-                            .setTokenPrice(
-                              token1.address,
-                              token2.address,
-                              partition1,
-                              partition2,
-                              multiple5
-                            );
-                        });
-                        it('returns the updatedprice', async function () {
-                          assert.equal(
-                            (await dvp.getPrice(1)).eq(
-                              multiple5 * token1Amount
-                            ),
-                            true
-                          );
-                        });
-                        it('executes the trade at correct price', async function () {
-                          await assertBalanceOfByPartition(
-                            token1,
-                            tokenHolder1,
-                            partition1,
-                            issuanceAmount - token1Amount
-                          );
-                          await assertBalanceOfByPartition(
-                            token1,
-                            dvp.address,
-                            partition1,
-                            token1Amount
-                          );
-                          await assertBalanceOfByPartition(
-                            token1,
-                            recipient1,
-                            partition1,
-                            0
-                          );
-                          await assertBalanceOfByPartition(
-                            token2,
-                            recipient1,
-                            partition2,
-                            issuanceAmount - token2Amount
-                          );
-                          await assertBalanceOfByPartition(
-                            token2,
-                            dvp.address,
-                            partition2,
-                            token2Amount
-                          );
-                          await assertBalanceOfByPartition(
-                            token2,
-                            tokenHolder1,
-                            partition2,
-                            0
-                          );
-                          await dvp
-                            .connect(await ethers.getSigner(executer))
-                            .executeTrade(1);
-                          await assertBalanceOfByPartition(
-                            token1,
-                            tokenHolder1,
-                            partition1,
-                            issuanceAmount - token1Amount
-                          );
-                          await assertBalanceOfByPartition(
-                            token1,
-                            dvp.address,
-                            partition1,
-                            0
-                          );
-                          await assertBalanceOfByPartition(
-                            token1,
-                            recipient1,
-                            partition1,
-                            token1Amount
-                          );
-                          await assertBalanceOfByPartition(
-                            token2,
-                            recipient1,
-                            partition2,
-                            issuanceAmount - multiple5 * token1Amount
-                          );
-                          await assertBalanceOfByPartition(
-                            token2,
-                            dvp.address,
-                            partition2,
-                            0
-                          );
-                          await assertBalanceOfByPartition(
-                            token2,
-                            tokenHolder1,
-                            partition2,
-                            multiple5 * token1Amount
-                          );
-                        });
+                      it('executes the trade at correct price', async function () {
+                        await assertBalanceOfByPartition(
+                          token1,
+                          tokenHolder1,
+                          partition1,
+                          issuanceAmount - token1Amount
+                        );
+                        await assertBalanceOfByPartition(
+                          token1,
+                          dvp.address,
+                          partition1,
+                          token1Amount
+                        );
+                        await assertBalanceOfByPartition(
+                          token1,
+                          recipient1,
+                          partition1,
+                          0
+                        );
+                        await assertBalanceOfByPartition(
+                          token2,
+                          recipient1,
+                          partition2,
+                          issuanceAmount - token2Amount
+                        );
+                        await assertBalanceOfByPartition(
+                          token2,
+                          dvp.address,
+                          partition2,
+                          token2Amount
+                        );
+                        await assertBalanceOfByPartition(
+                          token2,
+                          tokenHolder1,
+                          partition2,
+                          0
+                        );
+                        await dvp.connect(executerSigner).executeTrade(1);
+                        await assertBalanceOfByPartition(
+                          token1,
+                          tokenHolder1,
+                          partition1,
+                          issuanceAmount - token1Amount
+                        );
+                        await assertBalanceOfByPartition(
+                          token1,
+                          dvp.address,
+                          partition1,
+                          0
+                        );
+                        await assertBalanceOfByPartition(
+                          token1,
+                          recipient1,
+                          partition1,
+                          token1Amount
+                        );
+                        await assertBalanceOfByPartition(
+                          token2,
+                          recipient1,
+                          partition2,
+                          issuanceAmount - multiple5 * token1Amount
+                        );
+                        await assertBalanceOfByPartition(
+                          token2,
+                          dvp.address,
+                          partition2,
+                          0
+                        );
+                        await assertBalanceOfByPartition(
+                          token2,
+                          tokenHolder1,
+                          partition2,
+                          multiple5 * token1Amount
+                        );
                       });
                     });
                   });
                 });
-                describe('when the price is not set', function () {
-                  it('returns the price defined in the trade', async function () {
-                    assert.equal(
-                      (await dvp.getPrice(1)).eq(token2Amount),
-                      true
-                    );
-                  });
-                });
               });
-              describe('when the price ownership is taken for the second token', function () {
-                beforeEach(async function () {
-                  await dvp
-                    .connect(await ethers.getSigner(unknown))
-                    .setPriceOwnership(token2.address, token1.address, true);
-                });
-                describe('when the price is set (case 1)', function () {
-                  const multiple2 = 2;
-                  beforeEach(async function () {
-                    await dvp
-                      .connect(await ethers.getSigner(unknown))
-                      .setTokenPrice(
-                        token1.address,
-                        token2.address,
-                        ALL_PARTITIONS,
-                        ALL_PARTITIONS,
-                        multiple2
-                      );
-                  });
-                  it('returns the updatedprice', async function () {
-                    assert.equal(
-                      (await dvp.getPrice(1)).eq(multiple2 * token1Amount),
-                      true
-                    );
-                  });
+              describe('when the price is not set', function () {
+                it('returns the price defined in the trade', async function () {
+                  assert.equal((await dvp.getPrice(1)).eq(token2Amount), true);
                 });
               });
             });
-            describe('when the second token has more value than the first token', function () {
-              let token3: ERC1400;
-              let token4: ERC1400;
+            describe('when the price ownership is taken for the second token', function () {
               beforeEach(async function () {
-                token3 = await new ERC1400__factory(signer).deploy(
-                  'ERC1400Token',
-                  'DAU',
-                  1,
-                  [owner],
-                  partitions
-                );
-                await token3.issueByPartition(
-                  partition1,
-                  tokenHolder1,
-                  issuanceAmount,
-                  MOCK_CERTIFICATE
-                );
-                await dvp.setPriceOracles(token3.address, [oracle]);
-
-                token4 = await new ERC1400__factory(signer).deploy(
-                  'ERC1400Token',
-                  'DAU',
-                  1,
-                  [owner],
-                  partitions
-                );
-                await token4.issueByPartition(
-                  partition2,
-                  recipient1,
-                  issuanceAmount,
-                  MOCK_CERTIFICATE
-                );
-                await dvp.setPriceOracles(token4.address, [unknown]);
-
-                // Create and accept a second trade
-                const chainTime = (await ethers.provider.getBlock('latest'))
-                  .timestamp;
-                const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
-                const tradeProposalData = getTradeProposalData(
-                  recipient1,
-                  executer,
-                  expirationDate,
-                  0,
-                  token4.address,
-                  token4Amount,
-                  partition2,
-                  ERC1400STANDARD,
-                  TYPE_ESCROW
-                );
-                await token3
-                  .connect(await ethers.getSigner(tokenHolder1))
-                  .operatorTransferByPartition(
-                    partition1,
-                    tokenHolder1,
-                    dvp.address,
-                    token3Amount,
-                    tradeProposalData,
-                    MOCK_CERTIFICATE
-                  );
-                const tradeAcceptanceData = getTradeAcceptanceData(2);
-                await token4
-                  .connect(await ethers.getSigner(recipient1))
-                  .operatorTransferByPartition(
-                    partition2,
-                    recipient1,
-                    dvp.address,
-                    token4Amount,
-                    tradeAcceptanceData,
-                    MOCK_CERTIFICATE
-                  );
-
-                let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
                 await dvp
-                  .connect(await ethers.getSigner(oracle))
-                  .setVariablePriceStartDate(
-                    token3.address,
-                    variablePriceStartDate
-                  );
-                // Wait for 1 week
-                await advanceTimeAndBlock(SECONDS_IN_A_WEEK + 100);
+                  .connect(unknownSigner)
+                  .setPriceOwnership(token2.address, token1.address, true);
               });
-              describe('when the price ownership is taken for the first token', function () {
+              describe('when the price is set (case 1)', function () {
+                const multiple2 = 2;
                 beforeEach(async function () {
                   await dvp
-                    .connect(await ethers.getSigner(oracle))
-                    .setPriceOwnership(token3.address, token4.address, true);
+                    .connect(unknownSigner)
+                    .setTokenPrice(
+                      token1.address,
+                      token2.address,
+                      ALL_PARTITIONS,
+                      ALL_PARTITIONS,
+                      multiple2
+                    );
                 });
-                describe('when the price is set (case 1)', function () {
-                  const multiple2 = 2;
+                it('returns the updatedprice', async function () {
+                  assert.equal(
+                    (await dvp.getPrice(1)).eq(multiple2 * token1Amount),
+                    true
+                  );
+                });
+              });
+            });
+          });
+          describe('when the second token has more value than the first token', function () {
+            let token3: ERC1400;
+            let token4: ERC1400;
+            beforeEach(async function () {
+              token3 = await new ERC1400__factory(signer).deploy(
+                'ERC1400Token',
+                'DAU',
+                1,
+                [owner],
+                partitions
+              );
+              await token3.issueByPartition(
+                partition1,
+                tokenHolder1,
+                issuanceAmount,
+                MOCK_CERTIFICATE
+              );
+              await dvp.setPriceOracles(token3.address, [oracle]);
+
+              token4 = await new ERC1400__factory(signer).deploy(
+                'ERC1400Token',
+                'DAU',
+                1,
+                [owner],
+                partitions
+              );
+              await token4.issueByPartition(
+                partition2,
+                recipient1,
+                issuanceAmount,
+                MOCK_CERTIFICATE
+              );
+              await dvp.setPriceOracles(token4.address, [unknown]);
+
+              // Create and accept a second trade
+              const chainTime = (await ethers.provider.getBlock('latest'))
+                .timestamp;
+              const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
+              const tradeProposalData = getTradeProposalData(
+                recipient1,
+                executer,
+                expirationDate,
+                0,
+                token4.address,
+                token4Amount,
+                partition2,
+                ERC1400STANDARD,
+                TYPE_ESCROW
+              );
+              await token3
+                .connect(tokenHolder1Signer)
+                .operatorTransferByPartition(
+                  partition1,
+                  tokenHolder1,
+                  dvp.address,
+                  token3Amount,
+                  tradeProposalData,
+                  MOCK_CERTIFICATE
+                );
+              const tradeAcceptanceData = getTradeAcceptanceData(2);
+              await token4
+                .connect(recipient1Signer)
+                .operatorTransferByPartition(
+                  partition2,
+                  recipient1,
+                  dvp.address,
+                  token4Amount,
+                  tradeAcceptanceData,
+                  MOCK_CERTIFICATE
+                );
+
+              let variablePriceStartDate = chainTime + SECONDS_IN_A_WEEK + 10;
+              await dvp
+                .connect(oracleSigner)
+                .setVariablePriceStartDate(
+                  token3.address,
+                  variablePriceStartDate
+                );
+              // Wait for 1 week
+              await advanceTimeAndBlock(SECONDS_IN_A_WEEK + 100);
+            });
+            describe('when the price ownership is taken for the first token', function () {
+              beforeEach(async function () {
+                await dvp
+                  .connect(oracleSigner)
+                  .setPriceOwnership(token3.address, token4.address, true);
+              });
+              describe('when the price is set (case 1)', function () {
+                const multiple2 = 2;
+                beforeEach(async function () {
+                  await dvp
+                    .connect(oracleSigner)
+                    .setTokenPrice(
+                      token4.address,
+                      token3.address,
+                      ALL_PARTITIONS,
+                      ALL_PARTITIONS,
+                      multiple2
+                    );
+                });
+                it('returns the updatedprice', async function () {
+                  assert.equal(
+                    (await dvp.getPrice(2)).eq(
+                      Math.round(token3Amount / multiple2)
+                    ),
+                    true
+                  );
+                });
+                describe('when the price is set (case 2)', function () {
+                  const multiple3 = 3;
                   beforeEach(async function () {
                     await dvp
-                      .connect(await ethers.getSigner(oracle))
+                      .connect(oracleSigner)
                       .setTokenPrice(
                         token4.address,
                         token3.address,
+                        partition2,
                         ALL_PARTITIONS,
-                        ALL_PARTITIONS,
-                        multiple2
+                        multiple3
                       );
                   });
                   it('returns the updatedprice', async function () {
                     assert.equal(
                       (await dvp.getPrice(2)).eq(
-                        Math.round(token3Amount / multiple2)
+                        Math.round(token3Amount / multiple3)
                       ),
                       true
                     );
                   });
-                  describe('when the price is set (case 2)', function () {
-                    const multiple3 = 3;
+                  describe('when the price is set (case 3)', function () {
+                    const multiple4 = 4;
                     beforeEach(async function () {
                       await dvp
-                        .connect(await ethers.getSigner(oracle))
+                        .connect(oracleSigner)
                         .setTokenPrice(
                           token4.address,
                           token3.address,
-                          partition2,
                           ALL_PARTITIONS,
-                          multiple3
+                          partition1,
+                          multiple4
                         );
                     });
                     it('returns the updatedprice', async function () {
                       assert.equal(
                         (await dvp.getPrice(2)).eq(
-                          Math.round(token3Amount / multiple3)
+                          Math.round(token3Amount / multiple4)
                         ),
                         true
                       );
                     });
-                    describe('when the price is set (case 3)', function () {
-                      const multiple4 = 4;
+                    describe('when the price is set (case 4)', function () {
+                      const multiple5 = 5;
                       beforeEach(async function () {
                         await dvp
-                          .connect(await ethers.getSigner(oracle))
+                          .connect(oracleSigner)
                           .setTokenPrice(
                             token4.address,
                             token3.address,
-                            ALL_PARTITIONS,
+                            partition2,
                             partition1,
-                            multiple4
+                            multiple5
                           );
                       });
                       it('returns the updatedprice', async function () {
                         assert.equal(
                           (await dvp.getPrice(2)).eq(
-                            Math.round(token3Amount / multiple4)
+                            Math.round(token3Amount / multiple5)
                           ),
                           true
                         );
                       });
-                      describe('when the price is set (case 4)', function () {
-                        const multiple5 = 5;
-                        beforeEach(async function () {
-                          await dvp
-                            .connect(await ethers.getSigner(oracle))
-                            .setTokenPrice(
-                              token4.address,
-                              token3.address,
-                              partition2,
-                              partition1,
-                              multiple5
-                            );
-                        });
-                        it('returns the updatedprice', async function () {
-                          assert.equal(
-                            (await dvp.getPrice(2)).eq(
-                              Math.round(token3Amount / multiple5)
-                            ),
-                            true
-                          );
-                        });
-                        it('reverts when price is higher than amount escrowed/authorized', async function () {
-                          await assertBalanceOfByPartition(
-                            token3,
-                            tokenHolder1,
-                            partition1,
-                            issuanceAmount - token3Amount
-                          );
-                          await assertBalanceOfByPartition(
-                            token3,
-                            dvp.address,
-                            partition1,
-                            token3Amount
-                          );
-                          await assertBalanceOfByPartition(
-                            token3,
-                            recipient1,
-                            partition1,
-                            0
-                          );
-                          await assertBalanceOfByPartition(
-                            token4,
-                            recipient1,
-                            partition2,
-                            issuanceAmount - token4Amount
-                          );
-                          await assertBalanceOfByPartition(
-                            token4,
-                            dvp.address,
-                            partition2,
-                            token4Amount
-                          );
-                          await assertBalanceOfByPartition(
-                            token4,
-                            tokenHolder1,
-                            partition2,
-                            0
-                          );
-                          await expectRevert.unspecified(
-                            dvp
-                              .connect(await ethers.getSigner(executer))
-                              .executeTrade(2)
-                          );
-                          // await assertBalanceOfByPartition(token3, tokenHolder1, partition1, issuanceAmount - token3Amount);
-                          // await assertBalanceOfByPartition(token3, dvp.address, partition1, 0);
-                          // await assertBalanceOfByPartition(token3, recipient1, partition1, token3Amount);
-                          // await assertBalanceOfByPartition(token4, recipient1, partition2, issuanceAmount - Math.round(token3Amount/multiple5));
-                          // await assertBalanceOfByPartition(token4, dvp.address, partition2, 0);
-                          // await assertBalanceOfByPartition(token4, tokenHolder1, partition2, Math.round(token3Amount/multiple5));
-                        });
+                      it('reverts when price is higher than amount escrowed/authorized', async function () {
+                        await assertBalanceOfByPartition(
+                          token3,
+                          tokenHolder1,
+                          partition1,
+                          issuanceAmount - token3Amount
+                        );
+                        await assertBalanceOfByPartition(
+                          token3,
+                          dvp.address,
+                          partition1,
+                          token3Amount
+                        );
+                        await assertBalanceOfByPartition(
+                          token3,
+                          recipient1,
+                          partition1,
+                          0
+                        );
+                        await assertBalanceOfByPartition(
+                          token4,
+                          recipient1,
+                          partition2,
+                          issuanceAmount - token4Amount
+                        );
+                        await assertBalanceOfByPartition(
+                          token4,
+                          dvp.address,
+                          partition2,
+                          token4Amount
+                        );
+                        await assertBalanceOfByPartition(
+                          token4,
+                          tokenHolder1,
+                          partition2,
+                          0
+                        );
+                        await expectRevert.unspecified(
+                          dvp.connect(executerSigner).executeTrade(2)
+                        );
+                        // await assertBalanceOfByPartition(token3, tokenHolder1, partition1, issuanceAmount - token3Amount);
+                        // await assertBalanceOfByPartition(token3, dvp.address, partition1, 0);
+                        // await assertBalanceOfByPartition(token3, recipient1, partition1, token3Amount);
+                        // await assertBalanceOfByPartition(token4, recipient1, partition2, issuanceAmount - Math.round(token3Amount/multiple5));
+                        // await assertBalanceOfByPartition(token4, dvp.address, partition2, 0);
+                        // await assertBalanceOfByPartition(token4, tokenHolder1, partition2, Math.round(token3Amount/multiple5));
                       });
                     });
                   });
                 });
-                describe('when the price is not set', function () {
-                  it('returns the price defined in the trade', async function () {
-                    assert.equal(
-                      (await dvp.getPrice(2)).eq(token4Amount),
-                      true
-                    );
-                  });
-                });
               });
-              describe('when the price ownership is taken for the second token', function () {
-                beforeEach(async function () {
-                  await dvp
-                    .connect(await ethers.getSigner(unknown))
-                    .setPriceOwnership(token4.address, token3.address, true);
-                });
-                describe('when the price is set (case 1)', function () {
-                  const multiple2 = 2;
-                  beforeEach(async function () {
-                    await dvp
-                      .connect(await ethers.getSigner(unknown))
-                      .setTokenPrice(
-                        token4.address,
-                        token3.address,
-                        ALL_PARTITIONS,
-                        ALL_PARTITIONS,
-                        multiple2
-                      );
-                  });
-                  it('returns the updatedprice', async function () {
-                    assert.equal(
-                      (await dvp.getPrice(2)).eq(token3Amount / multiple2),
-                      true
-                    );
-                  });
+              describe('when the price is not set', function () {
+                it('returns the price defined in the trade', async function () {
+                  assert.equal((await dvp.getPrice(2)).eq(token4Amount), true);
                 });
               });
             });
-          });
-          describe('when the price ownership is not taken', function () {
-            it('returns the price defined in the trade', async function () {
-              assert.equal((await dvp.getPrice(1)).eq(token2Amount), true);
+            describe('when the price ownership is taken for the second token', function () {
+              beforeEach(async function () {
+                await dvp
+                  .connect(unknownSigner)
+                  .setPriceOwnership(token4.address, token3.address, true);
+              });
+              describe('when the price is set (case 1)', function () {
+                const multiple2 = 2;
+                beforeEach(async function () {
+                  await dvp
+                    .connect(unknownSigner)
+                    .setTokenPrice(
+                      token4.address,
+                      token3.address,
+                      ALL_PARTITIONS,
+                      ALL_PARTITIONS,
+                      multiple2
+                    );
+                });
+                it('returns the updatedprice', async function () {
+                  assert.equal(
+                    (await dvp.getPrice(2)).eq(token3Amount / multiple2),
+                    true
+                  );
+                });
+              });
             });
           });
         });
-        describe('when there is competition on the price ownership', function () {
-          beforeEach(async function () {
-            await dvp
-              .connect(await ethers.getSigner(oracle))
-              .setPriceOwnership(token1.address, token2.address, true);
-            await dvp
-              .connect(await ethers.getSigner(unknown))
-              .setPriceOwnership(token2.address, token1.address, true);
-          });
-          it('reverts', async function () {
-            await expectRevert.unspecified(dvp.getPrice(1));
+        describe('when the price ownership is not taken', function () {
+          it('returns the price defined in the trade', async function () {
+            assert.equal((await dvp.getPrice(1)).eq(token2Amount), true);
           });
         });
       });
-      describe('when the variable price start date has been set', function () {
-        it('returns the non-updated price', async function () {
+      describe('when there is competition on the price ownership', function () {
+        beforeEach(async function () {
           await dvp
-            .connect(await ethers.getSigner(oracle))
+            .connect(oracleSigner)
             .setPriceOwnership(token1.address, token2.address, true);
-          const multiple2 = 2;
           await dvp
-            .connect(await ethers.getSigner(oracle))
-            .setTokenPrice(
-              token1.address,
-              token2.address,
-              ALL_PARTITIONS,
-              ALL_PARTITIONS,
-              multiple2
-            );
-          assert.isTrue((await dvp.getPrice(1)).eq(token2Amount));
+            .connect(unknownSigner)
+            .setPriceOwnership(token2.address, token1.address, true);
+        });
+        it('reverts', async function () {
+          await expectRevert.unspecified(dvp.getPrice(1));
         });
       });
     });
-  }
-);
+    describe('when the variable price start date has been set', function () {
+      it('returns the non-updated price', async function () {
+        await dvp
+          .connect(oracleSigner)
+          .setPriceOwnership(token1.address, token2.address, true);
+        const multiple2 = 2;
+        await dvp
+          .connect(oracleSigner)
+          .setTokenPrice(
+            token1.address,
+            token2.address,
+            ALL_PARTITIONS,
+            ALL_PARTITIONS,
+            multiple2
+          );
+        assert.isTrue((await dvp.getPrice(1)).eq(token2Amount));
+      });
+    });
+  });
+});

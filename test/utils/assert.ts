@@ -1,5 +1,6 @@
 import { BigNumber, BigNumberish, BytesLike, Event } from 'ethers';
-import { assert, ethers } from 'hardhat';
+import { ethers } from 'hardhat';
+import { assert } from 'chai';
 import {
   ERC1400,
   ERC1400HoldableCertificateToken,
@@ -35,9 +36,8 @@ export const ZERO_BYTE = '0x';
 export const ZERO_BYTES32 =
   '0x0000000000000000000000000000000000000000000000000000000000000000';
 
-const OFFCHAIN =
+export const OFFCHAIN =
   '0x0000000000000000000000000000000000000000000000000000000000000000';
-
 export const ETHSTANDARD =
   '0x0000000000000000000000000000000000000000000000000000000000000001';
 export const ERC20STANDARD =
@@ -72,13 +72,17 @@ export const assertBalanceOfByPartition = async (
     _partition,
     _tokenHolder
   );
-  assert.equal(balanceByPartition.eq(_amount), true);
+
+  assert.equal(
+    balanceByPartition.isZero() || balanceByPartition.eq(_amount),
+    true
+  );
 };
 
 export const assertTokenOf = async (
   _contract: ERC721,
   _tokenHolder: string,
-  _tokenId: number
+  _tokenId: BigNumberish
 ) => {
   const ownerOf = await _contract.ownerOf(_tokenId);
 
@@ -236,7 +240,7 @@ export const assertOrder = async (
   _contract: FundIssuer,
   _orderIndex: any,
   _cycleIndex: number,
-  _investor: any,
+  _investor: string,
   _value: number,
   _amount: number,
   _orderType: number,
@@ -259,15 +263,15 @@ export const assertTokenTransferred = async (
   token2: ERC20 | ERC721 | ERC1400 | undefined,
   holder1: any,
   holder2: string,
-  tokenStandard1: string | number,
-  tokenStandard2: string | number,
+  tokenStandard1: BigNumberish,
+  tokenStandard2: BigNumberish,
   tokenAmount1: BigNumberish,
   tokenAmount2: BigNumberish,
   issuanceAmount: BigNumberish,
   issuanceTokenId: number,
   partition: BytesLike
 ) => {
-  if (tokenStandard1 === ERC20STANDARD) {
+  if (BigNumber.from(tokenStandard1).eq(ERC20STANDARD)) {
     await assertBalanceOf(
       token1 as ERC20,
       holder1,
@@ -282,7 +286,7 @@ export const assertTokenTransferred = async (
     );
     await assertBalanceOf(token1 as ERC20, dvp.address, 0, true);
   }
-  if (tokenStandard2 === ERC20STANDARD) {
+  if (BigNumber.from(tokenStandard2).eq(ERC20STANDARD)) {
     await assertBalanceOf(
       token2 as ERC20,
       holder2,
@@ -294,21 +298,21 @@ export const assertTokenTransferred = async (
     await assertBalanceOf(token2 as ERC20, holder1, tokenAmount2, true);
     await assertBalanceOf(token2 as ERC20, dvp.address, 0, true);
   }
-  if (tokenStandard1 === ERC721STANDARD) {
+  if (BigNumber.from(tokenStandard1).eq(ERC721STANDARD)) {
     await assertTokenOf(
       token1 as ERC721,
-      tokenAmount1 === 1 ? holder2 : holder1,
+      BigNumber.from(tokenAmount1).eq(1) ? holder2 : holder1,
       issuanceTokenId
     );
   }
-  if (tokenStandard2 === ERC721STANDARD) {
+  if (BigNumber.from(tokenStandard2).eq(ERC721STANDARD)) {
     await assertTokenOf(
       token2 as ERC721,
-      tokenAmount2 === 1 ? holder1 : holder2,
+      BigNumber.from(tokenAmount2).eq(1) ? holder1 : holder2,
       issuanceTokenId
     );
   }
-  if (tokenStandard1 === ERC1400STANDARD) {
+  if (BigNumber.from(tokenStandard1).eq(ERC1400STANDARD)) {
     await assertBalanceOfByPartition(
       token1 as ERC1400,
       holder1,
@@ -328,7 +332,7 @@ export const assertTokenTransferred = async (
       0
     );
   }
-  if (tokenStandard2 === ERC1400STANDARD) {
+  if (BigNumber.from(tokenStandard2).eq(ERC1400STANDARD)) {
     await assertBalanceOfByPartition(
       token2 as ERC1400,
       holder2,
@@ -358,8 +362,8 @@ export const assertTokenAuthorized = async (
   token2: any,
   holder1: any,
   holder2: any,
-  tokenStandard1: string,
-  tokenStandard2: string,
+  tokenStandard1: BigNumberish,
+  tokenStandard2: BigNumberish,
   tokenAmount1: number,
   tokenAmount2: number,
   issuanceAmount: number,
@@ -381,7 +385,7 @@ export const assertTokenAuthorized = async (
     partition
   );
 
-  if (tokenStandard1 === ERC20STANDARD) {
+  if (BigNumber.from(tokenStandard1).eq(ERC20STANDARD)) {
     await assertERC20Allowance(
       token1 as ERC20,
       holder1,
@@ -389,16 +393,16 @@ export const assertTokenAuthorized = async (
       tokenAmount1
     );
   }
-  if (tokenStandard2 === ERC20STANDARD) {
+  if (BigNumber.from(tokenStandard2).eq(ERC20STANDARD)) {
     await assertERC20Allowance(token2, holder2, dvp.address, tokenAmount2);
   }
-  if (tokenStandard1 === ERC721STANDARD && tokenAmount1 === 1) {
+  if (BigNumber.from(tokenStandard1).eq(ERC721STANDARD) && tokenAmount1 === 1) {
     await assertERC721Allowance(token1 as ERC721, dvp.address, issuanceTokenId);
   }
-  if (tokenStandard2 === ERC721STANDARD && tokenAmount2 === 1) {
+  if (BigNumber.from(tokenStandard2).eq(ERC721STANDARD) && tokenAmount2 === 1) {
     await assertERC721Allowance(token2, dvp.address, issuanceTokenId);
   }
-  if (tokenStandard1 === ERC1400STANDARD) {
+  if (BigNumber.from(tokenStandard1).eq(ERC1400STANDARD)) {
     await assertERC1400Allowance(
       partition,
       token1 as ERC1400,
@@ -407,7 +411,7 @@ export const assertTokenAuthorized = async (
       tokenAmount1
     );
   }
-  if (tokenStandard2 === ERC1400STANDARD) {
+  if (BigNumber.from(tokenStandard2).eq(ERC1400STANDARD)) {
     await assertERC1400Allowance(
       partition,
       token2,
@@ -416,55 +420,55 @@ export const assertTokenAuthorized = async (
       tokenAmount2
     );
   }
-  if (tokenStandard1 === ETHSTANDARD) {
+  if (BigNumber.from(tokenStandard1).eq(ETHSTANDARD)) {
     throw new Error('Shall never happen as ETH needs to be escrowed 1');
   }
-  if (tokenStandard2 === ETHSTANDARD) {
+  if (BigNumber.from(tokenStandard2).eq(ETHSTANDARD)) {
     throw new Error('Shall never happen as ETH needs to be escrowed 2');
   }
 };
 
 export const assertTokenEscrowed = async (
   dvp: Swaps,
-  token: any,
+  token: ERC20 | ERC1400 | ERC721 | undefined,
   holder: string,
-  tokenStandard: string | number,
+  tokenStandard: BigNumberish,
   tokenAmount: BigNumberish,
   issuanceAmount: number,
   issuanceTokenId: number,
   partition: BytesLike
 ) => {
-  if (tokenStandard === ERC20STANDARD) {
+  if (BigNumber.from(tokenStandard).eq(ERC20STANDARD)) {
     await assertBalanceOf(
-      token,
+      token as ERC20,
       holder,
       BigNumber.from(issuanceAmount).sub(tokenAmount),
       true
     );
-    await assertBalanceOf(token, dvp.address, tokenAmount, true);
+    await assertBalanceOf(token as ERC20, dvp.address, tokenAmount, true);
   }
-  if (tokenStandard === ERC721STANDARD) {
+  if (BigNumber.from(tokenStandard).eq(ERC721STANDARD)) {
     await assertTokenOf(
-      token,
-      tokenAmount === 1 ? dvp.address : holder,
+      token as ERC721,
+      BigNumber.from(tokenAmount).eq(1) ? dvp.address : holder,
       issuanceTokenId
     );
   }
-  if (tokenStandard === ERC1400STANDARD) {
+  if (BigNumber.from(tokenStandard).eq(ERC1400STANDARD)) {
     await assertBalanceOfByPartition(
-      token,
+      token as ERC1400,
       holder,
       partition,
       BigNumber.from(issuanceAmount).sub(tokenAmount)
     );
     await assertBalanceOfByPartition(
-      token,
+      token as ERC1400,
       dvp.address,
       partition,
       tokenAmount
     );
   }
-  if (tokenStandard === ETHSTANDARD) {
+  if (BigNumber.from(tokenStandard).eq(ETHSTANDARD)) {
     await assertEtherBalance(dvp.address, tokenAmount, true);
   }
 };
@@ -512,7 +516,7 @@ export const assertGlobalBalancesAreCorrect = async (
           token1,
           holder1,
           tokenStandard1,
-          tokenAmount1 || 1,
+          tokenAmount1.isZero() ? BigNumber.from(1) : tokenAmount1,
           issuanceAmount,
           issuanceTokenId,
           partition1
@@ -581,8 +585,8 @@ export const assertGlobalBalancesAreCorrect = async (
       holder2,
       tokenStandard1,
       tokenStandard2,
-      tokenAmount1 || 1,
-      tokenAmount2 || 1,
+      tokenAmount1.isZero() ? BigNumber.from(1) : tokenAmount1,
+      tokenAmount2.isZero() ? BigNumber.from(1) : tokenAmount2,
       issuanceAmount,
       issuanceTokenId,
       partition1
@@ -599,7 +603,7 @@ export const assertGlobalBalancesAreCorrect = async (
         holder2,
         tokenStandard1,
         tokenStandard2,
-        tokenAmount1 || 1,
+        tokenAmount1.isZero() ? BigNumber.from(1) : tokenAmount1,
         0,
         issuanceAmount,
         issuanceTokenId,
@@ -615,7 +619,7 @@ export const assertGlobalBalancesAreCorrect = async (
         tokenStandard1,
         tokenStandard2,
         0,
-        tokenAmount2 || 1,
+        tokenAmount2.isZero() ? BigNumber.from(1) : tokenAmount2,
         issuanceAmount,
         issuanceTokenId,
         partition1
@@ -675,23 +679,23 @@ export const assertTradeAccepted = async (
 
 export const assertTrade = (
   _contract: Swaps,
-  _tradeIndex: any,
-  _holder1: any,
-  _holder2: any,
-  _executer: any,
-  _expirationDate: any,
+  _tradeIndex: number,
+  _holder1: string,
+  _holder2: string,
+  _executer: string,
+  _expirationDate: number,
   _tradeType: number,
   _tradeState: number,
-  _token1Address: any,
-  _token1Amount: any,
+  _token1Address: string,
+  _token1Amount: BigNumberish,
   _token1Id: string,
-  _token1Standard: string,
+  _token1Standard: BigNumberish,
   _token1Accepted: boolean,
   _token1Approved: boolean,
-  _token2Address: any,
-  _token2Amount: any,
-  _token2Id: any,
-  _token2Standard: any,
+  _token2Address: string,
+  _token2Amount: BigNumberish,
+  _token2Id: string,
+  _token2Standard: BigNumberish,
   _token2Accepted: boolean,
   _token2Approved: boolean
 ) => {
@@ -722,24 +726,24 @@ export const assertTrade = (
 
 export const fullAssertTrade = async (
   _contract: Swaps,
-  _tradeIndex: any,
-  _holder1: any,
-  _holder2: any,
-  _executer: any,
+  _tradeIndex: number,
+  _holder1: string,
+  _holder2: string,
+  _executer: string,
   _expirationDate: number,
-  _tradeType1: any,
-  _tradeType2: any,
+  _tradeType1: number,
+  _tradeType2: number,
   _tradeState: number,
-  _token1Address: any,
+  _token1Address: string,
   _token1Amount: BigNumberish,
   _token1Id: string,
-  _token1Standard: any,
+  _token1Standard: BigNumberish,
   _token1Accepted: boolean,
   _token1Approved: boolean,
-  _token2Address: any,
-  _token2Amount: any,
+  _token2Address: string,
+  _token2Amount: BigNumberish,
   _token2Id: string,
-  _token2Standard: any,
+  _token2Standard: BigNumberish,
   _token2Accepted: boolean,
   _token2Approved: boolean
 ) => {

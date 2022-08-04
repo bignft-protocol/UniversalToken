@@ -1,15 +1,18 @@
-import { artifacts, assert, contract, ethers } from 'hardhat';
+import { ethers } from 'hardhat';
 
 // @ts-ignore
 import { expectRevert } from '@openzeppelin/test-helpers';
 import { assertBalanceOfByPartition, ZERO_BYTE } from './utils/assert';
-
-const BatchTokenIssuer = artifacts.require('BatchTokenIssuer');
-
-const ERC1400HoldableCertificate = artifacts.require(
-  'ERC1400HoldableCertificateToken'
-);
-const ERC1400TokensValidator = artifacts.require('ERC1400TokensValidator');
+import {
+  BatchTokenIssuer,
+  BatchTokenIssuer__factory,
+  ERC1400HoldableCertificateToken,
+  ERC1400HoldableCertificateToken__factory,
+  ERC1400TokensValidator,
+  ERC1400TokensValidator__factory
+} from '../typechain-types';
+import { Signer } from 'ethers';
+import truffleFixture from './truffle-fixture';
 
 const CERTIFICATE_SIGNER = '0xe31C41f0f70C5ff39f73B4B94bcCD767b3071630';
 
@@ -37,49 +40,65 @@ const CERTIFICATE_VALIDATION_DEFAULT = CERTIFICATE_VALIDATION_SALT;
 
 const MAX_NUMBER_OF_ISSUANCES_IN_A_BATCH = 40;
 
-contract('BatchTokenIssuer', ([owner, controller, unknown]) => {
+describe('BatchTokenIssuer', function () {
+  let owner: string;
+  let controller: string;
+  let unknown: string;
+  let signer: Signer;
+  let controllerSigner: Signer;
+  let unknownSigner: Signer;
+  let extension: ERC1400TokensValidator;
+  let token: ERC1400HoldableCertificateToken;
+  let batchIssuer: BatchTokenIssuer;
+  let issuancePartitions: string[];
+  let tokenHolders: string[];
+  let values: number[];
+
   before(async function () {
-    this.extension = await ERC1400TokensValidator.new({
-      from: unknown
-    });
+    await truffleFixture([2]);
+
+    const signers = await ethers.getSigners();
+    [signer, controllerSigner, unknownSigner] = signers;
+    [owner, controller, unknown] = signers.map((s) => s.address);
+
+    extension = await new ERC1400TokensValidator__factory(
+      unknownSigner
+    ).deploy();
   });
 
   beforeEach(async function () {
-    this.token = await ERC1400HoldableCertificate.new(
+    token = await new ERC1400HoldableCertificateToken__factory(
+      controllerSigner
+    ).deploy(
       'ERC1400Token',
       'DAU',
       1,
       [controller],
       [partition1],
-      this.extension.address,
+      extension.address,
       owner,
       CERTIFICATE_SIGNER,
-      CERTIFICATE_VALIDATION_DEFAULT,
-      { from: controller }
+      CERTIFICATE_VALIDATION_DEFAULT
     );
-    this.batchIssuer = await BatchTokenIssuer.new();
+    batchIssuer = await new BatchTokenIssuer__factory(signer).deploy();
 
-    await this.extension.addCertificateSigner(
-      this.token.address,
-      this.batchIssuer.address,
-      {
-        from: controller
-      }
-    );
+    await extension
+      .connect(controllerSigner)
+      .addCertificateSigner(token.address, batchIssuer.address);
 
-    await this.token.addMinter(this.batchIssuer.address, { from: controller });
+    await token.connect(controllerSigner).addMinter(batchIssuer.address);
 
-    this.issuancePartitions = [];
-    this.tokenHolders = [];
-    this.values = [];
+    issuancePartitions = [];
+    tokenHolders = [];
+    values = [];
 
     for (let index = 0; index < MAX_NUMBER_OF_ISSUANCES_IN_A_BATCH; index++) {
       const wallet = ethers.Wallet.createRandom();
-      this.issuancePartitions.push(
+      issuancePartitions.push(
         partitions[Math.floor(Math.random() * partitions.length)]
       );
-      this.tokenHolders.push(wallet.address);
-      this.values.push(index);
+      tokenHolders.push(wallet.address);
+      values.push(index);
     }
   });
 
@@ -89,20 +108,21 @@ contract('BatchTokenIssuer', ([owner, controller, unknown]) => {
     describe('when input is correct', function () {
       describe('when the operator is a minter', function () {
         it('issues tokens for multiple different holders', async function () {
-          await this.batchIssuer.batchIssueByPartition(
-            this.token.address,
-            this.issuancePartitions,
-            this.tokenHolders,
-            this.values,
-            { from: controller }
-          );
+          await batchIssuer
+            .connect(controllerSigner)
+            .batchIssueByPartition(
+              token.address,
+              issuancePartitions,
+              tokenHolders,
+              values
+            );
 
-          for (let i = 0; i < this.issuancePartitions.length; i++) {
+          for (let i = 0; i < issuancePartitions.length; i++) {
             await assertBalanceOfByPartition(
-              this.token,
-              this.tokenHolders[i],
-              this.issuancePartitions[i],
-              this.values[i]
+              token,
+              tokenHolders[i],
+              issuancePartitions[i],
+              values[i]
             );
           }
         });
@@ -110,42 +130,45 @@ contract('BatchTokenIssuer', ([owner, controller, unknown]) => {
       describe('when the operator is not a minter', function () {
         it('reverts', async function () {
           await expectRevert.unspecified(
-            this.batchIssuer.batchIssueByPartition(
-              this.token.address,
-              this.issuancePartitions,
-              this.tokenHolders,
-              this.values,
-              { from: unknown }
-            )
+            batchIssuer
+              .connect(unknownSigner)
+              .batchIssueByPartition(
+                token.address,
+                issuancePartitions,
+                tokenHolders,
+                values
+              )
           );
         });
       });
     });
     describe('when tokenHoler list is not correct', function () {
       it('reverts', async function () {
-        this.tokenHolders.push(unknown);
+        tokenHolders.push(unknown);
         await expectRevert.unspecified(
-          this.batchIssuer.batchIssueByPartition(
-            this.token.address,
-            this.issuancePartitions,
-            this.tokenHolders,
-            this.values,
-            { from: controller }
-          )
+          batchIssuer
+            .connect(controllerSigner)
+            .batchIssueByPartition(
+              token.address,
+              issuancePartitions,
+              tokenHolders,
+              values
+            )
         );
       });
     });
     describe('when values list is not correct', function () {
       it('reverts', async function () {
-        this.values.push(10);
+        values.push(10);
         await expectRevert.unspecified(
-          this.batchIssuer.batchIssueByPartition(
-            this.token.address,
-            this.issuancePartitions,
-            this.tokenHolders,
-            this.values,
-            { from: controller }
-          )
+          batchIssuer
+            .connect(controllerSigner)
+            .batchIssueByPartition(
+              token.address,
+              issuancePartitions,
+              tokenHolders,
+              values
+            )
         );
       });
     });
