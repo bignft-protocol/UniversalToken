@@ -5504,7 +5504,10 @@ contract(
                 await token
                   .connect(await ethers.getSigner(tokenHolder))
                   .authorizeOperator(operator);
-                assert.equal(await token.allowance(tokenHolder, operator), 0);
+                assert.equal(
+                  (await token.allowance(tokenHolder, operator)).toNumber(),
+                  0
+                );
 
                 await token
                   .connect(await ethers.getSigner(operator))
@@ -10594,9 +10597,9 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
 
             const finalBalance = await token.balanceOf(recipient);
 
-            assert.equal(initialBalance, 0);
-            assert.equal(intermediateBalance, holdAmount - 100);
-            assert.equal(finalBalance, holdAmount);
+            assert.equal(initialBalance.toNumber(), 0);
+            assert.equal(intermediateBalance.toNumber(), holdAmount - 100);
+            assert.equal(finalBalance.toNumber(), holdAmount);
 
             holdData = await extension.retrieveHoldData(token.address, holdId);
             assert.equal(holdData[0], partition1);

@@ -505,7 +505,10 @@ contract(
               await token
                 .connect(await ethers.getSigner(tokenHolder))
                 .authorizeOperator(operator);
-              assert.equal(await token.allowance(tokenHolder, operator), 0);
+              assert.equal(
+                (await token.allowance(tokenHolder, operator)).toNumber(),
+                0
+              );
 
               await token
                 .connect(await ethers.getSigner(operator))
@@ -3329,7 +3332,13 @@ contract(
       describe('when sender approves an operator for a given partition', function () {
         it('approves the operator', async function () {
           assert.equal(
-            await token.allowanceByPartition(partition1, tokenHolder, operator),
+            (
+              await token.allowanceByPartition(
+                partition1,
+                tokenHolder,
+                operator
+              )
+            ).toNumber(),
             0
           );
 
