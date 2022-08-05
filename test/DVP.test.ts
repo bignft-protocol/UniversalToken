@@ -1,4 +1,4 @@
-import { ethers } from 'hardhat';
+import { ethers, network } from 'hardhat';
 import { assert } from 'chai';
 import {
   Swaps,
@@ -20,10 +20,13 @@ import {
   numToHexBytes32,
   numToNumBytes32
 } from './utils/bytes';
-
+import { normalizeHardhatNetworkAccountsConfig } from 'hardhat/internal/core/providers/util';
 // @ts-ignore
 import { expectRevert } from '@openzeppelin/test-helpers';
-
+import {
+  HardhatNetworkConfig,
+  HardhatNetworkHDAccountsConfig
+} from 'hardhat/types';
 import { BigNumber, BigNumberish, Signer } from 'ethers';
 import {
   assertBalanceOfByPartition,
@@ -51,6 +54,8 @@ import {
 } from './utils/assert';
 import { extractTokenAmount, extractTokenStandard } from './utils/extract';
 import truffleFixture from './truffle-fixture';
+import { toBuffer } from 'ethereumjs-util';
+import { getSigners } from './common/wallet';
 
 const HEX_TYPE_ESCROW =
   '0x0000000000000000000000000000000000000000000000000000000000000002';
@@ -767,63 +772,35 @@ const cancelTradeRequest = async (
 };
 
 describe('DVP', function () {
-  let signer: Signer;
-  let tokenController1Signer: Signer;
-  let tokenController2Signer: Signer;
-  let executerSigner: Signer;
-  let oracleSigner: Signer;
-  let tokenHolder1Signer: Signer;
-  let tokenHolder2Signer: Signer;
-  let recipient1Signer: Signer;
-  let recipient2Signer: Signer;
-  let unknownSigner: Signer;
+  const signers = getSigners(10);
+  const [
+    signer,
+    tokenController1Signer,
+    tokenController2Signer,
+    executerSigner,
+    oracleSigner,
+    tokenHolder1Signer,
+    tokenHolder2Signer,
+    recipient1Signer,
+    recipient2Signer,
+    unknownSigner
+  ] = signers;
 
-  let owner: string;
-  let tokenController1: string;
-  let tokenController2: string;
-  let executer: string;
-  let oracle: string;
-  let tokenHolder1: string;
-  let tokenHolder2: string;
-  let recipient1: string;
-  let recipient2: string;
-  let unknown: string;
+  const [
+    owner,
+    tokenController1,
+    tokenController2,
+    executer,
+    oracle,
+    tokenHolder1,
+    tokenHolder2,
+    recipient1,
+    recipient2,
+    unknown
+  ] = signers.map((s) => s.address);
 
   before(async function () {
-    const signers = await ethers.getSigners();
-    [
-      signer,
-      tokenController1Signer,
-      tokenController2Signer,
-      executerSigner,
-      oracleSigner,
-      tokenHolder1Signer,
-      tokenHolder2Signer,
-      recipient1Signer,
-      recipient2Signer,
-      unknownSigner
-    ] = signers;
-    [
-      owner,
-      tokenController1,
-      tokenController2,
-      executer,
-      oracle,
-      tokenHolder1,
-      tokenHolder2,
-      recipient1,
-      recipient2,
-      unknown
-    ] = signers.map((s) => s.address);
-
     await truffleFixture([2]);
-
-    // console.log('Owner: ', owner);
-    // console.log('Controller: ', controller);
-    // console.log('TokenHolder1: ', tokenHolder1);
-    // console.log('TokenHolder2: ', tokenHolder2);
-    // console.log('Recipient1: ', recipient1);
-    // console.log('Recipient2: ', recipient2);
   });
 
   // PARAMETERS

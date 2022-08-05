@@ -36,6 +36,7 @@ import {
 } from './utils/assert';
 import { addressToBytes32, numTostringBytes32 } from './utils/bytes';
 import truffleFixture from './truffle-fixture';
+import { getSigners } from './common/wallet';
 
 const ERC1400_TOKENS_RECIPIENT_INTERFACE = 'ERC1400TokensRecipient';
 
@@ -380,57 +381,35 @@ const launchCycleForAssetClass = async (
 };
 
 describe('Fund issuance', function () {
-  let owner: string;
-  let tokenController1: string;
-  let tokenController2: string;
-  let fund: string;
-  let oracle: string;
-  let tokenHolder1: string;
-  let tokenHolder2: string;
-  let recipient1: string;
-  let recipient2: string;
-  let unknown: string;
-
-  let signer: Signer;
-  let tokenController1Signer: Signer;
-  let tokenController2Signer: Signer;
-  let fundSigner: Signer;
-  let oracleSigner: Signer;
-  let tokenHolder1Signer: Signer;
-  let tokenHolder2Signer: Signer;
-  let recipient1Signer: Signer;
-  let recipient2Signer: Signer;
-  let unknownSigner: Signer;
+  const signers = getSigners(10);
+  const [
+    signer,
+    tokenController1Signer,
+    tokenController2Signer,
+    fundSigner,
+    oracleSigner,
+    tokenHolder1Signer,
+    tokenHolder2Signer,
+    recipient1Signer,
+    recipient2Signer,
+    unknownSigner
+  ] = signers;
+  const [
+    owner,
+    tokenController1,
+    tokenController2,
+    fund,
+    oracle,
+    tokenHolder1,
+    tokenHolder2,
+    recipient1,
+    recipient2,
+    unknown
+  ] = signers.map((s) => s.address);
 
   let registry: ERC1820Registry;
 
   before(async function () {
-    const signers = await ethers.getSigners();
-    [
-      signer,
-      tokenController1Signer,
-      tokenController2Signer,
-      fundSigner,
-      oracleSigner,
-      tokenHolder1Signer,
-      tokenHolder2Signer,
-      recipient1Signer,
-      recipient2Signer,
-      unknownSigner
-    ] = signers;
-    [
-      owner,
-      tokenController1,
-      tokenController2,
-      fund,
-      oracle,
-      tokenHolder1,
-      tokenHolder2,
-      recipient1,
-      recipient2,
-      unknown
-    ] = signers.map((s) => s.address);
-
     await truffleFixture([2]);
 
     registry = ERC1820Registry__factory.deployed;

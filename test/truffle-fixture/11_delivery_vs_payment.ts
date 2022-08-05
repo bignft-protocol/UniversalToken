@@ -1,4 +1,5 @@
 import { ethers } from 'hardhat';
+import { getSigners } from '../../test/common/wallet';
 import {
   ERC1820Registry__factory,
   Swaps__factory
@@ -7,7 +8,7 @@ import {
 const DELIVERY_VS_PAYMENT = 'DeliveryVsPayment';
 
 export default async function () {
-  const [owner] = await ethers.getSigners();
+  const [owner] = getSigners(1);
 
   const dvpContract = await new Swaps__factory(owner).deploy(false);
   Swaps__factory.setAsDeployed(dvpContract);

@@ -26,6 +26,7 @@ import {
 } from './utils/assert';
 import { BigNumberish, BytesLike, Signer } from 'ethers';
 import truffleFixture from './truffle-fixture';
+import { getSigners } from './common/wallet';
 
 const ERC1820_ACCEPT_MAGIC = 'ERC1820_ACCEPT_MAGIC';
 
@@ -83,49 +84,33 @@ const issueOnMultiplePartitions = async (
 };
 
 describe('ERC1400', function () {
-  let owner: string;
-  let operator: string;
-  let controller: string;
-  let controller_alternative1: string;
-  let controller_alternative2: string;
-  let tokenHolder: string;
-  let recipient: string;
-  let unknown: string;
+  const signers = getSigners(8);
+  const [
+    signer,
+    operatorSigner,
+    controllerSigner,
+    controller_alternative1Signer,
+    controller_alternative2Signer,
+    tokenHolderSigner,
+    recipientSigner,
+    unknownSigner
+  ] = signers;
 
-  let signer: Signer, operatorSigner: Signer;
-  let controllerSigner: Signer;
-  let controller_alternative1Signer: Signer;
-  let controller_alternative2Signer: Signer;
-  let tokenHolderSigner: Signer;
-  let recipientSigner: Signer;
-  let unknownSigner: Signer;
+  const [
+    owner,
+    operator,
+    controller,
+    controller_alternative1,
+    controller_alternative2,
+    tokenHolder,
+    recipient,
+    unknown
+  ] = signers.map((s) => s.address);
 
   let registry: ERC1820Registry;
 
   before(async function () {
     await truffleFixture([2]);
-    const signers = await ethers.getSigners();
-    [
-      signer,
-      operatorSigner,
-      controllerSigner,
-      controller_alternative1Signer,
-      controller_alternative2Signer,
-      tokenHolderSigner,
-      recipientSigner,
-      unknownSigner
-    ] = signers;
-
-    [
-      owner,
-      operator,
-      controller,
-      controller_alternative1,
-      controller_alternative2,
-      tokenHolder,
-      recipient,
-      unknown
-    ] = signers.map((s) => s.address);
 
     registry = ERC1820Registry__factory.deployed;
   });

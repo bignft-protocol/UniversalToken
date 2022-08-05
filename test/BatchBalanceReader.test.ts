@@ -9,6 +9,7 @@ import {
 } from '../typechain-types';
 import { ZERO_BYTE } from './utils/assert';
 import truffleFixture from './truffle-fixture';
+import { getSigners } from './common/wallet';
 
 const CERTIFICATE_SIGNER = '0xe31C41f0f70C5ff39f73B4B94bcCD767b3071630';
 
@@ -47,19 +48,18 @@ const issuanceAmount42 = 42;
 const issuanceAmount43 = 43;
 
 describe('BatchBalanceReader', function () {
-  let signer: Signer;
-  let controllerSigner: Signer;
-  let tokenHolder1Signer: Signer;
-  let tokenHolder2Signer: Signer;
-  let tokenHolder3Signer: Signer;
-  let unknownSigner: Signer;
+  const signers = getSigners(6);
+  const [
+    signer,
+    controllerSigner,
+    tokenHolder1Signer,
+    tokenHolder2Signer,
+    tokenHolder3Signer,
+    unknownSigner
+  ] = signers;
 
-  let owner: string;
-  let controller: string;
-  let tokenHolder1: string;
-  let tokenHolder2: string;
-  let tokenHolder3: string;
-  let unknown: string;
+  const [owner, controller, tokenHolder1, tokenHolder2, tokenHolder3, unknown] =
+    signers.map((s) => s.address);
 
   let token1: ERC1400;
   let token2: ERC1400;
@@ -68,18 +68,6 @@ describe('BatchBalanceReader', function () {
   before(async function () {
     // require fixture first
     await truffleFixture([2]);
-
-    const signers = await ethers.getSigners();
-    [
-      signer,
-      controllerSigner,
-      tokenHolder1Signer,
-      tokenHolder2Signer,
-      tokenHolder3Signer,
-      unknownSigner
-    ] = signers;
-    [owner, controller, tokenHolder1, tokenHolder2, tokenHolder3, unknown] =
-      signers.map((s) => s.address);
   });
 
   beforeEach(async function () {

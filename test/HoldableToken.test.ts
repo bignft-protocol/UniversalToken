@@ -14,6 +14,7 @@ import {
 } from '../typechain-types';
 import { ZERO_ADDRESS, ZERO_BYTE, ZERO_BYTES32 } from './utils/assert';
 import { Signer } from 'ethers';
+import { getSigners } from './common/wallet';
 
 const HoldStatusCode = Object.freeze({
   Nonexistent: 0,
@@ -26,32 +27,18 @@ const HoldStatusCode = Object.freeze({
 });
 
 describe('Holdable Token', function () {
-  let deployer: string;
-  let sender: string;
-  let holder: string;
-  let recipient: string;
-  let recipient2: string;
-  let notary: string;
-  let deployerSigner: Signer;
-  let senderSigner: Signer;
-  let holderSigner: Signer;
-  let recipientSigner: Signer;
-  let recipient2Signer: Signer;
-  let notarySigner: Signer;
-  before(async () => {
-    const signers = await ethers.getSigners();
-    [
-      deployerSigner,
-      senderSigner,
-      holderSigner,
-      recipientSigner,
-      recipient2Signer,
-      notarySigner
-    ] = signers;
-    [deployer, sender, holder, recipient, recipient2, notary] = signers.map(
-      (s) => s.address
-    );
-  });
+  const signers = getSigners(6);
+  const [
+    deployerSigner,
+    senderSigner,
+    holderSigner,
+    recipientSigner,
+    recipient2Signer,
+    notarySigner
+  ] = signers;
+  const [deployer, sender, holder, recipient, recipient2, notary] = signers.map(
+    (s) => s.address
+  );
 
   describe('Hold and execute by notary before expiration', () => {
     const hashLock = newSecretHashPair();

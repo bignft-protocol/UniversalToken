@@ -23,7 +23,7 @@ const CERTIFICATE_VALIDATION_NONCE = 1;
 const CERTIFICATE_VALIDATION_SALT = 2;
 
 export default async function () {
-  const [owner] = await ethers.getSigners();
+  const owner = ethers.provider.getSigner();
   const erc1400HoldableToken = await new ERC1400HoldableToken__factory(
     owner
   ).deploy(

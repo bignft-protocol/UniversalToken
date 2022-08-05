@@ -13,6 +13,7 @@ import {
 } from '../typechain-types';
 import { Signer } from 'ethers';
 import truffleFixture from './truffle-fixture';
+import { getSigners } from './common/wallet';
 
 const CERTIFICATE_SIGNER = '0xe31C41f0f70C5ff39f73B4B94bcCD767b3071630';
 
@@ -41,12 +42,10 @@ const CERTIFICATE_VALIDATION_DEFAULT = CERTIFICATE_VALIDATION_SALT;
 const MAX_NUMBER_OF_ISSUANCES_IN_A_BATCH = 40;
 
 describe('BatchTokenIssuer', function () {
-  let owner: string;
-  let controller: string;
-  let unknown: string;
-  let signer: Signer;
-  let controllerSigner: Signer;
-  let unknownSigner: Signer;
+  const signers = getSigners(3);
+  const [signer, controllerSigner, unknownSigner] = signers;
+  const [owner, controller, unknown] = signers.map((s) => s.address);
+
   let extension: ERC1400TokensValidator;
   let token: ERC1400HoldableCertificateToken;
   let batchIssuer: BatchTokenIssuer;
@@ -56,10 +55,6 @@ describe('BatchTokenIssuer', function () {
 
   before(async function () {
     await truffleFixture([2]);
-
-    const signers = await ethers.getSigners();
-    [signer, controllerSigner, unknownSigner] = signers;
-    [owner, controller, unknown] = signers.map((s) => s.address);
 
     extension = await new ERC1400TokensValidator__factory(
       unknownSigner

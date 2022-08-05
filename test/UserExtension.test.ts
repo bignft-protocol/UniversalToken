@@ -15,6 +15,7 @@ import {
 } from '../typechain-types';
 import { Signer } from 'ethers';
 import truffleFixture from './truffle-fixture';
+import { getSigners } from './common/wallet';
 
 const ERC1400_TOKENS_SENDER = 'ERC1400TokensSender';
 const ERC1400_TOKENS_RECIPIENT = 'ERC1400TokensRecipient';
@@ -44,33 +45,21 @@ const partitions = [partition1, partition2, partition3];
 const issuanceAmount = 1000;
 
 describe('ERC1400 with sender and recipient hooks', function () {
-  let signer: Signer;
-  let operatorSigner: Signer;
-  let controllerSigner: Signer;
-  let tokenHolderSigner: Signer;
-  let recipientSigner: Signer;
-  let unknownSigner: Signer;
-  let owner: string;
-  let operator: string;
-  let controller: string;
-  let tokenHolder: string;
-  let recipient: string;
-  let unknown: string;
+  const signers = getSigners(6);
+  const [
+    signer,
+    operatorSigner,
+    controllerSigner,
+    tokenHolderSigner,
+    recipientSigner,
+    unknownSigner
+  ] = signers;
+  const [owner, operator, controller, tokenHolder, recipient, unknown] =
+    signers.map((s) => s.address);
+
   let registry: ERC1820Registry;
 
   before(async function () {
-    const signers = await ethers.getSigners();
-    [
-      signer,
-      operatorSigner,
-      controllerSigner,
-      tokenHolderSigner,
-      recipientSigner,
-      unknownSigner
-    ] = signers;
-    [owner, operator, controller, tokenHolder, recipient, unknown] =
-      signers.map((s) => s.address);
-
     await truffleFixture([2]);
 
     registry = ERC1820Registry__factory.deployed;

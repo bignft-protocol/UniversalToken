@@ -1,4 +1,5 @@
 import { ethers } from 'hardhat';
+import { getSigners } from '../../test/common/wallet';
 import {
   BatchTokenIssuer__factory,
   ERC1820Registry__factory
@@ -7,7 +8,7 @@ import {
 const BATCH_ISSUER = 'BatchTokenIssuer';
 
 export default async function () {
-  const [owner] = await ethers.getSigners();
+  const [owner] = getSigners(1);
 
   const batchTokenIssuer = await new BatchTokenIssuer__factory(owner).deploy();
   BatchTokenIssuer__factory.setAsDeployed(batchTokenIssuer);

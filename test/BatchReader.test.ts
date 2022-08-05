@@ -24,6 +24,7 @@ import {
 import { ZERO_ADDRESS, ZERO_BYTE, ZERO_BYTES32 } from './utils/assert';
 import { Signer } from 'ethers';
 import truffleFixture from './truffle-fixture';
+import { getSigners } from './common/wallet';
 
 const partition1_short =
   '7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
@@ -76,25 +77,30 @@ const SECONDS_IN_AN_HOUR = 3600;
 const holdAmount = 6;
 
 describe('BatchReader', function () {
-  let signer: Signer;
-  let controller1Signer: Signer;
-  let controller2Signer: Signer;
-  let controller3Signer: Signer;
-  let deployerSigner: Signer;
-  let tokenHolder1Signer: Signer;
-  let tokenHolder2Signer: Signer;
-  let tokenHolder3Signer: Signer;
-  let unknownSigner: Signer;
+  const signers = getSigners(9);
 
-  let owner: string;
-  let controller1: string;
-  let controller2: string;
-  let controller3: string;
-  let deployer: string;
-  let tokenHolder1: string;
-  let tokenHolder2: string;
-  let tokenHolder3: string;
-  let unknown: string;
+  const [
+    signer,
+    controller1Signer,
+    controller2Signer,
+    controller3Signer,
+    deployerSigner,
+    tokenHolder1Signer,
+    tokenHolder2Signer,
+    tokenHolder3Signer,
+    unknownSigner
+  ] = signers;
+  const [
+    owner,
+    controller1,
+    controller2,
+    controller3,
+    deployer,
+    tokenHolder1,
+    tokenHolder2,
+    tokenHolder3,
+    unknown
+  ] = signers.map((s) => s.address);
 
   let balanceReader: BatchReader;
 
@@ -110,30 +116,6 @@ describe('BatchReader', function () {
   before(async function () {
     // require fixture first
     await truffleFixture([2]);
-
-    const signers = await ethers.getSigners();
-    [
-      signer,
-      controller1Signer,
-      controller2Signer,
-      controller3Signer,
-      deployerSigner,
-      tokenHolder1Signer,
-      tokenHolder2Signer,
-      tokenHolder3Signer,
-      unknownSigner
-    ] = signers;
-    [
-      owner,
-      controller1,
-      controller2,
-      controller3,
-      deployer,
-      tokenHolder1,
-      tokenHolder2,
-      tokenHolder3,
-      unknown
-    ] = signers.map((s) => s.address);
 
     extension = await new ERC1400TokensValidator__factory(
       deployerSigner

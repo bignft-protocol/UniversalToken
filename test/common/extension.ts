@@ -17,7 +17,7 @@ export const setNewExtensionForToken = async (
   _sender: string
 ) => {
   const controllers = await _token.controllers();
-  const signer = await ethers.getSigner(_sender);
+  const signer = ethers.provider.getSigner(_sender);
   await _extension
     .connect(signer)
     .registerTokenSetup(
@@ -48,7 +48,7 @@ export const setCertificateActivated = async (
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = await ethers.getSigner(_sender);
+  const signer = ethers.provider.getSigner(_sender);
   await _extension
     .connect(signer)
     .registerTokenSetup(
@@ -69,7 +69,7 @@ export const setAllowListActivated = async (
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = await ethers.getSigner(_sender);
+  const signer = ethers.provider.getSigner(_sender);
   await _extension
     .connect(signer)
     .registerTokenSetup(
@@ -90,7 +90,7 @@ export const setBlockListActivated = async (
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = await ethers.getSigner(_sender);
+  const signer = ethers.provider.getSigner(_sender);
   await _extension
     .connect(signer)
     .registerTokenSetup(
@@ -111,7 +111,7 @@ export const setGranularityByPartitionActivated = async (
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = await ethers.getSigner(_sender);
+  const signer = ethers.provider.getSigner(_sender);
   await _extension
     .connect(signer)
     .registerTokenSetup(
@@ -132,7 +132,7 @@ export const setHoldsActivated = async (
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = await ethers.getSigner(_sender);
+  const signer = ethers.provider.getSigner(_sender);
   await _extension
     .connect(signer)
     .registerTokenSetup(
@@ -153,7 +153,7 @@ export const addTokenController = async (
   _newController: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = await ethers.getSigner(_sender);
+  const signer = ethers.provider.getSigner(_sender);
   //Need to clone the object since tokenSetup[5] is immutable
   const controllerList = Object.assign([], tokenSetup[5]);
   if (!controllerList.includes(_newController)) {

@@ -12,7 +12,7 @@ const partition3 =
 const partitions = [partition1, partition2, partition3];
 
 export default async function () {
-  const [owner] = await ethers.getSigners();
+  const owner = ethers.provider.getSigner();
   const erc1400Token = await new ERC1400__factory(owner).deploy(
     'ERC1400Token',
     'DAU',

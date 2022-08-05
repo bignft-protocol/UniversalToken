@@ -1,4 +1,5 @@
 import { ethers } from 'hardhat';
+import { getSigners } from '../../test/common/wallet';
 import {
   ERC1820Registry__factory,
   FundIssuer__factory
@@ -7,7 +8,7 @@ import {
 const FUND_ISSUER = 'FundIssuer';
 
 export default async function () {
-  const [owner] = await ethers.getSigners();
+  const [owner] = getSigners(1);
 
   const fundIssuer = await new FundIssuer__factory(owner).deploy();
   FundIssuer__factory.setAsDeployed(fundIssuer);

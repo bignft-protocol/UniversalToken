@@ -1,4 +1,5 @@
 import { ethers } from 'hardhat';
+import { getSigners } from '../../test/common/wallet';
 import {
   BatchReader__factory,
   ERC1820Registry__factory,
@@ -9,7 +10,7 @@ const BALANCE_READER = 'BatchBalanceReader';
 const READER = 'BatchReader';
 
 export default async function () {
-  const [owner] = await ethers.getSigners();
+  const [owner] = getSigners(1);
 
   const batchReader = await new BatchReader__factory(owner).deploy();
   BatchReader__factory.setAsDeployed(batchReader);

@@ -1,39 +1,22 @@
 import { ethers } from 'hardhat';
+import { getSigners } from '../../test/common/wallet';
 
 type Args = {
-  mnemonic: string;
   num: number;
   amount: string;
 };
 
-export default async function ({ mnemonic, num = 10, amount = '0' }: Args) {
-  if (!mnemonic && process.env.MNEMONIC) mnemonic = process.env.MNEMONIC;
-
-  const signer = ethers.Wallet.fromMnemonic(
-    mnemonic,
-    `m/44'/60'/0'/0/0`
-  ).connect(ethers.provider);
-
-  console.log(
-    await signer.getAddress(),
-    signer.privateKey,
-    await signer.getBalance()
-  );
+export default async function ({ num = 10, amount = '0' }: Args) {
+  //
+  const signers = getSigners(num + 1);
 
   const sendAmount = ethers.utils.parseEther(amount);
 
-  const wallets = [];
-  for (let i = 1; i <= num; i++) {
-    const wallet = ethers.Wallet.fromMnemonic(
-      mnemonic,
-      `m/44'/60'/0'/0/${i}`
-    ).connect(ethers.provider);
-
-    const recipientAddress = await wallet.getAddress();
-    if (!sendAmount.isZero()) {
+  if (!sendAmount.isZero()) {
+    for (let i = 1; i <= num; i++) {
       // wait 1 block confirm
-      const res = await signer.sendTransaction({
-        to: recipientAddress,
+      const res = await signers[0].sendTransaction({
+        to: signers[0].address,
         value: sendAmount
       });
       // last transaction need confirm block
@@ -41,16 +24,10 @@ export default async function ({ mnemonic, num = 10, amount = '0' }: Args) {
         await res.wait();
       }
     }
-    wallets.push(wallet);
   }
 
-  for (let i = 1; i <= num; i++) {
-    const wallet = wallets[i - 1];
-    console.log(
-      i,
-      await wallet.getAddress(),
-      wallet.privateKey,
-      await wallet.getBalance()
-    );
+  for (let i = 0; i <= num; i++) {
+    const signer = signers[i];
+    console.log(i, signer.address, await signer.getBalance());
   }
 }

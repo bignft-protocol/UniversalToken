@@ -61,6 +61,7 @@ import {
 import { BigNumber, Signer } from 'ethers';
 import { numberToHexa } from './utils/bytes';
 import truffleFixture from './truffle-fixture';
+import { getSigners } from './common/wallet';
 
 const ERC1400_TOKENS_VALIDATOR = 'ERC1400TokensValidator';
 const ERC1400_TOKENS_CHECKER = 'ERC1400TokensChecker';
@@ -312,27 +313,31 @@ const craftSaltBasedCertificate = async (
 };
 
 describe('ERC1400HoldableCertificate with token extension', function () {
-  let deployer: string;
-  let owner: string;
-  let operator: string;
-  let controller: string;
-  let tokenHolder: string;
-  let recipient: string;
-  let notary: string;
-  let unknown: string;
-  let tokenController1: string;
-  let tokenController2: string;
-
-  let deployerSigner: Signer;
-  let signer: Signer;
-  let operatorSigner: Signer;
-  let controllerSigner: Signer;
-  let tokenHolderSigner: Signer;
-  let recipientSigner: Signer;
-  let notarySigner: Signer;
-  let unknownSigner: Signer;
-  let tokenController1Signer: Signer;
-  let tokenController2Signer: Signer;
+  const signers = getSigners(10);
+  const [
+    deployerSigner,
+    signer,
+    operatorSigner,
+    controllerSigner,
+    tokenHolderSigner,
+    recipientSigner,
+    notarySigner,
+    unknownSigner,
+    tokenController1Signer,
+    tokenController2Signer
+  ] = signers;
+  const [
+    deployer,
+    owner,
+    operator,
+    controller,
+    tokenHolder,
+    recipient,
+    notary,
+    unknown,
+    tokenController1,
+    tokenController2
+  ] = signers.map((s) => s.address);
 
   let extension: ERC1400TokensValidator;
   let clock: ClockMock;
@@ -340,32 +345,6 @@ describe('ERC1400HoldableCertificate with token extension', function () {
   let token: ERC1400HoldableCertificateToken;
 
   before(async function () {
-    const signers = await ethers.getSigners();
-    [
-      deployerSigner,
-      signer,
-      operatorSigner,
-      controllerSigner,
-      tokenHolderSigner,
-      recipientSigner,
-      notarySigner,
-      unknownSigner,
-      tokenController1Signer,
-      tokenController2Signer
-    ] = signers;
-    [
-      deployer,
-      owner,
-      operator,
-      controller,
-      tokenHolder,
-      recipient,
-      notary,
-      unknown,
-      tokenController1,
-      tokenController2
-    ] = signers.map((s) => s.address);
-
     await truffleFixture([2]);
 
     registry = ERC1820Registry__factory.deployed;
