@@ -1,15 +1,16 @@
 // @ts-nocheck
 
 import { ethers, network } from 'hardhat';
+import { HARDHAT_NETWORK_NAME } from 'hardhat/plugins';
 
 // ---------- Module to accelerate time -----------------------
 export const advanceTime = (time: any) => {
-  if (network.name !== 'hardhat') return;
+  if (network.name !== HARDHAT_NETWORK_NAME) return;
   return ethers.provider.send('evm_increaseTime', [time]);
 };
 
 export const advanceBlock = () => {
-  if (network.name !== 'hardhat') return;
+  if (network.name !== HARDHAT_NETWORK_NAME) return;
   return ethers.provider.send('evm_mine', []);
 };
 
@@ -20,12 +21,12 @@ export const advanceTimeAndBlock = async (time: any) => {
 };
 
 export const takeSnapshot = () => {
-  if (network.name !== 'hardhat') return;
+  if (network.name !== HARDHAT_NETWORK_NAME) return;
   return ethers.provider.send('evm_snapshot', []);
 };
 
 export const revertToSnapshot = (snapShotId: any) => {
-  if (network.name !== 'hardhat') return;
+  if (network.name !== HARDHAT_NETWORK_NAMM) return;
   return ethers.provider.send('evm_revert', [snapShotId]);
 };
 
