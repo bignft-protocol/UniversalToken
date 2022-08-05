@@ -8,10 +8,18 @@ import 'solidity-coverage';
 import 'hardhat-contract-sizer';
 import path from 'path';
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
-const accounts = PRIVATE_KEY ? [PRIVATE_KEY] : [];
-if (process.env.PRIVATE_KEYS_EXTRAS) {
-  accounts.push(...process.env.PRIVATE_KEYS_EXTRAS.split(/\s*,\s*/));
+let accounts: any;
+
+if (process.env.MNEMONIC) {
+  accounts = {
+    mnemonic: process.env.MNEMONIC,
+    path: "m/44'/60'/0'/0",
+    initialIndex: 0,
+    count: 20,
+    passphrase: ''
+  };
+} else if (process.env.PRIVATE_KEY) {
+  accounts = process.env.PRIVATE_KEY.split(/\s*,\s*/);
 }
 
 const config: HardhatUserConfig = {
