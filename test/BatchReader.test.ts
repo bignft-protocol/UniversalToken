@@ -187,53 +187,33 @@ describe('BatchReader', function () {
     await addTokenController(
       extension2,
       token3,
-      await signer.getAddress(),
+      signer,
       await controller1Signer.getAddress()
     );
     await addTokenController(
       extension2,
       token3,
-      await signer.getAddress(),
+      signer,
       await controller2Signer.getAddress()
     );
 
     // Deactivate allowlist checks
-    await setAllowListActivated(
-      extension,
-      token1,
-      await controller1Signer.getAddress(),
-      false
-    );
-    await setAllowListActivated(
-      extension,
-      token2,
-      await controller1Signer.getAddress(),
-      false
-    );
+    await setAllowListActivated(extension, token1, controller1Signer, false);
+    await setAllowListActivated(extension, token2, controller1Signer, false);
 
     // Deactivate blocklist checks
-    await setBlockListActivated(
-      extension,
-      token2,
-      await controller1Signer.getAddress(),
-      false
-    );
+    await setBlockListActivated(extension, token2, controller1Signer, false);
 
     // Deactivate granularity by partition checks
     await setGranularityByPartitionActivated(
       extension,
       token1,
-      await controller1Signer.getAddress(),
+      controller1Signer,
       false
     );
 
     // Deactivate holds
-    await setHoldsActivated(
-      extension2,
-      token3,
-      await signer.getAddress(),
-      false
-    );
+    await setHoldsActivated(extension2, token3, signer, false);
 
     // Token1
     await token1

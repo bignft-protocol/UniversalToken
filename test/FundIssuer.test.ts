@@ -28,13 +28,15 @@ import {
   assertCycleAssetValue,
   assertCycleState,
   assertOrder,
+  assertRevert,
   ZERO_ADDRESS,
   ZERO_BYTE,
   ZERO_BYTES32
 } from './utils/assert';
 import { addressToBytes32, numTostringBytes32 } from './utils/bytes';
 import truffleFixture from './truffle-fixture';
-import { getSigners } from './common/wallet';
+import { getSigners, provider } from './common/wallet';
+import { PromiseOrValue } from 'typechain-types/common';
 
 const ERC1400_TOKENS_RECIPIENT_INTERFACE = 'ERC1400TokensRecipient';
 
@@ -172,7 +174,7 @@ const getOrderPaymentData = (orderIndex: number, isFake: boolean = false) => {
 const setAssetRules = async (
   _contract: FundIssuer,
   _issuerSigner: Signer,
-  _assetAddress: string,
+  _assetAddress: PromiseOrValue<string>,
   _assetClass: string,
   _firstStartTime: number | undefined,
   _subscriptionPeriodLength: number | undefined,
@@ -184,7 +186,7 @@ const setAssetRules = async (
   _fundAddress: string,
   _subscriptionsOpened: boolean
 ) => {
-  const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
+  const chainTime = (await provider.getBlock('latest')).timestamp;
   const firstStartTime = _firstStartTime || chainTime + 20;
   const subscriptionPeriodLength =
     _subscriptionPeriodLength || DEFAULT_SUBSCRIPTION_PERIOD_LENGTH;
@@ -222,7 +224,7 @@ const setAssetRules = async (
     0,
     _paymentType,
     _paymentAddress,
-    _paymentPartition,
+    _paymentPartition.toString(),
     _fundAddress,
     _subscriptionsOpened
   );
@@ -287,19 +289,22 @@ const subscribe = async (
   ).toNumber();
 
   if (_newCycle) {
-    assert.equal(currentNumberOfCycles, initialNumberOfCycles + 1);
-    assert.equal(currentIndexOfAssetCycle, initialNumberOfCycles + 1);
+    assert.strictEqual(currentNumberOfCycles, initialNumberOfCycles + 1);
+    assert.strictEqual(currentIndexOfAssetCycle, initialNumberOfCycles + 1);
   } else {
-    assert.equal(currentNumberOfCycles, initialNumberOfCycles);
-    assert.equal(currentIndexOfAssetCycle, initialIndexOfAssetCycle);
+    assert.strictEqual(currentNumberOfCycles, initialNumberOfCycles);
+    assert.strictEqual(currentIndexOfAssetCycle, initialIndexOfAssetCycle);
   }
 
   const currentNumberOfOrders = (await _contract.getNbOrders()).toNumber();
   const currentInvestorOrders = await _contract.getInvestorOrders(
     _investorSigner.getAddress()
   );
-  assert.equal(currentNumberOfOrders, initialNumberOfOrders + 1);
-  assert.equal(currentInvestorOrders.length, initialInvestorOrders.length + 1);
+  assert.strictEqual(currentNumberOfOrders, initialNumberOfOrders + 1);
+  assert.strictEqual(
+    currentInvestorOrders.length,
+    initialInvestorOrders.length + 1
+  );
 
   const cycleIndex = (
     await _contract.getLastCycleIndex(_assetAddress, _assetClass)
@@ -330,7 +335,7 @@ const launchCycleForAssetClass = async (
   _paymentPartition: any,
   _subscriptionsOpened: any
 ) => {
-  const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
+  const chainTime = (await provider.getBlock('latest')).timestamp;
   const firstStartTime = _firstStartTime || chainTime;
   const subscriptionPeriodLength =
     _subscriptionPeriodLength || SECONDS_IN_A_WEEK;
@@ -359,8 +364,11 @@ const launchCycleForAssetClass = async (
   const currentNumberOfAssetCycles = (
     await _contract.getLastCycleIndex(_assetAddress, _assetClass)
   ).toNumber();
-  assert.equal(currentNumberOfCycles, initialNumberOfCycles + 1);
-  assert.equal(initialNumberOfAssetCycles, currentNumberOfAssetCycles + 1);
+  assert.strictEqual(currentNumberOfCycles, initialNumberOfCycles + 1);
+  assert.strictEqual(
+    initialNumberOfAssetCycles,
+    currentNumberOfAssetCycles + 1
+  );
 
   await assertCycle(
     _contract,
@@ -379,7 +387,6 @@ const launchCycleForAssetClass = async (
 };
 
 describe('Fund issuance', function () {
-  const signers = getSigners(10);
   const [
     signer,
     tokenController1Signer,
@@ -391,19 +398,7 @@ describe('Fund issuance', function () {
     recipient1Signer,
     recipient2Signer,
     unknownSigner
-  ] = signers;
-  const [
-    owner,
-    tokenController1,
-    tokenController2,
-    fund,
-    oracle,
-    tokenHolder1,
-    tokenHolder2,
-    recipient1,
-    recipient2,
-    unknown
-  ] = signers.map((s) => s.address);
+  ] = getSigners(10);
 
   let registry: ERC1820Registry;
 
@@ -424,7 +419,7 @@ describe('Fund issuance', function () {
         'ERC1400Token',
         'DAU',
         1,
-        [owner],
+        [signer.getAddress()],
         partitions
       );
       fic = await new FundIssuer__factory(signer).deploy();
@@ -443,7 +438,7 @@ describe('Fund issuance', function () {
       //   _paymentType,
       //   _paymentAddress,
       //   _paymentPartition,
-      //   fund,
+      //   fundSigner.getAddress(),
       //   true
       // );
     });
@@ -462,7 +457,7 @@ describe('Fund issuance', function () {
             ETH_PAYMENT,
             ZERO_ADDRESS,
             ZERO_BYTES32,
-            fund,
+            await fundSigner.getAddress(),
             true
           );
 
@@ -476,7 +471,7 @@ describe('Fund issuance', function () {
             tokenHolder1Signer,
             INIT_RULES_FALSE,
             tokenController1Signer,
-            fund,
+            await fundSigner.getAddress(),
             NEW_CYCLE_CREATED_TRUE
           );
         });
@@ -529,7 +524,9 @@ describe('Fund issuance', function () {
                     describe('when order state is Subscribed', function () {
                       it('updates the order state to Paid', async function () {
                         const currentInvestorOrders =
-                          await fic.getInvestorOrders(tokenHolder1);
+                          await fic.getInvestorOrders(
+                            tokenHolder1Signer.getAddress()
+                          );
                         const orderIndex =
                           currentInvestorOrders[
                             currentInvestorOrders.length - 1
@@ -545,7 +542,7 @@ describe('Fund issuance', function () {
                           fic,
                           orderIndex,
                           1,
-                          tokenHolder1,
+                          await tokenHolder1Signer.getAddress(),
                           0,
                           amount,
                           TYPE_AMOUNT,
@@ -562,7 +559,7 @@ describe('Fund issuance', function () {
                           fic,
                           orderIndex,
                           1,
-                          tokenHolder1,
+                          await tokenHolder1Signer.getAddress(),
                           value,
                           amount,
                           TYPE_AMOUNT,
@@ -670,7 +667,7 @@ describe('Fund issuance', function () {
         'ERC1400Token',
         'DAU',
         1,
-        [owner],
+        [signer.getAddress()],
         partitions
       );
       fic = await new FundIssuer__factory(signer).deploy();
@@ -684,7 +681,7 @@ describe('Fund issuance', function () {
         tokenHolder1Signer,
         INIT_RULES_TRUE,
         tokenController1Signer,
-        fund,
+        await fundSigner.getAddress(),
         NEW_CYCLE_CREATED_TRUE
       );
     });
@@ -697,7 +694,9 @@ describe('Fund issuance', function () {
                 describe('when we are in the subscription period', function () {
                   it('rejects the order', async function () {
                     const orderIndex = (
-                      await fic.getInvestorOrders(tokenHolder1)
+                      await fic.getInvestorOrders(
+                        tokenHolder1Signer.getAddress()
+                      )
                     )[0].toNumber();
                     const cycleIndex = (
                       await fic.getLastCycleIndex(asset.address, partition1)
@@ -706,7 +705,7 @@ describe('Fund issuance', function () {
                       fic,
                       orderIndex,
                       cycleIndex,
-                      tokenHolder1,
+                      await tokenHolder1Signer.getAddress(),
                       0,
                       1000,
                       TYPE_AMOUNT,
@@ -719,7 +718,7 @@ describe('Fund issuance', function () {
                       fic,
                       orderIndex,
                       cycleIndex,
-                      tokenHolder1,
+                      await tokenHolder1Signer.getAddress(),
                       0,
                       1000,
                       TYPE_AMOUNT,
@@ -730,7 +729,9 @@ describe('Fund issuance', function () {
                 describe('when we are in the valuation period', function () {
                   it('rejects the order', async function () {
                     const orderIndex = (
-                      await fic.getInvestorOrders(tokenHolder1)
+                      await fic.getInvestorOrders(
+                        tokenHolder1Signer.getAddress()
+                      )
                     )[0].toNumber();
                     const cycleIndex = (
                       await fic.getLastCycleIndex(asset.address, partition1)
@@ -739,7 +740,7 @@ describe('Fund issuance', function () {
                       fic,
                       orderIndex,
                       cycleIndex,
-                      tokenHolder1,
+                      await tokenHolder1Signer.getAddress(),
                       0,
                       1000,
                       TYPE_AMOUNT,
@@ -772,7 +773,7 @@ describe('Fund issuance', function () {
                       fic,
                       orderIndex,
                       cycleIndex,
-                      tokenHolder1,
+                      await tokenHolder1Signer.getAddress(),
                       0,
                       1000,
                       TYPE_AMOUNT,
@@ -788,7 +789,7 @@ describe('Fund issuance', function () {
             describe('when the order rejection needs to be cancelled', function () {
               it('cancels the rejection', async function () {
                 const orderIndex = (
-                  await fic.getInvestorOrders(tokenHolder1)
+                  await fic.getInvestorOrders(tokenHolder1Signer.getAddress())
                 )[0].toNumber();
                 const cycleIndex = (
                   await fic.getLastCycleIndex(asset.address, partition1)
@@ -797,7 +798,7 @@ describe('Fund issuance', function () {
                   fic,
                   orderIndex,
                   cycleIndex,
-                  tokenHolder1,
+                  await tokenHolder1Signer.getAddress(),
                   0,
                   1000,
                   TYPE_AMOUNT,
@@ -810,7 +811,7 @@ describe('Fund issuance', function () {
                   fic,
                   orderIndex,
                   cycleIndex,
-                  tokenHolder1,
+                  await tokenHolder1Signer.getAddress(),
                   0,
                   1000,
                   TYPE_AMOUNT,
@@ -823,7 +824,7 @@ describe('Fund issuance', function () {
                   fic,
                   orderIndex,
                   cycleIndex,
-                  tokenHolder1,
+                  await tokenHolder1Signer.getAddress(),
                   0,
                   1000,
                   TYPE_AMOUNT,
@@ -883,7 +884,7 @@ describe('Fund issuance', function () {
           fic.address,
           ethers.utils.id(ERC1400_TOKENS_RECIPIENT_INTERFACE)
         );
-        assert.equal(interfaceFundImplementer, fic.address);
+        assert.strictEqual(interfaceFundImplementer, fic.address);
       });
     });
   });
@@ -901,7 +902,7 @@ describe('Fund issuance', function () {
           ethers.utils.id(ERC1400_TOKENS_RECIPIENT_INTERFACE),
           ZERO_ADDRESS
         );
-        assert.equal(ERC1820_ACCEPT_MAGIC, canImplement);
+        assert.strictEqual(ERC1820_ACCEPT_MAGIC, canImplement);
       });
     });
     describe('when interface hash is not correct', function () {
@@ -910,7 +911,7 @@ describe('Fund issuance', function () {
           ethers.utils.id('FakeInterfaceName'),
           ZERO_ADDRESS
         );
-        assert.equal(ZERO_BYTES32, canImplement);
+        assert.strictEqual(ZERO_BYTES32, canImplement);
       });
     });
   });
@@ -928,7 +929,7 @@ describe('Fund issuance', function () {
         'ERC1400Token',
         'DAU',
         1,
-        [owner],
+        [signer.getAddress()],
         partitions
       );
       orderCreationFlag = getOrderCreationData(
@@ -948,14 +949,14 @@ describe('Fund issuance', function () {
               const answer = await fic.canReceive(
                 '0x00000000',
                 partition1,
-                unknown,
-                unknown,
-                unknown,
+                unknownSigner.getAddress(),
+                unknownSigner.getAddress(),
+                unknownSigner.getAddress(),
                 1,
                 orderCreationFlag,
                 MOCK_CERTIFICATE
               );
-              assert.isFalse(answer);
+              assert.strictEqual(answer, false);
             });
           });
           describe('when data is formatted for an order payment', function () {
@@ -963,15 +964,15 @@ describe('Fund issuance', function () {
               const answer = await fic.canReceive(
                 '0x00000000',
                 partition1,
-                unknown,
-                unknown,
-                unknown,
+                unknownSigner.getAddress(),
+                unknownSigner.getAddress(),
+                unknownSigner.getAddress(),
                 1,
                 orderPaymentFlag,
                 MOCK_CERTIFICATE
               );
 
-              assert.isTrue(answer);
+              assert.strictEqual(answer, true);
             });
           });
           describe('when data is formatted for a hook bypass', function () {
@@ -979,14 +980,14 @@ describe('Fund issuance', function () {
               const answer = await fic.canReceive(
                 '0x00000000',
                 partition1,
-                unknown,
-                unknown,
-                unknown,
+                unknownSigner.getAddress(),
+                unknownSigner.getAddress(),
+                unknownSigner.getAddress(),
                 1,
                 bypassFlag,
                 MOCK_CERTIFICATE
               );
-              assert.isTrue(answer);
+              assert.strictEqual(answer, true);
             });
           });
         });
@@ -995,14 +996,14 @@ describe('Fund issuance', function () {
             const answer = await fic.canReceive(
               '0x00000000',
               partition1,
-              unknown,
-              unknown,
-              unknown,
+              unknownSigner.getAddress(),
+              unknownSigner.getAddress(),
+              unknownSigner.getAddress(),
               1,
               partitionFlag,
               MOCK_CERTIFICATE
             );
-            assert.isFalse(answer);
+            assert.strictEqual(answer, false);
           });
         });
       });
@@ -1011,15 +1012,15 @@ describe('Fund issuance', function () {
           const answer = await fic.canReceive(
             '0x00000000',
             partition1,
-            unknown,
-            unknown,
-            unknown,
+            unknownSigner.getAddress(),
+            unknownSigner.getAddress(),
+            unknownSigner.getAddress(),
             1,
             orderPaymentFlag.substring(0, orderPaymentFlag.length - 2),
             MOCK_CERTIFICATE
           );
 
-          assert.isFalse(answer);
+          assert.strictEqual(answer, false);
         });
       });
     });
@@ -1028,14 +1029,14 @@ describe('Fund issuance', function () {
         const answer = await fic.canReceive(
           '0x00000000',
           partition1,
-          unknown,
-          unknown,
-          unknown,
+          unknownSigner.getAddress(),
+          unknownSigner.getAddress(),
+          unknownSigner.getAddress(),
           1,
           orderPaymentFlag,
           ZERO_BYTE
         );
-        assert.isFalse(answer);
+        assert.strictEqual(answer, false);
       });
     });
   });
@@ -1050,7 +1051,7 @@ describe('Fund issuance', function () {
         'ERC1400Token',
         'DAU',
         1,
-        [owner],
+        [signer.getAddress()],
         partitions
       );
       fic = await new FundIssuer__factory(signer).deploy();
@@ -1072,7 +1073,7 @@ describe('Fund issuance', function () {
                 OFF_CHAIN_PAYMENT,
                 ZERO_ADDRESS,
                 ZERO_BYTES32,
-                fund,
+                await fundSigner.getAddress(),
                 true
               );
             });
@@ -1091,14 +1092,19 @@ describe('Fund issuance', function () {
                 OFF_CHAIN_PAYMENT,
                 ZERO_ADDRESS,
                 ZERO_BYTES32,
-                fund,
+                await fundSigner.getAddress(),
                 true
               );
               const paymentToken = await new ERC1400__factory(
                 tokenController1Signer
-              ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
-              const chainTime = (await ethers.provider.getBlock('latest'))
-                .timestamp;
+              ).deploy(
+                'ERC1400Token',
+                'DAU',
+                1,
+                [signer.getAddress()],
+                partitions
+              );
+              const chainTime = (await provider.getBlock('latest')).timestamp;
               await setAssetRules(
                 fic,
                 tokenController1Signer,
@@ -1111,7 +1117,7 @@ describe('Fund issuance', function () {
                 ERC1400_PAYMENT,
                 paymentToken.address,
                 partition3,
-                tokenHolder2,
+                await tokenHolder2Signer.getAddress(),
                 false
               );
             });
@@ -1120,8 +1126,7 @@ describe('Fund issuance', function () {
         describe('when periods are not valid', function () {
           describe('when subscriptionPeriodLength is nil', function () {
             it('reverts', async function () {
-              const chainTime = (await ethers.provider.getBlock('latest'))
-                .timestamp;
+              const chainTime = (await provider.getBlock('latest')).timestamp;
               await assertRevert(
                 fic
                   .connect(tokenController1Signer)
@@ -1135,7 +1140,7 @@ describe('Fund issuance', function () {
                     OFF_CHAIN_PAYMENT,
                     ZERO_ADDRESS,
                     ZERO_BYTES32,
-                    fund,
+                    fundSigner.getAddress(),
                     true
                   )
               );
@@ -1143,8 +1148,7 @@ describe('Fund issuance', function () {
           });
           describe('when valuationPeriodLength is nil', function () {
             it('reverts', async function () {
-              const chainTime = (await ethers.provider.getBlock('latest'))
-                .timestamp;
+              const chainTime = (await provider.getBlock('latest')).timestamp;
               await assertRevert(
                 fic
                   .connect(tokenController1Signer)
@@ -1158,7 +1162,7 @@ describe('Fund issuance', function () {
                     OFF_CHAIN_PAYMENT,
                     ZERO_ADDRESS,
                     ZERO_BYTES32,
-                    fund,
+                    fundSigner.getAddress(),
                     true
                   )
               );
@@ -1166,8 +1170,7 @@ describe('Fund issuance', function () {
           });
           describe('when paymentPeriodLength is nil', function () {
             it('reverts', async function () {
-              const chainTime = (await ethers.provider.getBlock('latest'))
-                .timestamp;
+              const chainTime = (await provider.getBlock('latest')).timestamp;
               await assertRevert(
                 fic
                   .connect(tokenController1Signer)
@@ -1181,7 +1184,7 @@ describe('Fund issuance', function () {
                     OFF_CHAIN_PAYMENT,
                     ZERO_ADDRESS,
                     ZERO_BYTES32,
-                    fund,
+                    fundSigner.getAddress(),
                     true
                   )
               );
@@ -1191,8 +1194,7 @@ describe('Fund issuance', function () {
       });
       describe('when first start time is not valid', function () {
         it('reverts', async function () {
-          const chainTime = (await ethers.provider.getBlock('latest'))
-            .timestamp;
+          const chainTime = (await provider.getBlock('latest')).timestamp;
 
           await assertRevert(
             setAssetRules(
@@ -1207,7 +1209,7 @@ describe('Fund issuance', function () {
               OFF_CHAIN_PAYMENT,
               ZERO_ADDRESS,
               ZERO_BYTES32,
-              fund,
+              await fundSigner.getAddress(),
               true
             )
           );
@@ -1216,7 +1218,7 @@ describe('Fund issuance', function () {
     });
     describe('when caller is not the token controller', function () {
       it('reverts', async function () {
-        const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
+        const chainTime = (await provider.getBlock('latest')).timestamp;
         await assertRevert(
           setAssetRules(
             fic,
@@ -1230,7 +1232,7 @@ describe('Fund issuance', function () {
             OFF_CHAIN_PAYMENT,
             ZERO_ADDRESS,
             ZERO_BYTES32,
-            fund,
+            await fundSigner.getAddress(),
             true
           )
         );
@@ -1248,7 +1250,7 @@ describe('Fund issuance', function () {
         'ERC1400Token',
         'DAU',
         1,
-        [owner],
+        [signer.getAddress()],
         partitions
       );
       fic = await new FundIssuer__factory(signer).deploy();
@@ -1269,7 +1271,7 @@ describe('Fund issuance', function () {
                   tokenHolder1Signer,
                   INIT_RULES_TRUE,
                   tokenController1Signer,
-                  fund,
+                  await fundSigner.getAddress(),
                   NEW_CYCLE_CREATED_TRUE
                 );
                 await subscribe(
@@ -1282,7 +1284,7 @@ describe('Fund issuance', function () {
                   tokenHolder2Signer,
                   INIT_RULES_FALSE,
                   tokenController1Signer,
-                  fund,
+                  await fundSigner.getAddress(),
                   NEW_CYCLE_CREATED_FALSE
                 );
               });
@@ -1309,7 +1311,7 @@ describe('Fund issuance', function () {
                   tokenHolder1Signer,
                   INIT_RULES_TRUE,
                   tokenController1Signer,
-                  fund,
+                  await fundSigner.getAddress(),
                   NEW_CYCLE_CREATED_TRUE
                 )
               );
@@ -1329,7 +1331,7 @@ describe('Fund issuance', function () {
                 tokenHolder1Signer,
                 INIT_RULES_TRUE,
                 tokenController1Signer,
-                fund,
+                await fundSigner.getAddress(),
                 NEW_CYCLE_CREATED_TRUE
               );
             });
@@ -1347,7 +1349,7 @@ describe('Fund issuance', function () {
                   tokenHolder1Signer,
                   INIT_RULES_TRUE,
                   tokenController1Signer,
-                  fund,
+                  await fundSigner.getAddress(),
                   NEW_CYCLE_CREATED_TRUE
                 )
               );
@@ -1357,8 +1359,7 @@ describe('Fund issuance', function () {
       });
       describe('when the current period is not a subscription period (before first start time)', function () {
         it('reverts', async function () {
-          const chainTime = (await ethers.provider.getBlock('latest'))
-            .timestamp;
+          const chainTime = (await provider.getBlock('latest')).timestamp;
 
           await setAssetRules(
             fic,
@@ -1372,7 +1373,7 @@ describe('Fund issuance', function () {
             OFF_CHAIN_PAYMENT,
             ZERO_ADDRESS,
             ZERO_BYTES32,
-            fund,
+            await fundSigner.getAddress(),
             true
           );
 
@@ -1387,7 +1388,7 @@ describe('Fund issuance', function () {
               tokenHolder1Signer,
               INIT_RULES_FALSE,
               tokenController1Signer,
-              fund,
+              await fundSigner.getAddress(),
               NEW_CYCLE_CREATED_TRUE
             )
           );
@@ -1409,7 +1410,7 @@ describe('Fund issuance', function () {
                 tokenHolder1Signer,
                 INIT_RULES_TRUE,
                 tokenController1Signer,
-                fund,
+                await fundSigner.getAddress(),
                 NEW_CYCLE_CREATED_TRUE
               );
             });
@@ -1424,7 +1425,7 @@ describe('Fund issuance', function () {
                 tokenHolder1Signer,
                 INIT_RULES_TRUE,
                 tokenController1Signer,
-                fund,
+                await fundSigner.getAddress(),
                 NEW_CYCLE_CREATED_TRUE
               );
               await subscribe(
@@ -1437,12 +1438,18 @@ describe('Fund issuance', function () {
                 tokenHolder2Signer,
                 INIT_RULES_FALSE,
                 tokenController1Signer,
-                fund,
+                await fundSigner.getAddress(),
                 NEW_CYCLE_CREATED_FALSE
               );
               const asset2 = await new ERC1400__factory(
                 tokenController2Signer
-              ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
+              ).deploy(
+                'ERC1400Token',
+                'DAU',
+                1,
+                [signer.getAddress()],
+                partitions
+              );
               await subscribe(
                 fic,
                 asset2.address,
@@ -1453,7 +1460,7 @@ describe('Fund issuance', function () {
                 tokenHolder2Signer,
                 INIT_RULES_TRUE,
                 tokenController2Signer,
-                fund,
+                await fundSigner.getAddress(),
                 NEW_CYCLE_CREATED_TRUE
               );
             });
@@ -1470,7 +1477,7 @@ describe('Fund issuance', function () {
                 tokenHolder1Signer,
                 INIT_RULES_TRUE,
                 tokenController1Signer,
-                fund,
+                await fundSigner.getAddress(),
                 NEW_CYCLE_CREATED_TRUE
               );
 
@@ -1501,7 +1508,7 @@ describe('Fund issuance', function () {
                 tokenHolder2Signer,
                 INIT_RULES_FALSE,
                 tokenController1Signer,
-                fund,
+                await fundSigner.getAddress(),
                 NEW_CYCLE_CREATED_TRUE
               );
             });
@@ -1521,7 +1528,7 @@ describe('Fund issuance', function () {
               OFF_CHAIN_PAYMENT,
               ZERO_ADDRESS,
               ZERO_BYTES32,
-              fund,
+              await fundSigner.getAddress(),
               false
             );
 
@@ -1536,7 +1543,7 @@ describe('Fund issuance', function () {
                 tokenHolder1Signer,
                 INIT_RULES_FALSE,
                 tokenController1Signer,
-                fund,
+                await fundSigner.getAddress(),
                 NEW_CYCLE_CREATED_TRUE
               )
             );
@@ -1556,7 +1563,7 @@ describe('Fund issuance', function () {
               tokenHolder1Signer,
               INIT_RULES_FALSE,
               tokenController1Signer,
-              fund,
+              await fundSigner.getAddress(),
               NEW_CYCLE_CREATED_TRUE
             )
           );
@@ -1575,7 +1582,7 @@ describe('Fund issuance', function () {
         'ERC1400Token',
         'DAU',
         1,
-        [owner],
+        [signer.getAddress()],
         partitions
       );
       fic = await new FundIssuer__factory(signer).deploy();
@@ -1589,7 +1596,7 @@ describe('Fund issuance', function () {
         tokenHolder1Signer,
         INIT_RULES_TRUE,
         tokenController1Signer,
-        fund,
+        await fundSigner.getAddress(),
         NEW_CYCLE_CREATED_TRUE
       );
     });
@@ -1599,7 +1606,7 @@ describe('Fund issuance', function () {
           describe('when order has not been paid yet', function () {
             it('cancels the order', async function () {
               const orderIndex = (
-                await fic.getInvestorOrders(tokenHolder1)
+                await fic.getInvestorOrders(tokenHolder1Signer.getAddress())
               )[0].toNumber();
               const cycleIndex = (
                 await fic.getLastCycleIndex(asset.address, partition1)
@@ -1608,7 +1615,7 @@ describe('Fund issuance', function () {
                 fic,
                 orderIndex,
                 cycleIndex,
-                tokenHolder1,
+                await tokenHolder1Signer.getAddress(),
                 0,
                 1000,
                 TYPE_AMOUNT,
@@ -1625,7 +1632,7 @@ describe('Fund issuance', function () {
                 fic,
                 orderIndex,
                 cycleIndex,
-                tokenHolder1,
+                await tokenHolder1Signer.getAddress(),
                 0,
                 1000,
                 TYPE_AMOUNT,
@@ -1640,7 +1647,7 @@ describe('Fund issuance', function () {
         describe('when message sender is not the investor', function () {
           it('reverts', async function () {
             const orderIndex = (
-              await fic.getInvestorOrders(tokenHolder1)
+              await fic.getInvestorOrders(tokenHolder1Signer.getAddress())
             )[0].toNumber();
             await assertRevert(
               fic.connect(tokenHolder2Signer).cancelOrder(orderIndex)
@@ -1668,7 +1675,7 @@ describe('Fund issuance', function () {
           );
 
           const orderIndex = (
-            await fic.getInvestorOrders(tokenHolder1)
+            await fic.getInvestorOrders(tokenHolder1Signer.getAddress())
           )[0].toNumber();
           await assertRevert(
             fic.connect(tokenHolder1Signer).cancelOrder(orderIndex)
@@ -1719,7 +1726,7 @@ describe('Fund issuance', function () {
         'ERC1400Token',
         'DAU',
         1,
-        [owner],
+        [signer.getAddress()],
         partitions
       );
       fic = await new FundIssuer__factory(signer).deploy();
@@ -1733,7 +1740,7 @@ describe('Fund issuance', function () {
         tokenHolder1Signer,
         INIT_RULES_TRUE,
         tokenController1Signer,
-        fund,
+        await fundSigner.getAddress(),
         NEW_CYCLE_CREATED_TRUE
       );
     });
@@ -1886,7 +1893,7 @@ describe('Fund issuance', function () {
         it('set the valuation', async function () {
           const asset2 = await new ERC1400__factory(
             tokenController1Signer
-          ).deploy('ERC1400Token', 'DAU', 1, [owner], partitions);
+          ).deploy('ERC1400Token', 'DAU', 1, [signer.getAddress()], partitions);
           const fic2 = await new FundIssuer__factory(signer).deploy();
           await setAssetRules(
             fic2,
@@ -1900,7 +1907,7 @@ describe('Fund issuance', function () {
             OFF_CHAIN_PAYMENT,
             ZERO_ADDRESS,
             ZERO_BYTES32,
-            fund,
+            await fundSigner.getAddress(),
             true
           );
           await fic2

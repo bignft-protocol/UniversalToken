@@ -1,8 +1,8 @@
+import { ethers } from 'ethers';
 import {
   ERC1400HoldableCertificateToken,
   ERC1400TokensValidator
 } from '../../typechain-types';
-import { getSigner } from './wallet';
 
 export const ERC1400_TOKENS_VALIDATOR = 'ERC1400TokensValidator';
 
@@ -14,12 +14,12 @@ export const CERTIFICATE_VALIDATION_DEFAULT = CERTIFICATE_VALIDATION_SALT;
 export const setNewExtensionForToken = async (
   _extension: ERC1400TokensValidator,
   _token: ERC1400HoldableCertificateToken,
-  _sender: string
+  _senderSigner: ethers.Signer
 ) => {
   const controllers = await _token.controllers();
-  const signer = getSigner(_sender);
+
   await _extension
-    .connect(signer)
+    .connect(_senderSigner)
     .registerTokenSetup(
       _token.address,
       CERTIFICATE_VALIDATION_DEFAULT,
@@ -31,7 +31,7 @@ export const setNewExtensionForToken = async (
     );
 
   await _token
-    .connect(signer)
+    .connect(_senderSigner)
     .setTokenExtension(
       _extension.address,
       ERC1400_TOKENS_VALIDATOR,
@@ -44,13 +44,12 @@ export const setNewExtensionForToken = async (
 export const setCertificateActivated = async (
   _extension: ERC1400TokensValidator,
   _token: ERC1400HoldableCertificateToken,
-  _sender: string,
+  _senderSigner: ethers.Signer,
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = getSigner(_sender);
   await _extension
-    .connect(signer)
+    .connect(_senderSigner)
     .registerTokenSetup(
       _token.address,
       _value,
@@ -65,13 +64,13 @@ export const setCertificateActivated = async (
 export const setAllowListActivated = async (
   _extension: ERC1400TokensValidator,
   _token: ERC1400HoldableCertificateToken,
-  _sender: string,
+  _senderSigner: ethers.Signer,
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = getSigner(_sender);
+
   await _extension
-    .connect(signer)
+    .connect(_senderSigner)
     .registerTokenSetup(
       _token.address,
       tokenSetup[0],
@@ -86,13 +85,13 @@ export const setAllowListActivated = async (
 export const setBlockListActivated = async (
   _extension: ERC1400TokensValidator,
   _token: ERC1400HoldableCertificateToken,
-  _sender: string,
+  _senderSigner: ethers.Signer,
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = getSigner(_sender);
+
   await _extension
-    .connect(signer)
+    .connect(_senderSigner)
     .registerTokenSetup(
       _token.address,
       tokenSetup[0],
@@ -107,13 +106,13 @@ export const setBlockListActivated = async (
 export const setGranularityByPartitionActivated = async (
   _extension: ERC1400TokensValidator,
   _token: ERC1400HoldableCertificateToken,
-  _sender: string,
+  _senderSigner: ethers.Signer,
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = getSigner(_sender);
+
   await _extension
-    .connect(signer)
+    .connect(_senderSigner)
     .registerTokenSetup(
       _token.address,
       tokenSetup[0],
@@ -128,13 +127,13 @@ export const setGranularityByPartitionActivated = async (
 export const setHoldsActivated = async (
   _extension: ERC1400TokensValidator,
   _token: ERC1400HoldableCertificateToken,
-  _sender: string,
+  _senderSigner: ethers.Signer,
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = getSigner(_sender);
+
   await _extension
-    .connect(signer)
+    .connect(_senderSigner)
     .registerTokenSetup(
       _token.address,
       tokenSetup[0],
@@ -149,18 +148,18 @@ export const setHoldsActivated = async (
 export const addTokenController = async (
   _extension: ERC1400TokensValidator,
   _token: ERC1400HoldableCertificateToken,
-  _sender: string,
+  _senderSigner: ethers.Signer,
   _newController: string
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = getSigner(_sender);
+
   //Need to clone the object since tokenSetup[5] is immutable
   const controllerList = Object.assign([], tokenSetup[5]);
   if (!controllerList.includes(_newController)) {
     controllerList.push(_newController);
   }
   await _extension
-    .connect(signer)
+    .connect(_senderSigner)
     .registerTokenSetup(
       _token.address,
       tokenSetup[0],

@@ -13,7 +13,6 @@ import {
   ERC20HoldableToken__factory
 } from '../typechain-types';
 import { ZERO_ADDRESS, ZERO_BYTE, ZERO_BYTES32 } from './utils/assert';
-import { Signer } from 'ethers';
 import { getSigners } from './common/wallet';
 
 const HoldStatusCode = Object.freeze({
@@ -27,7 +26,6 @@ const HoldStatusCode = Object.freeze({
 });
 
 describe('Holdable Token', function () {
-  const signers = getSigners(6);
   const [
     deployerSigner,
     senderSigner,
@@ -35,10 +33,7 @@ describe('Holdable Token', function () {
     recipientSigner,
     recipient2Signer,
     notarySigner
-  ] = signers;
-  const [deployer, sender, holder, recipient, recipient2, notary] = signers.map(
-    (s) => s.address
-  );
+  ] = getSigners(6);
 
   describe('Hold and execute by notary before expiration', () => {
     const hashLock = newSecretHashPair();
@@ -58,20 +53,47 @@ describe('Holdable Token', function () {
       await revertToSnapshot(snapshotId);
     });
     it('Mint 1000 tokens to holder', async () => {
-      assert.equal((await token.totalSupply()).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 0);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 0);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        0
+      );
       const receipt = await token
         .connect(deployerSigner)
-        .mint(holder, 1000)
+        .mint(holderSigner.getAddress(), 1000)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(deployer)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 1000);
-      assert.equal((await token.spendableBalanceOf(sender)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(recipient2)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(notary)).toNumber(), 0);
-      assert.equal((await token.totalSupply()).toNumber(), 1000);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(deployerSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        1000
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(senderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipient2Signer.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(notarySigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 1000);
     });
     it('Failed hold from notary with zero address', async () => {
       try {
@@ -80,7 +102,7 @@ describe('Holdable Token', function () {
           .hold(
             ZERO_BYTE +
               Buffer.from(ethers.utils.randomBytes(32)).toString('hex'),
-            recipient2,
+            recipient2Signer.getAddress(),
             ZERO_ADDRESS,
             900,
             inOneHour,
@@ -88,14 +110,25 @@ describe('Holdable Token', function () {
           );
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /notary must not be a zero address/
         );
-        assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-        assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-        assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(recipientSigner.getAddress())
+          ).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+          0
+        );
       }
     });
     it('Failed hold from a zero amount', async () => {
@@ -105,22 +138,33 @@ describe('Holdable Token', function () {
           .hold(
             ZERO_BYTE +
               Buffer.from(ethers.utils.randomBytes(32)).toString('hex'),
-            recipient2,
-            notary,
+            recipient2Signer.getAddress(),
+            notarySigner.getAddress(),
             0,
             inOneHour,
             hashLock.hash
           );
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /amount must be greater than zero/
         );
-        assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-        assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-        assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(recipientSigner.getAddress())
+          ).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+          0
+        );
       }
     });
     it('Recipient can not hold as they have no tokens', async () => {
@@ -130,22 +174,33 @@ describe('Holdable Token', function () {
           .hold(
             ZERO_BYTE +
               Buffer.from(ethers.utils.randomBytes(32)).toString('hex'),
-            recipient2,
-            notary,
+            recipient2Signer.getAddress(),
+            notarySigner.getAddress(),
             900,
             inOneHour,
             hashLock.hash
           );
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /amount exceeds available balance/
         );
-        assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-        assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-        assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(recipientSigner.getAddress())
+          ).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+          0
+        );
       }
     });
     it('Holder can not hold more than what they own', async () => {
@@ -155,22 +210,33 @@ describe('Holdable Token', function () {
           .hold(
             ZERO_BYTE +
               Buffer.from(ethers.utils.randomBytes(32)).toString('hex'),
-            recipient,
-            notary,
+            recipientSigner.getAddress(),
+            notarySigner.getAddress(),
             1001,
             inOneHour,
             hashLock.hash
           );
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /amount exceeds available balance/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 1000);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 1000);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          1000
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          1000
+        );
       }
     });
     it('Holder holds 900 tokens for the recipient with a lock hash', async () => {
@@ -178,43 +244,106 @@ describe('Holdable Token', function () {
         ZERO_BYTE + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
       const receipt = await token
         .connect(holderSigner)
-        .hold(holdId, recipient, notary, 900, inOneHour, hashLock.hash)
+        .hold(
+          holdId,
+          recipientSigner.getAddress(),
+          notarySigner.getAddress(),
+          900,
+          inOneHour,
+          hashLock.hash
+        )
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.lengthOf(receipt.logs, 1);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(receipt.logs.length, 1);
       assert.match(holdId, bytes32);
-      assert.equal(await token.holdStatus(holdId), HoldStatusCode.Held);
-      assert.equal((await token.spendableBalanceOf(deployer)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 100);
-      assert.equal((await token.spendableBalanceOf(sender)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(recipient2)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(notary)).toNumber(), 0);
+      assert.strictEqual(await token.holdStatus(holdId), HoldStatusCode.Held);
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(deployerSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        100
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(senderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipient2Signer.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(notarySigner.getAddress())).toNumber(),
+        0
+      );
 
-      assert.equal((await token.balanceOnHold(deployer)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 900);
-      assert.equal((await token.balanceOnHold(sender)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient2)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(notary)).toNumber(), 0);
+      assert.strictEqual(
+        (await token.balanceOnHold(deployerSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        900
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(senderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipient2Signer.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(notarySigner.getAddress())).toNumber(),
+        0
+      );
 
-      assert.equal((await token.balanceOf(holder)).toNumber(), 1000);
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        1000
+      );
 
-      assert.equal((await token.totalSupply()).toNumber(), 1000);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 1000);
     });
     it('Holder can not release the hold before expiration time', async () => {
       try {
         await token.connect(holderSigner).releaseHold(holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /can only release after the expiration date/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 100);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 900);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 1000);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          100
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          900
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          1000
+        );
       }
     });
     it('Recipient can not execute the hold', async () => {
@@ -224,11 +353,22 @@ describe('Holdable Token', function () {
           ['executeHold(bytes32,bytes32)'](holdId, hashLock.secret);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /caller must be the hold notary/);
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 100);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 900);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 1000);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          100
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          900
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          1000
+        );
       }
     });
     it('Notary can not execute hold with the wrong lock hash', async () => {
@@ -239,14 +379,25 @@ describe('Holdable Token', function () {
           ['executeHold(bytes32,bytes32)'](holdId, incorrectHashLock.secret);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /preimage hash does not match lock hash/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 100);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 900);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 1000);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          100
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          900
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          1000
+        );
       }
     });
     it('Notary can not execute hold with the wrong execute function', async () => {
@@ -256,18 +407,29 @@ describe('Holdable Token', function () {
           ['executeHold(bytes32,bytes32,address)'](
             holdId,
             hashLock.secret,
-            recipient2
+            recipient2Signer.getAddress()
           );
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /can not set a recipient on execution as it was set on hold/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 100);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 900);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 1000);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          100
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          900
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          1000
+        );
       }
     });
     it('Recipient can not release the hold', async () => {
@@ -275,14 +437,25 @@ describe('Holdable Token', function () {
         await token.connect(recipientSigner).releaseHold(holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /caller must be the hold sender or notary/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 100);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 900);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 1000);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          100
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          900
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          1000
+        );
       }
     });
     it('Holder can not transfer 200 tokens with only 100 available and 900 on hold', async () => {
@@ -292,117 +465,271 @@ describe('Holdable Token', function () {
           .hold(
             ZERO_BYTE +
               Buffer.from(ethers.utils.randomBytes(32)).toString('hex'),
-            recipient,
-            notary,
+            recipientSigner.getAddress(),
+            notarySigner.getAddress(),
             900,
             inOneHour,
             hashLock.hash
           );
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /amount exceeds available balance/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 100);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 900);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 1000);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          100
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          900
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          1000
+        );
       }
     });
     it('Holder can not approve 200 tokens for recipient2 to spend with only 100 available and 900 on hold', async () => {
       try {
-        assert.equal((await token.allowance(holder, recipient2)).toNumber(), 0);
-        await token.connect(holderSigner).approve(recipient2, 200);
+        assert.strictEqual(
+          (
+            await token.allowance(
+              holderSigner.getAddress(),
+              recipient2Signer.getAddress()
+            )
+          ).toNumber(),
+          0
+        );
+        await token
+          .connect(holderSigner)
+          .approve(recipient2Signer.getAddress(), 200);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /amount exceeds available balance/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 100);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 900);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 1000);
-        assert.equal((await token.allowance(holder, recipient2)).toNumber(), 0);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          100
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          900
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          1000
+        );
+        assert.strictEqual(
+          (
+            await token.allowance(
+              holderSigner.getAddress(),
+              recipient2Signer.getAddress()
+            )
+          ).toNumber(),
+          0
+        );
       }
     });
     it('Holder can approve 30 tokens for recipient2 to spend', async () => {
-      assert.equal((await token.allowance(holder, recipient2)).toNumber(), 0);
+      assert.strictEqual(
+        (
+          await token.allowance(
+            holderSigner.getAddress(),
+            recipient2Signer.getAddress()
+          )
+        ).toNumber(),
+        0
+      );
       const receipt = await token
         .connect(holderSigner)
-        .approve(recipient2, 30)
+        .approve(recipient2Signer.getAddress(), 30)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.allowance(holder, recipient2)).toNumber(), 30);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 100);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 900);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 1000);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (
+          await token.allowance(
+            holderSigner.getAddress(),
+            recipient2Signer.getAddress()
+          )
+        ).toNumber(),
+        30
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        100
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        900
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        1000
+      );
     });
     it('Holder can transfer 80 tokens with 100 available and 30 approved for spending', async () => {
       const receipt = await token
         .connect(holderSigner)
-        .transfer(recipient2, 80)
+        .transfer(recipient2Signer.getAddress(), 80)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal(receipt.status, 1);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(receipt.status, 1);
 
-      assert.equal((await token.spendableBalanceOf(deployer)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 20);
-      assert.equal((await token.spendableBalanceOf(sender)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(recipient2)).toNumber(), 80);
-      assert.equal((await token.spendableBalanceOf(notary)).toNumber(), 0);
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(deployerSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        20
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(senderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipient2Signer.getAddress())
+        ).toNumber(),
+        80
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(notarySigner.getAddress())).toNumber(),
+        0
+      );
 
-      assert.equal((await token.balanceOnHold(deployer)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 900);
-      assert.equal((await token.balanceOnHold(sender)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient2)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(notary)).toNumber(), 0);
+      assert.strictEqual(
+        (await token.balanceOnHold(deployerSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        900
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(senderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipient2Signer.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(notarySigner.getAddress())).toNumber(),
+        0
+      );
 
-      assert.equal((await token.balanceOf(holder)).toNumber(), 920);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient2)).toNumber(), 80);
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        920
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipient2Signer.getAddress())).toNumber(),
+        80
+      );
 
-      assert.equal((await token.totalSupply()).toNumber(), 1000);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 1000);
     });
     it('Holder can not transfer 21 tokens with 20 available', async () => {
       try {
-        await token.connect(holderSigner).transfer(recipient2, 101);
+        await token
+          .connect(holderSigner)
+          .transfer(recipient2Signer.getAddress(), 101);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /amount exceeds available balance/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 20);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 900);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 920);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          20
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          900
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          920
+        );
       }
     });
     it('Recipient 2 can not transfer 30 approved tokens from holder as only 20 are available', async () => {
       try {
-        assert.equal(
-          (await token.allowance(holder, recipient2)).toNumber(),
+        assert.strictEqual(
+          (
+            await token.allowance(
+              holderSigner.getAddress(),
+              recipient2Signer.getAddress()
+            )
+          ).toNumber(),
           30
         );
         await token
           .connect(recipient2Signer)
-          .transferFrom(holder, recipient2, 30);
+          .transferFrom(
+            holderSigner.getAddress(),
+            recipient2Signer.getAddress(),
+            30
+          );
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /amount exceeds available balance/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 20);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 900);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 920);
-        assert.equal(
-          (await token.allowance(holder, recipient2)).toNumber(),
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          20
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          900
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          920
+        );
+        assert.strictEqual(
+          (
+            await token.allowance(
+              holderSigner.getAddress(),
+              recipient2Signer.getAddress()
+            )
+          ).toNumber(),
           30
         );
       }
@@ -414,14 +741,29 @@ describe('Holdable Token', function () {
           ['executeHold(bytes32)'](holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /need preimage if the hold has a lock hash/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 20);
-        assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-        assert.equal((await token.spendableBalanceOf(notary)).toNumber(), 0);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          20
+        );
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(recipientSigner.getAddress())
+          ).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(notarySigner.getAddress())
+          ).toNumber(),
+          0
+        );
       }
     });
     it('Notary can not execute hold with the wrong lock hash', async () => {
@@ -432,14 +774,29 @@ describe('Holdable Token', function () {
           ['executeHold(bytes32,bytes32)'](holdId, incorrectHashLock.secret);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /preimage hash does not match lock hash/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 20);
-        assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-        assert.equal((await token.spendableBalanceOf(notary)).toNumber(), 0);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          20
+        );
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(recipientSigner.getAddress())
+          ).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(notarySigner.getAddress())
+          ).toNumber(),
+          0
+        );
       }
     });
     it('Notary can execute the hold', async () => {
@@ -447,29 +804,83 @@ describe('Holdable Token', function () {
         .connect(notarySigner)
         ['executeHold(bytes32,bytes32)'](holdId, hashLock.secret)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal(await token.holdStatus(holdId), HoldStatusCode.Executed);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        await token.holdStatus(holdId),
+        HoldStatusCode.Executed
+      );
 
-      assert.equal((await token.spendableBalanceOf(deployer)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 20);
-      assert.equal((await token.spendableBalanceOf(sender)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 900);
-      assert.equal((await token.spendableBalanceOf(recipient2)).toNumber(), 80);
-      assert.equal((await token.spendableBalanceOf(notary)).toNumber(), 0);
-      assert.equal((await token.totalSupply()).toNumber(), 1000);
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(deployerSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        20
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(senderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        900
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipient2Signer.getAddress())
+        ).toNumber(),
+        80
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(notarySigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 1000);
 
-      assert.equal((await token.balanceOnHold(deployer)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(sender)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient2)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(notary)).toNumber(), 0);
+      assert.strictEqual(
+        (await token.balanceOnHold(deployerSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(senderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipient2Signer.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(notarySigner.getAddress())).toNumber(),
+        0
+      );
 
-      assert.equal((await token.balanceOf(holder)).toNumber(), 20);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 900);
-      assert.equal((await token.balanceOf(recipient2)).toNumber(), 80);
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        20
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        900
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipient2Signer.getAddress())).toNumber(),
+        80
+      );
 
-      assert.equal((await token.totalSupply()).toNumber(), 1000);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 1000);
     });
     it('Notary can not execute a hold a second time', async () => {
       try {
@@ -478,11 +889,18 @@ describe('Holdable Token', function () {
           ['executeHold(bytes32,bytes32)'](holdId, hashLock.secret);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /Hold is not in Ordered status/);
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 20);
-        assert.equal(
-          (await token.spendableBalanceOf(recipient)).toNumber(),
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          20
+        );
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(recipientSigner.getAddress())
+          ).toNumber(),
           900
         );
       }
@@ -492,11 +910,18 @@ describe('Holdable Token', function () {
         await token.connect(holderSigner).releaseHold(holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /Hold is not in Ordered status/);
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 20);
-        assert.equal(
-          (await token.spendableBalanceOf(recipient)).toNumber(),
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          20
+        );
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(recipientSigner.getAddress())
+          ).toNumber(),
           900
         );
       }
@@ -507,11 +932,18 @@ describe('Holdable Token', function () {
         await token.connect(holderSigner).releaseHold(holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /Hold is not in Ordered status/);
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 20);
-        assert.equal(
-          (await token.spendableBalanceOf(recipient)).toNumber(),
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          20
+        );
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(recipientSigner.getAddress())
+          ).toNumber(),
           900
         );
       }
@@ -535,61 +967,158 @@ describe('Holdable Token', function () {
       await revertToSnapshot(snapshotId);
     });
     it('Mint 200 tokens to holder', async () => {
-      assert.equal((await token.totalSupply()).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 0);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 0);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        0
+      );
       const receipt = await token
         .connect(deployerSigner)
-        .mint(holder, 200)
+        .mint(holderSigner.getAddress(), 200)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(deployer)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 200);
-      assert.equal((await token.spendableBalanceOf(sender)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(recipient2)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(notary)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 200);
-      assert.equal((await token.totalSupply()).toNumber(), 200);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(deployerSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        200
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(senderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipient2Signer.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(notarySigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        200
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 200);
     });
     it('Holder holds 30 tokens for the recipient', async () => {
       holdId =
         ZERO_BYTE + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
       const receipt = await token
         .connect(holderSigner)
-        .hold(holdId, recipient, notary, 30, inOneHour, hashLock.hash)
+        .hold(
+          holdId,
+          recipientSigner.getAddress(),
+          notarySigner.getAddress(),
+          30,
+          inOneHour,
+          hashLock.hash
+        )
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.lengthOf(receipt.logs, 1);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(receipt.logs.length, 1);
       assert.match(holdId, bytes32);
-      assert.equal((await token.spendableBalanceOf(deployer)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 170);
-      assert.equal((await token.spendableBalanceOf(sender)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(recipient2)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(notary)).toNumber(), 0);
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(deployerSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        170
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(senderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipient2Signer.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(notarySigner.getAddress())).toNumber(),
+        0
+      );
 
-      assert.equal((await token.balanceOnHold(deployer)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 30);
-      assert.equal((await token.balanceOnHold(sender)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient2)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(notary)).toNumber(), 0);
+      assert.strictEqual(
+        (await token.balanceOnHold(deployerSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        30
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(senderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipient2Signer.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(notarySigner.getAddress())).toNumber(),
+        0
+      );
 
-      assert.equal((await token.balanceOf(holder)).toNumber(), 200);
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        200
+      );
 
-      assert.equal((await token.totalSupply()).toNumber(), 200);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 200);
     });
     it('Holder can not hold with the same parameters again', async () => {
       try {
         await token
           .connect(holderSigner)
-          .hold(holdId, recipient, notary, 30, inOneHour, hashLock.hash);
+          .hold(
+            holdId,
+            recipientSigner.getAddress(),
+            notarySigner.getAddress(),
+            30,
+            inOneHour,
+            hashLock.hash
+          );
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /id already exists/);
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 170);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          170
+        );
       }
     });
     it('Notary releases 30 tokens back to holder', async () => {
@@ -597,31 +1126,74 @@ describe('Holdable Token', function () {
         .connect(notarySigner)
         .releaseHold(holdId)
         .then((res) => res.wait());
-      assert.equal(await token.holdStatus(holdId), HoldStatusCode.Released);
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 200);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 200);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(notary)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(notary)).toNumber(), 0);
-      assert.equal((await token.balanceOf(notary)).toNumber(), 0);
+      assert.strictEqual(
+        await token.holdStatus(holdId),
+        HoldStatusCode.Released
+      );
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        200
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        200
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(notarySigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(notarySigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(notarySigner.getAddress())).toNumber(),
+        0
+      );
 
-      assert.equal((await token.totalSupply()).toNumber(), 200);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 200);
     });
     it('Notary can not release a hold twice', async () => {
       try {
         await token.connect(notarySigner).releaseHold(holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /Hold is not in Ordered status/);
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 200);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 200);
-        assert.equal((await token.totalSupply()).toNumber(), 200);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          200
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          200
+        );
+        assert.strictEqual((await token.totalSupply()).toNumber(), 200);
       }
     });
     it('Notary can not execute a hold after release', async () => {
@@ -631,12 +1203,23 @@ describe('Holdable Token', function () {
           ['executeHold(bytes32,bytes32)'](holdId, hashLock.secret);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /Hold is not in Ordered status/);
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 200);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 200);
-        assert.equal((await token.totalSupply()).toNumber(), 200);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          200
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          200
+        );
+        assert.strictEqual((await token.totalSupply()).toNumber(), 200);
       }
     });
     it('Holder can not release a hold after release', async () => {
@@ -644,12 +1227,23 @@ describe('Holdable Token', function () {
         await token.connect(notarySigner).releaseHold(holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /Hold is not in Ordered status/);
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 200);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 200);
-        assert.equal((await token.totalSupply()).toNumber(), 200);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          200
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          200
+        );
+        assert.strictEqual((await token.totalSupply()).toNumber(), 200);
       }
     });
   });
@@ -671,46 +1265,85 @@ describe('Holdable Token', function () {
       await revertToSnapshot(snapshotId);
     });
     it('Mint 3 tokens to holder', async () => {
-      assert.equal((await token.totalSupply()).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 0);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 0);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        0
+      );
       const receipt = await token
         .connect(deployerSigner)
-        .mint(holder, 3)
+        .mint(holderSigner.getAddress(), 3)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.totalSupply()).toNumber(), 3);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 3);
     });
     it('Holder holds 2 tokens for the recipient', async () => {
       holdId =
         ZERO_BYTE + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
       const receipt = await token
         .connect(holderSigner)
-        .hold(holdId, recipient, notary, 2, inOneHour, hashLock.hash)
+        .hold(
+          holdId,
+          recipientSigner.getAddress(),
+          notarySigner.getAddress(),
+          2,
+          inOneHour,
+          hashLock.hash
+        )
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.lengthOf(receipt.logs, 1);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(receipt.logs.length, 1);
       assert.match(holdId, bytes32);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 1);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 2);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.totalSupply()).toNumber(), 3);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        1
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        2
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 3);
     });
     it('Holder can not release the hold before expiration', async () => {
       try {
         await token.connect(holderSigner).releaseHold(holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /can only release after the expiration date/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 1);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 2);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 3);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          1
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          2
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          3
+        );
       }
     });
     it('Advance time to after expiration', async () => {
@@ -721,23 +1354,46 @@ describe('Holdable Token', function () {
         .connect(notarySigner)
         .releaseHold(holdId)
         .then((res) => res.wait());
-      assert.equal(await token.holdStatus(holdId), HoldStatusCode.Released);
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.totalSupply()).toNumber(), 3);
+      assert.strictEqual(
+        await token.holdStatus(holdId),
+        HoldStatusCode.Released
+      );
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 3);
     });
     it('Notary can not release the hold twice', async () => {
       try {
         await token.connect(notarySigner).releaseHold(holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /Hold is not in Ordered status/);
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 3);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 3);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          3
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          3
+        );
       }
     });
     it('Holder can not release the hold after release', async () => {
@@ -745,11 +1401,22 @@ describe('Holdable Token', function () {
         await token.connect(holderSigner).releaseHold(holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /Hold is not in Ordered status/);
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 3);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 3);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          3
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          3
+        );
       }
     });
   });
@@ -772,46 +1439,85 @@ describe('Holdable Token', function () {
       await revertToSnapshot(snapshotId);
     });
     it('Mint 3 tokens to holder', async () => {
-      assert.equal((await token.totalSupply()).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 0);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 0);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        0
+      );
       const receipt = await token
         .connect(deployerSigner)
-        .mint(holder, 3)
+        .mint(holderSigner.getAddress(), 3)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.totalSupply()).toNumber(), 3);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 3);
     });
     it('Holder holds 2 tokens for the recipient', async () => {
       holdId =
         ZERO_BYTE + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
       const receipt = await token
         .connect(holderSigner)
-        .hold(holdId, recipient, notary, 2, inOneHour, hashLock.hash)
+        .hold(
+          holdId,
+          recipientSigner.getAddress(),
+          notarySigner.getAddress(),
+          2,
+          inOneHour,
+          hashLock.hash
+        )
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.lengthOf(receipt.logs, 1);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(receipt.logs.length, 1);
       assert.match(holdId, bytes32);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 1);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 2);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.totalSupply()).toNumber(), 3);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        1
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        2
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 3);
     });
     it('Holder can not release the hold before expiration', async () => {
       try {
         await token.connect(holderSigner).releaseHold(holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /can only release after the expiration date/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 1);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 2);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 3);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          1
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          2
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          3
+        );
       }
     });
     it('After expiration, holder releases 3 tokens back to holder', async () => {
@@ -820,26 +1526,46 @@ describe('Holdable Token', function () {
         .connect(holderSigner)
         .releaseHold(holdId)
         .then((res) => res.wait());
-      assert.equal(
+      assert.strictEqual(
         await token.holdStatus(holdId),
         HoldStatusCode.ReleasedOnExpiration
       );
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.totalSupply()).toNumber(), 3);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 3);
     });
     it('Holder can not release the hold twice', async () => {
       try {
         await token.connect(holderSigner).releaseHold(holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /Hold is not in Ordered status/);
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 3);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 3);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          3
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          3
+        );
       }
     });
     it('Notary can not release the hold after release', async () => {
@@ -847,11 +1573,22 @@ describe('Holdable Token', function () {
         await token.connect(notarySigner).releaseHold(holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /Hold is not in Ordered status/);
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 3);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 3);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          3
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          3
+        );
       }
     });
   });
@@ -873,32 +1610,60 @@ describe('Holdable Token', function () {
       await revertToSnapshot(snapshotId);
     });
     it('Mint 3 tokens to holder', async () => {
-      assert.equal((await token.totalSupply()).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 0);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 0);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        0
+      );
       const receipt = await token
         .connect(deployerSigner)
-        .mint(holder, 3)
+        .mint(holderSigner.getAddress(), 3)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.totalSupply()).toNumber(), 3);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 3);
     });
     it('Holder holds 2 tokens for the recipient', async () => {
       holdId =
         ZERO_BYTE + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
       const receipt = await token
         .connect(holderSigner)
-        .hold(holdId, recipient, notary, 2, inOneHour, hashLock.hash)
+        .hold(
+          holdId,
+          recipientSigner.getAddress(),
+          notarySigner.getAddress(),
+          2,
+          inOneHour,
+          hashLock.hash
+        )
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.lengthOf(receipt.logs, 1);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(receipt.logs.length, 1);
       assert.match(holdId, bytes32);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 1);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 2);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 3);
-      assert.equal((await token.totalSupply()).toNumber(), 3);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        1
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        2
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        3
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 3);
     });
     it('Advance time to after expiration', async () => {
       await advanceTime(inOneHour + 1);
@@ -908,18 +1673,41 @@ describe('Holdable Token', function () {
         .connect(notarySigner)
         ['executeHold(bytes32,bytes32)'](holdId, hashLock.secret)
         .then((res) => res.wait());
-      assert.equal(await token.holdStatus(holdId), HoldStatusCode.Executed);
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 1);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 1);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 2);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 2);
-      assert.equal((await token.totalSupply()).toNumber(), 3);
+      assert.strictEqual(
+        await token.holdStatus(holdId),
+        HoldStatusCode.Executed
+      );
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        1
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        1
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        2
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        2
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 3);
     });
   });
-  describe('Hold with no recipient, notary can execute before expiration with recipient', () => {
+  describe('Hold with no recipientSigner.getAddress(), notary can execute before expiration with recipient', () => {
     const hashLock = newSecretHashPair();
     const inOneDay = nowSeconds() + 60 * 60 * 24;
     let holdId: string;
@@ -937,41 +1725,74 @@ describe('Holdable Token', function () {
       await revertToSnapshot(snapshotId);
     });
     it('Mint 9876543210 tokens to holder', async () => {
-      assert.equal((await token.totalSupply()).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 0);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 0);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        0
+      );
       const receipt = await token
         .connect(deployerSigner)
-        .mint(holder, 9876543210)
+        .mint(holderSigner.getAddress(), 9876543210)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal(
-        (await token.spendableBalanceOf(holder)).toNumber(),
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
         9876543210
       );
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 9876543210);
-      assert.equal((await token.totalSupply()).toNumber(), 9876543210);
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        9876543210
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 9876543210);
     });
     it('Holder holds 9000000000 tokens with no recipient', async () => {
       holdId =
         ZERO_BYTE + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
       const receipt = await token
         .connect(holderSigner)
-        .hold(holdId, ZERO_ADDRESS, notary, 9000000000, inOneDay, hashLock.hash)
+        .hold(
+          holdId,
+          ZERO_ADDRESS,
+          notarySigner.getAddress(),
+          9000000000,
+          inOneDay,
+          hashLock.hash
+        )
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.lengthOf(receipt.logs, 1);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(receipt.logs.length, 1);
       assert.match(holdId, bytes32);
-      assert.equal(
-        (await token.spendableBalanceOf(holder)).toNumber(),
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
         876543210
       );
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 9000000000);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 9876543210);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.totalSupply()).toNumber(), 9876543210);
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        9000000000
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        9876543210
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 9876543210);
     });
     it('Recipient can not execute a hold', async () => {
       try {
@@ -980,25 +1801,41 @@ describe('Holdable Token', function () {
           ['executeHold(bytes32,bytes32,address)'](
             holdId,
             hashLock.secret,
-            recipient
+            recipientSigner.getAddress()
           );
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match((err as Error).message, /caller must be the hold notary/);
-        assert.equal(
-          (await token.spendableBalanceOf(holder)).toNumber(),
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
           876543210
         );
-        assert.equal(
-          (await token.balanceOnHold(holder)).toNumber(),
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
           9000000000
         );
-        assert.equal((await token.balanceOf(holder)).toNumber(), 9876543210);
-        assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-        assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-        assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
-        assert.equal((await token.totalSupply()).toNumber(), 9876543210);
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          9876543210
+        );
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(recipientSigner.getAddress())
+          ).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual((await token.totalSupply()).toNumber(), 9876543210);
       }
     });
     it('Recipient can not execute a hold without specifying a recipient', async () => {
@@ -1008,24 +1845,40 @@ describe('Holdable Token', function () {
           ['executeHold(bytes32,bytes32)'](holdId, hashLock.secret);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /must pass the recipient on execution as the recipient was not set on hold/
         );
-        assert.equal(
-          (await token.spendableBalanceOf(holder)).toNumber(),
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
           876543210
         );
-        assert.equal(
-          (await token.balanceOnHold(holder)).toNumber(),
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
           9000000000
         );
-        assert.equal((await token.balanceOf(holder)).toNumber(), 9876543210);
-        assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-        assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-        assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
-        assert.equal((await token.totalSupply()).toNumber(), 9876543210);
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          9876543210
+        );
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(recipientSigner.getAddress())
+          ).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual((await token.totalSupply()).toNumber(), 9876543210);
       }
     });
     it('Recipient can not execute a hold with zero address as the recipient', async () => {
@@ -1039,24 +1892,40 @@ describe('Holdable Token', function () {
           );
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /recipient must not be a zero address/
         );
-        assert.equal(
-          (await token.spendableBalanceOf(holder)).toNumber(),
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
           876543210
         );
-        assert.equal(
-          (await token.balanceOnHold(holder)).toNumber(),
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
           9000000000
         );
-        assert.equal((await token.balanceOf(holder)).toNumber(), 9876543210);
-        assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-        assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-        assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
-        assert.equal((await token.totalSupply()).toNumber(), 9876543210);
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          9876543210
+        );
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(recipientSigner.getAddress())
+          ).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual(
+          (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+          0
+        );
+        assert.strictEqual((await token.totalSupply()).toNumber(), 9876543210);
       }
     });
     it('Notary can not execute the hold without the lock hash', async () => {
@@ -1066,20 +1935,25 @@ describe('Holdable Token', function () {
           ['executeHold(bytes32)'](holdId);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /must pass the recipient on execution as the recipient was not set on hold/
         );
-        assert.equal(
-          (await token.spendableBalanceOf(holder)).toNumber(),
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
           876543210
         );
-        assert.equal(
-          (await token.balanceOnHold(holder)).toNumber(),
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
           9000000000
         );
-        assert.equal((await token.balanceOf(holder)).toNumber(), 9876543210);
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          9876543210
+        );
       }
     });
     it('Notary can not execute hold with the wrong lock hash', async () => {
@@ -1090,24 +1964,29 @@ describe('Holdable Token', function () {
           ['executeHold(bytes32,bytes32,address)'](
             holdId,
             incorrectHashLock.secret,
-            recipient
+            recipientSigner.getAddress()
           );
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /preimage hash does not match lock hash/
         );
-        assert.equal(
-          (await token.spendableBalanceOf(holder)).toNumber(),
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
           876543210
         );
-        assert.equal(
-          (await token.balanceOnHold(holder)).toNumber(),
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
           9000000000
         );
-        assert.equal((await token.balanceOf(holder)).toNumber(), 9876543210);
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          9876543210
+        );
       }
     });
     it('Notary can execute the hold specifying the recipient', async () => {
@@ -1116,24 +1995,41 @@ describe('Holdable Token', function () {
         ['executeHold(bytes32,bytes32,address)'](
           holdId,
           hashLock.secret,
-          recipient
+          recipientSigner.getAddress()
         )
         .then((res) => res.wait());
-      assert.equal(await token.holdStatus(holdId), HoldStatusCode.Executed);
-      assert.equal(receipt.status, 1);
-      assert.equal(
-        (await token.spendableBalanceOf(holder)).toNumber(),
+      assert.strictEqual(
+        await token.holdStatus(holdId),
+        HoldStatusCode.Executed
+      );
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
         876543210
       );
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 876543210);
-      assert.equal(
-        (await token.spendableBalanceOf(recipient)).toNumber(),
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        876543210
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
         9000000000
       );
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 9000000000);
-      assert.equal((await token.totalSupply()).toNumber(), 9876543210);
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        9000000000
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 9876543210);
     });
   });
   describe('Hold with no hash lock, notary can execute without lock secret before expiration', () => {
@@ -1153,50 +2049,112 @@ describe('Holdable Token', function () {
       await revertToSnapshot(snapshotId);
     });
     it('Mint 123 tokens to holder', async () => {
-      assert.equal((await token.totalSupply()).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 0);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 0);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        0
+      );
       const receipt = await token
         .connect(deployerSigner)
-        .mint(holder, 123)
+        .mint(holderSigner.getAddress(), 123)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
     it('Holder holds 100 tokens with no hash lock', async () => {
       holdId =
         ZERO_BYTE + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
       const receipt = await token
         .connect(holderSigner)
-        .hold(holdId, recipient, notary, 100, inOneWeek, ZERO_BYTES32)
+        .hold(
+          holdId,
+          recipientSigner.getAddress(),
+          notarySigner.getAddress(),
+          100,
+          inOneWeek,
+          ZERO_BYTES32
+        )
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.lengthOf(receipt.logs, 1);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(receipt.logs.length, 1);
       assert.match(holdId, bytes32);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 23);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 100);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        23
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        100
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
     it('Notary can execute the hold without a lock preimage', async () => {
       const receipt = await token
         .connect(notarySigner)
         ['executeHold(bytes32)'](holdId)
         .then((res) => res.wait());
-      assert.equal(await token.holdStatus(holdId), HoldStatusCode.Executed);
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 23);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 23);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 100);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 100);
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual(
+        await token.holdStatus(holdId),
+        HoldStatusCode.Executed
+      );
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        23
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        23
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        100
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        100
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
   });
   describe('Hold with no recipient or hash lock, notary can execute before expiration', () => {
@@ -1216,35 +2174,74 @@ describe('Holdable Token', function () {
       await revertToSnapshot(snapshotId);
     });
     it('Mint 123 tokens to holder', async () => {
-      assert.equal((await token.totalSupply()).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 0);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 0);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        0
+      );
       const receipt = await token
         .connect(deployerSigner)
-        .mint(holder, 123)
+        .mint(holderSigner.getAddress(), 123)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
     it('Holder holds 100 tokens with no hash lock', async () => {
       holdId =
         ZERO_BYTE + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
       const receipt = await token
         .connect(holderSigner)
-        .hold(holdId, ZERO_ADDRESS, notary, 100, inOneWeek, ZERO_BYTES32)
+        .hold(
+          holdId,
+          ZERO_ADDRESS,
+          notarySigner.getAddress(),
+          100,
+          inOneWeek,
+          ZERO_BYTES32
+        )
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.lengthOf(receipt.logs, 1);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(receipt.logs.length, 1);
       assert.match(holdId, bytes32);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 23);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 100);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        23
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        100
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
     it('Notary can execute the hold specifying a recipient without a lock preimage', async () => {
       const receipt = await token
@@ -1252,21 +2249,41 @@ describe('Holdable Token', function () {
         ['executeHold(bytes32,bytes32,address)'](
           holdId,
           ZERO_BYTES32,
-          recipient2
+          recipient2Signer.getAddress()
         )
         .then((res) => res.wait());
-      assert.equal(await token.holdStatus(holdId), HoldStatusCode.Executed);
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 23);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 23);
-      assert.equal(
-        (await token.spendableBalanceOf(recipient2)).toNumber(),
+      assert.strictEqual(
+        await token.holdStatus(holdId),
+        HoldStatusCode.Executed
+      );
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        23
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        23
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipient2Signer.getAddress())
+        ).toNumber(),
         100
       );
-      assert.equal((await token.balanceOnHold(recipient2)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient2)).toNumber(), 100);
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual(
+        (await token.balanceOnHold(recipient2Signer.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipient2Signer.getAddress())).toNumber(),
+        100
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
   });
   describe('Hold with no expiration time, holder releases straight away', () => {
@@ -1286,50 +2303,98 @@ describe('Holdable Token', function () {
       await revertToSnapshot(snapshotId);
     });
     it('Mint 123 tokens to holder', async () => {
-      assert.equal((await token.totalSupply()).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 0);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 0);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        0
+      );
       const receipt = await token
         .connect(deployerSigner)
-        .mint(holder, 123)
+        .mint(holderSigner.getAddress(), 123)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
     it('Holder holds 100 tokens with no hash lock', async () => {
       holdId =
         ZERO_BYTE + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
       const receipt = await token
         .connect(holderSigner)
-        .hold(holdId, ZERO_ADDRESS, notary, 100, 0, ZERO_BYTES32)
+        .hold(
+          holdId,
+          ZERO_ADDRESS,
+          notarySigner.getAddress(),
+          100,
+          0,
+          ZERO_BYTES32
+        )
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.lengthOf(receipt.logs, 1);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(receipt.logs.length, 1);
       assert.match(holdId, bytes32);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 23);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 100);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        23
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        100
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
     it('Holder releases tokens back to holder straight away', async () => {
       const receipt = await token
         .connect(holderSigner)
         .releaseHold(holdId)
         .then((res) => res.wait());
-      assert.equal(
+      assert.strictEqual(
         await token.holdStatus(holdId),
         HoldStatusCode.ReleasedOnExpiration
       );
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
   });
   describe('Can not burn notes on hold', () => {
@@ -1350,115 +2415,263 @@ describe('Holdable Token', function () {
       await revertToSnapshot(snapshotId);
     });
     it('Mint 123 tokens to holder', async () => {
-      assert.equal((await token.totalSupply()).toNumber(), 0);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 0);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 0);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        0
+      );
       const receipt = await token
         .connect(deployerSigner)
-        .mint(holder, 123)
+        .mint(holderSigner.getAddress(), 123)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
     it('Holder holds 100 tokens with no hash lock', async () => {
       holdId =
         ZERO_BYTE + Buffer.from(ethers.utils.randomBytes(32)).toString('hex');
       const receipt = await token
         .connect(holderSigner)
-        .hold(holdId, ZERO_ADDRESS, notary, 100, 0, ZERO_BYTES32)
+        .hold(
+          holdId,
+          ZERO_ADDRESS,
+          notarySigner.getAddress(),
+          100,
+          0,
+          ZERO_BYTES32
+        )
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.lengthOf(receipt.logs, 1);
-      assert.equal(await token.holdStatus(holdId), HoldStatusCode.Held);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(receipt.logs.length, 1);
+      assert.strictEqual(await token.holdStatus(holdId), HoldStatusCode.Held);
       assert.match(holdId, bytes32);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 23);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 100);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 0);
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        23
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        100
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
     it('Holder can not burn on hold tokens', async () => {
       try {
         await token.connect(holderSigner).burn(24);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /amount exceeds available balance/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 23);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 100);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 123);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          23
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          100
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          123
+        );
       }
     });
     it('Holder approves a recipient to spend 10 tokens', async () => {
-      assert.equal((await token.allowance(holder, recipient)).toNumber(), 0);
+      assert.strictEqual(
+        (
+          await token.allowance(
+            holderSigner.getAddress(),
+            recipientSigner.getAddress()
+          )
+        ).toNumber(),
+        0
+      );
 
       const receipt = await token
         .connect(holderSigner)
-        .approve(recipient, 10)
+        .approve(recipientSigner.getAddress(), 10)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
+      assert.strictEqual(receipt.status, 1);
 
-      assert.equal((await token.allowance(holder, recipient)).toNumber(), 10);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 23);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 100);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 123);
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual(
+        (
+          await token.allowance(
+            holderSigner.getAddress(),
+            recipientSigner.getAddress()
+          )
+        ).toNumber(),
+        10
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        23
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        100
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        123
+      );
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
     it('Recipient transfers 4 tokens from the holder to themselves', async () => {
       const receipt = await token
         .connect(recipientSigner)
-        .transferFrom(holder, recipient, 4)
+        .transferFrom(
+          holderSigner.getAddress(),
+          recipientSigner.getAddress(),
+          4
+        )
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
+      assert.strictEqual(receipt.status, 1);
 
-      assert.equal((await token.allowance(holder, recipient)).toNumber(), 6);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 19);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 100);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 119);
+      assert.strictEqual(
+        (
+          await token.allowance(
+            holderSigner.getAddress(),
+            recipientSigner.getAddress()
+          )
+        ).toNumber(),
+        6
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        19
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        100
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        119
+      );
 
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 4);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 4);
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        4
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        4
+      );
 
-      assert.equal((await token.totalSupply()).toNumber(), 123);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 123);
     });
     it('Recipient burns one token held by the Holder', async () => {
       const receipt = await token
         .connect(recipientSigner)
-        .burnFrom(holder, 1)
+        .burnFrom(holderSigner.getAddress(), 1)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.allowance(holder, recipient)).toNumber(), 5);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 18);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 100);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 118);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (
+          await token.allowance(
+            holderSigner.getAddress(),
+            recipientSigner.getAddress()
+          )
+        ).toNumber(),
+        5
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        18
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        100
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        118
+      );
 
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 4);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 4);
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        4
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        4
+      );
 
-      assert.equal((await token.totalSupply()).toNumber(), 122);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 122);
     });
     it('Recipient can not burn more tokens than total held by the Holder', async () => {
       try {
-        await token.connect(recipientSigner).burnFrom(holder, 19);
+        await token
+          .connect(recipientSigner)
+          .burnFrom(holderSigner.getAddress(), 19);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /amount exceeds available balance/
         );
-        assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 18);
-        assert.equal((await token.balanceOnHold(holder)).toNumber(), 100);
-        assert.equal((await token.balanceOf(holder)).toNumber(), 118);
+        assert.strictEqual(
+          (
+            await token.spendableBalanceOf(holderSigner.getAddress())
+          ).toNumber(),
+          18
+        );
+        assert.strictEqual(
+          (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+          100
+        );
+        assert.strictEqual(
+          (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+          118
+        );
       }
     });
     it('Holder can burn tokens not on hold', async () => {
@@ -1466,24 +2679,52 @@ describe('Holdable Token', function () {
         .connect(holderSigner)
         .burn(18)
         .then((res) => res.wait());
-      assert.equal(receipt.status, 1);
-      assert.equal((await token.allowance(holder, recipient)).toNumber(), 5);
-      assert.equal((await token.spendableBalanceOf(holder)).toNumber(), 0);
-      assert.equal((await token.balanceOnHold(holder)).toNumber(), 100);
-      assert.equal((await token.balanceOf(holder)).toNumber(), 100);
+      assert.strictEqual(receipt.status, 1);
+      assert.strictEqual(
+        (
+          await token.allowance(
+            holderSigner.getAddress(),
+            recipientSigner.getAddress()
+          )
+        ).toNumber(),
+        5
+      );
+      assert.strictEqual(
+        (await token.spendableBalanceOf(holderSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(holderSigner.getAddress())).toNumber(),
+        100
+      );
+      assert.strictEqual(
+        (await token.balanceOf(holderSigner.getAddress())).toNumber(),
+        100
+      );
 
-      assert.equal((await token.spendableBalanceOf(recipient)).toNumber(), 4);
-      assert.equal((await token.balanceOnHold(recipient)).toNumber(), 0);
-      assert.equal((await token.balanceOf(recipient)).toNumber(), 4);
+      assert.strictEqual(
+        (
+          await token.spendableBalanceOf(recipientSigner.getAddress())
+        ).toNumber(),
+        4
+      );
+      assert.strictEqual(
+        (await token.balanceOnHold(recipientSigner.getAddress())).toNumber(),
+        0
+      );
+      assert.strictEqual(
+        (await token.balanceOf(recipientSigner.getAddress())).toNumber(),
+        4
+      );
 
-      assert.equal((await token.totalSupply()).toNumber(), 104);
+      assert.strictEqual((await token.totalSupply()).toNumber(), 104);
     });
     it('Holder can not burn on hold tokens', async () => {
       try {
         await token.connect(holderSigner).burn(1);
         assert(false, 'transaction should have failed');
       } catch (err) {
-        assert.instanceOf(err, Error);
+        assert.strictEqual(err instanceof Error, true);
         assert.match(
           (err as Error).message,
           /amount exceeds available balance/

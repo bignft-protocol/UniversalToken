@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import assert from 'assert';
-import { ZERO_ADDRESS, ZERO_BYTE } from './utils/assert';
+import { assertRevert, ZERO_ADDRESS, ZERO_BYTE } from './utils/assert';
 import {
   ERC1400,
   ERC1400TokensRecipientMock,
@@ -42,7 +42,6 @@ const partitions = [partition1, partition2, partition3];
 const issuanceAmount = 1000;
 
 describe('ERC1400 with sender and recipient hooks', function () {
-  const signers = getSigners(6);
   const [
     signer,
     operatorSigner,
@@ -50,9 +49,7 @@ describe('ERC1400 with sender and recipient hooks', function () {
     tokenHolderSigner,
     recipientSigner,
     unknownSigner
-  ] = signers;
-  const [owner, operator, controller, tokenHolder, recipient, unknown] =
-    signers.map((s) => s.address);
+  ] = getSigners(6);
 
   let registry: ERC1820Registry;
 
@@ -74,7 +71,7 @@ describe('ERC1400 with sender and recipient hooks', function () {
         'ERC1400Token',
         'DAU',
         1,
-        [controller],
+        [controllerSigner.getAddress()],
         partitions
       );
 
@@ -85,7 +82,7 @@ describe('ERC1400 with sender and recipient hooks', function () {
       await registry
         .connect(tokenHolderSigner)
         .setInterfaceImplementer(
-          tokenHolder,
+          tokenHolderSigner.getAddress(),
           ethers.utils.id(ERC1400_TOKENS_SENDER),
           senderContract.address
         );
@@ -96,27 +93,31 @@ describe('ERC1400 with sender and recipient hooks', function () {
       await registry
         .connect(recipientSigner)
         .setInterfaceImplementer(
-          recipient,
+          recipientSigner.getAddress(),
           ethers.utils.id(ERC1400_TOKENS_RECIPIENT),
           recipientContract.address
         );
 
       await token
         .connect(signer)
-        .issue(tokenHolder, issuanceAmount, VALID_CERTIFICATE);
+        .issue(
+          tokenHolderSigner.getAddress(),
+          issuanceAmount,
+          VALID_CERTIFICATE
+        );
     });
     afterEach(async function () {
       await registry
         .connect(tokenHolderSigner)
         .setInterfaceImplementer(
-          tokenHolder,
+          tokenHolderSigner.getAddress(),
           ethers.utils.id(ERC1400_TOKENS_SENDER),
           ZERO_ADDRESS
         );
       await registry
         .connect(recipientSigner)
         .setInterfaceImplementer(
-          recipient,
+          recipientSigner.getAddress(),
           ethers.utils.id(ERC1400_TOKENS_RECIPIENT),
           ZERO_ADDRESS
         );
@@ -125,12 +126,20 @@ describe('ERC1400 with sender and recipient hooks', function () {
       it('transfers the requested amount', async function () {
         await token
           .connect(tokenHolderSigner)
-          .transferWithData(recipient, issuanceAmount, VALID_CERTIFICATE);
-        const senderBalance = await token.balanceOf(tokenHolder);
-        assert.equal(senderBalance.toNumber(), 0);
+          .transferWithData(
+            recipientSigner.getAddress(),
+            issuanceAmount,
+            VALID_CERTIFICATE
+          );
+        const senderBalance = await token.balanceOf(
+          tokenHolderSigner.getAddress()
+        );
+        assert.strictEqual(senderBalance.toNumber(), 0);
 
-        const recipientBalance = await token.balanceOf(recipient);
-        assert.equal(recipientBalance.toNumber(), issuanceAmount);
+        const recipientBalance = await token.balanceOf(
+          recipientSigner.getAddress()
+        );
+        assert.strictEqual(recipientBalance.toNumber(), issuanceAmount);
       });
     });
     describe('when the transfer fails', function () {
@@ -140,7 +149,7 @@ describe('ERC1400 with sender and recipient hooks', function () {
           token
             .connect(tokenHolderSigner)
             .transferWithData(
-              recipient,
+              recipientSigner.getAddress(),
               issuanceAmount,
               INVALID_CERTIFICATE_SENDER
             )
@@ -152,7 +161,7 @@ describe('ERC1400 with sender and recipient hooks', function () {
           token
             .connect(tokenHolderSigner)
             .transferWithData(
-              recipient,
+              recipientSigner.getAddress(),
               issuanceAmount,
               INVALID_CERTIFICATE_RECIPIENT
             )

@@ -158,10 +158,13 @@ export const assertAssetRules = async (
 ) => {
   const rules = await _contract.getAssetRules(_assetAddress, _assetClass);
 
-  assert.strictEqual(rules[0], _firstStartTime);
-  assert.strictEqual(rules[1], _subscriptionPeriodLength);
-  assert.strictEqual(rules[2], _valuationPeriodLength);
-  assert.strictEqual(rules[3], _paymentPeriodLength);
+  assert.strictEqual(BigNumber.from(rules[0]).eq(_firstStartTime), true);
+  assert.strictEqual(
+    BigNumber.from(rules[1]).eq(_subscriptionPeriodLength),
+    true
+  );
+  assert.strictEqual(BigNumber.from(rules[2]).eq(_valuationPeriodLength), true);
+  assert.strictEqual(BigNumber.from(rules[3]).eq(_paymentPeriodLength), true);
   assert.strictEqual(rules[4], _paymentType);
   assert.strictEqual(rules[5], _paymentAddress);
   assert.strictEqual(rules[6], _paymentPartition);
