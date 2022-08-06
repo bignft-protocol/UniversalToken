@@ -26,7 +26,7 @@ export const takeSnapshot = () => {
 };
 
 export const revertToSnapshot = (snapShotId: any) => {
-  if (network.name !== HARDHAT_NETWORK_NAMM) return;
+  if (network.name !== HARDHAT_NETWORK_NAME) return;
   return ethers.provider.send('evm_revert', [snapShotId]);
 };
 
