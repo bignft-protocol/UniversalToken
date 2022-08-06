@@ -8,8 +8,8 @@ import {
   addTokenController
 } from './common/extension';
 
-import { ethers } from 'hardhat';
-import { assert } from 'chai';
+import { ethers } from 'ethers';
+import assert from 'assert';
 import { newSecretHashPair, newHoldId } from './utils/crypto';
 import {
   BatchReader,
@@ -22,9 +22,8 @@ import {
   ERC721Token__factory
 } from '../typechain-types';
 import { ZERO_ADDRESS, ZERO_BYTE, ZERO_BYTES32 } from './utils/assert';
-import { Signer } from 'ethers';
 import truffleFixture from './truffle-fixture';
-import { getSigners } from './common/wallet';
+import { provider, getSigners } from './common/wallet';
 
 const partition1_short =
   '7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
@@ -77,8 +76,6 @@ const SECONDS_IN_AN_HOUR = 3600;
 const holdAmount = 6;
 
 describe('BatchReader', function () {
-  const signers = getSigners(9);
-
   const [
     signer,
     controller1Signer,
@@ -89,18 +86,7 @@ describe('BatchReader', function () {
     tokenHolder2Signer,
     tokenHolder3Signer,
     unknownSigner
-  ] = signers;
-  const [
-    owner,
-    controller1,
-    controller2,
-    controller3,
-    deployer,
-    tokenHolder1,
-    tokenHolder2,
-    tokenHolder3,
-    unknown
-  ] = signers.map((s) => s.address);
+  ] = getSigners(9);
 
   let balanceReader: BatchReader;
 
@@ -132,7 +118,7 @@ describe('BatchReader', function () {
       'ERC1400Token',
       'DAU',
       1,
-      [controller1],
+      [controller1Signer.getAddress()],
       token1DefaultPartitions,
       extension.address,
       ZERO_ADDRESS, // owner
@@ -145,7 +131,7 @@ describe('BatchReader', function () {
       'ERC1400Token',
       'DAU',
       1,
-      [controller1],
+      [controller1Signer.getAddress()],
       token2DefaultPartitions,
       extension.address,
       ZERO_ADDRESS, // owner
@@ -161,7 +147,7 @@ describe('BatchReader', function () {
       [],
       token3DefaultPartitions,
       extension2.address,
-      owner, // owner
+      signer.getAddress(), // owner
       ZERO_ADDRESS, // certitficate signer
       CERTIFICATE_VALIDATION_SALT
     );
@@ -171,7 +157,11 @@ describe('BatchReader', function () {
       'ERC1400Token',
       'DAU',
       1,
-      [controller1, controller2, controller3],
+      [
+        controller1Signer.getAddress(),
+        controller2Signer.getAddress(),
+        controller3Signer.getAddress()
+      ],
       token4DefaultPartitions,
       ZERO_ADDRESS, // extension
       ZERO_ADDRESS, // owner
@@ -194,64 +184,139 @@ describe('BatchReader', function () {
     );
 
     // Add token extension controllers
-    await addTokenController(extension2, token3, owner, controller1);
-    await addTokenController(extension2, token3, owner, controller2);
+    await addTokenController(
+      extension2,
+      token3,
+      await signer.getAddress(),
+      await controller1Signer.getAddress()
+    );
+    await addTokenController(
+      extension2,
+      token3,
+      await signer.getAddress(),
+      await controller2Signer.getAddress()
+    );
 
     // Deactivate allowlist checks
-    await setAllowListActivated(extension, token1, controller1, false);
-    await setAllowListActivated(extension, token2, controller1, false);
+    await setAllowListActivated(
+      extension,
+      token1,
+      await controller1Signer.getAddress(),
+      false
+    );
+    await setAllowListActivated(
+      extension,
+      token2,
+      await controller1Signer.getAddress(),
+      false
+    );
 
     // Deactivate blocklist checks
-    await setBlockListActivated(extension, token2, controller1, false);
+    await setBlockListActivated(
+      extension,
+      token2,
+      await controller1Signer.getAddress(),
+      false
+    );
 
     // Deactivate granularity by partition checks
     await setGranularityByPartitionActivated(
       extension,
       token1,
-      controller1,
+      await controller1Signer.getAddress(),
       false
     );
 
     // Deactivate holds
-    await setHoldsActivated(extension2, token3, owner, false);
+    await setHoldsActivated(
+      extension2,
+      token3,
+      await signer.getAddress(),
+      false
+    );
 
     // Token1
     await token1
       .connect(controller1Signer)
-      .issueByPartition(partition1, tokenHolder1, issuanceAmount11, ZERO_BYTE);
+      .issueByPartition(
+        partition1,
+        tokenHolder1Signer.getAddress(),
+        issuanceAmount11,
+        ZERO_BYTE
+      );
     await token1
       .connect(controller1Signer)
-      .issueByPartition(partition1, tokenHolder2, issuanceAmount12, ZERO_BYTE);
+      .issueByPartition(
+        partition1,
+        tokenHolder2Signer.getAddress(),
+        issuanceAmount12,
+        ZERO_BYTE
+      );
     await token1
       .connect(controller1Signer)
-      .issueByPartition(partition1, tokenHolder3, issuanceAmount13, ZERO_BYTE);
+      .issueByPartition(
+        partition1,
+        tokenHolder3Signer.getAddress(),
+        issuanceAmount13,
+        ZERO_BYTE
+      );
 
     await token1
       .connect(controller1Signer)
-      .issueByPartition(partition2, tokenHolder1, issuanceAmount21, ZERO_BYTE);
+      .issueByPartition(
+        partition2,
+        tokenHolder1Signer.getAddress(),
+        issuanceAmount21,
+        ZERO_BYTE
+      );
     await token1
       .connect(controller1Signer)
-      .issueByPartition(partition2, tokenHolder2, issuanceAmount22, ZERO_BYTE);
+      .issueByPartition(
+        partition2,
+        tokenHolder2Signer.getAddress(),
+        issuanceAmount22,
+        ZERO_BYTE
+      );
     await token1
       .connect(controller1Signer)
-      .issueByPartition(partition2, tokenHolder3, issuanceAmount23, ZERO_BYTE);
+      .issueByPartition(
+        partition2,
+        tokenHolder3Signer.getAddress(),
+        issuanceAmount23,
+        ZERO_BYTE
+      );
 
     await token1
       .connect(controller1Signer)
-      .issueByPartition(partition3, tokenHolder1, issuanceAmount31, ZERO_BYTE);
+      .issueByPartition(
+        partition3,
+        tokenHolder1Signer.getAddress(),
+        issuanceAmount31,
+        ZERO_BYTE
+      );
     await token1
       .connect(controller1Signer)
-      .issueByPartition(partition3, tokenHolder2, issuanceAmount32, ZERO_BYTE);
+      .issueByPartition(
+        partition3,
+        tokenHolder2Signer.getAddress(),
+        issuanceAmount32,
+        ZERO_BYTE
+      );
     await token1
       .connect(controller1Signer)
-      .issueByPartition(partition3, tokenHolder3, issuanceAmount33, ZERO_BYTE);
+      .issueByPartition(
+        partition3,
+        tokenHolder3Signer.getAddress(),
+        issuanceAmount33,
+        ZERO_BYTE
+      );
 
     // Token2
     await token2
       .connect(controller1Signer)
       .issueByPartition(
         partition2,
-        tokenHolder1,
+        tokenHolder1Signer.getAddress(),
         2 * issuanceAmount21,
         ZERO_BYTE
       );
@@ -259,7 +324,7 @@ describe('BatchReader', function () {
       .connect(controller1Signer)
       .issueByPartition(
         partition2,
-        tokenHolder2,
+        tokenHolder2Signer.getAddress(),
         2 * issuanceAmount22,
         ZERO_BYTE
       );
@@ -267,7 +332,7 @@ describe('BatchReader', function () {
       .connect(controller1Signer)
       .issueByPartition(
         partition2,
-        tokenHolder3,
+        tokenHolder3Signer.getAddress(),
         2 * issuanceAmount23,
         ZERO_BYTE
       );
@@ -276,7 +341,7 @@ describe('BatchReader', function () {
       .connect(controller1Signer)
       .issueByPartition(
         partition3,
-        tokenHolder1,
+        tokenHolder1Signer.getAddress(),
         2 * issuanceAmount31,
         ZERO_BYTE
       );
@@ -284,7 +349,7 @@ describe('BatchReader', function () {
       .connect(controller1Signer)
       .issueByPartition(
         partition3,
-        tokenHolder2,
+        tokenHolder2Signer.getAddress(),
         2 * issuanceAmount32,
         ZERO_BYTE
       );
@@ -292,7 +357,7 @@ describe('BatchReader', function () {
       .connect(controller1Signer)
       .issueByPartition(
         partition3,
-        tokenHolder3,
+        tokenHolder3Signer.getAddress(),
         2 * issuanceAmount33,
         ZERO_BYTE
       );
@@ -301,7 +366,7 @@ describe('BatchReader', function () {
       .connect(controller1Signer)
       .issueByPartition(
         partition4,
-        tokenHolder1,
+        tokenHolder1Signer.getAddress(),
         2 * issuanceAmount41,
         ZERO_BYTE
       );
@@ -309,7 +374,7 @@ describe('BatchReader', function () {
       .connect(controller1Signer)
       .issueByPartition(
         partition4,
-        tokenHolder2,
+        tokenHolder2Signer.getAddress(),
         2 * issuanceAmount42,
         ZERO_BYTE
       );
@@ -317,7 +382,7 @@ describe('BatchReader', function () {
       .connect(controller1Signer)
       .issueByPartition(
         partition4,
-        tokenHolder3,
+        tokenHolder3Signer.getAddress(),
         2 * issuanceAmount43,
         ZERO_BYTE
       );
@@ -327,14 +392,14 @@ describe('BatchReader', function () {
       .connect(controller3Signer)
       .issueByPartition(
         partition1,
-        tokenHolder1,
+        tokenHolder1Signer.getAddress(),
         4 * issuanceAmount11,
         ZERO_BYTE
       );
 
     // Transfer some ETH to modify the balances
     tokenHolder1Signer.sendTransaction({
-      to: tokenHolder2,
+      to: tokenHolder2Signer.getAddress(),
       value: ethers.utils.parseEther('5')
     });
 
@@ -342,8 +407,8 @@ describe('BatchReader', function () {
     await extension.connect(tokenHolder1Signer).hold(
       token1.address,
       newHoldId(),
-      tokenHolder2,
-      unknown, // notary
+      tokenHolder2Signer.getAddress(),
+      unknownSigner.getAddress(), // notary
       partition1,
       holdAmount,
       SECONDS_IN_AN_HOUR,
@@ -353,8 +418,8 @@ describe('BatchReader', function () {
     await extension.connect(tokenHolder3Signer).hold(
       token2.address,
       newHoldId(),
-      tokenHolder2,
-      unknown, // notary
+      tokenHolder2Signer.getAddress(),
+      unknownSigner.getAddress(), // notary
       partition2,
       2 * holdAmount,
       SECONDS_IN_AN_HOUR,
@@ -365,59 +430,59 @@ describe('BatchReader', function () {
     // Add allowlisted
     await extension
       .connect(controller1Signer)
-      .addAllowlisted(token1.address, tokenHolder1);
+      .addAllowlisted(token1.address, tokenHolder1Signer.getAddress());
     await extension
       .connect(controller1Signer)
-      .addAllowlisted(token1.address, tokenHolder2);
+      .addAllowlisted(token1.address, tokenHolder2Signer.getAddress());
     await extension
       .connect(controller1Signer)
-      .addAllowlisted(token2.address, tokenHolder3);
+      .addAllowlisted(token2.address, tokenHolder3Signer.getAddress());
 
     // Add blocklisted
     await extension
       .connect(controller1Signer)
-      .addBlocklisted(token1.address, tokenHolder3);
+      .addBlocklisted(token1.address, tokenHolder3Signer.getAddress());
     await extension
       .connect(controller1Signer)
-      .addBlocklisted(token2.address, tokenHolder2);
+      .addBlocklisted(token2.address, tokenHolder2Signer.getAddress());
     await extension
       .connect(controller1Signer)
-      .addBlocklisted(token2.address, tokenHolder3);
+      .addBlocklisted(token2.address, tokenHolder3Signer.getAddress());
 
     // Mint NFTs
-    await token5.mint(tokenHolder1, 1);
-    await token5.mint(tokenHolder1, 2);
-    await token5.mint(tokenHolder1, 3);
-    await token5.mint(tokenHolder1, 4);
+    await token5.mint(tokenHolder1Signer.getAddress(), 1);
+    await token5.mint(tokenHolder1Signer.getAddress(), 2);
+    await token5.mint(tokenHolder1Signer.getAddress(), 3);
+    await token5.mint(tokenHolder1Signer.getAddress(), 4);
 
-    await token5.mint(tokenHolder2, 5);
-    await token5.mint(tokenHolder2, 6);
-    await token5.mint(tokenHolder2, 7);
+    await token5.mint(tokenHolder2Signer.getAddress(), 5);
+    await token5.mint(tokenHolder2Signer.getAddress(), 6);
+    await token5.mint(tokenHolder2Signer.getAddress(), 7);
 
-    await token5.mint(tokenHolder3, 8);
-    await token5.mint(tokenHolder3, 9);
-    await token5.mint(tokenHolder3, 10);
-    await token5.mint(tokenHolder3, 11);
-    await token5.mint(tokenHolder3, 12);
-    await token5.mint(tokenHolder3, 13);
-    await token5.mint(tokenHolder3, 14);
+    await token5.mint(tokenHolder3Signer.getAddress(), 8);
+    await token5.mint(tokenHolder3Signer.getAddress(), 9);
+    await token5.mint(tokenHolder3Signer.getAddress(), 10);
+    await token5.mint(tokenHolder3Signer.getAddress(), 11);
+    await token5.mint(tokenHolder3Signer.getAddress(), 12);
+    await token5.mint(tokenHolder3Signer.getAddress(), 13);
+    await token5.mint(tokenHolder3Signer.getAddress(), 14);
 
-    await token6.mint(tokenHolder1, 10);
-    await token6.mint(tokenHolder1, 20);
-    await token6.mint(tokenHolder1, 30);
-    await token6.mint(tokenHolder1, 40);
+    await token6.mint(tokenHolder1Signer.getAddress(), 10);
+    await token6.mint(tokenHolder1Signer.getAddress(), 20);
+    await token6.mint(tokenHolder1Signer.getAddress(), 30);
+    await token6.mint(tokenHolder1Signer.getAddress(), 40);
 
-    await token6.mint(tokenHolder2, 50);
-    await token6.mint(tokenHolder2, 60);
-    await token6.mint(tokenHolder2, 70);
+    await token6.mint(tokenHolder2Signer.getAddress(), 50);
+    await token6.mint(tokenHolder2Signer.getAddress(), 60);
+    await token6.mint(tokenHolder2Signer.getAddress(), 70);
 
-    await token6.mint(tokenHolder3, 80);
-    await token6.mint(tokenHolder3, 90);
-    await token6.mint(tokenHolder3, 100);
-    await token6.mint(tokenHolder3, 110);
-    await token6.mint(tokenHolder3, 120);
-    await token6.mint(tokenHolder3, 130);
-    await token6.mint(tokenHolder3, 140);
+    await token6.mint(tokenHolder3Signer.getAddress(), 80);
+    await token6.mint(tokenHolder3Signer.getAddress(), 90);
+    await token6.mint(tokenHolder3Signer.getAddress(), 100);
+    await token6.mint(tokenHolder3Signer.getAddress(), 110);
+    await token6.mint(tokenHolder3Signer.getAddress(), 120);
+    await token6.mint(tokenHolder3Signer.getAddress(), 130);
+    await token6.mint(tokenHolder3Signer.getAddress(), 140);
   });
 
   describe('batchTokenSuppliesInfos', function () {
@@ -469,45 +534,45 @@ describe('BatchReader', function () {
 
       // TOTAL SUPPLIES
       //
-      assert.equal(batchTotalSupplies.length, tokenAddresses.length);
+      assert.strictEqual(batchTotalSupplies.length, tokenAddresses.length);
       //
       // Token1
-      assert.equal(batchTotalSupplies[0].toNumber(), totalSupply1);
+      assert.strictEqual(batchTotalSupplies[0].toNumber(), totalSupply1);
       // Token2
-      assert.equal(batchTotalSupplies[1].toNumber(), totalSupply2);
+      assert.strictEqual(batchTotalSupplies[1].toNumber(), totalSupply2);
       // Token3
-      assert.equal(batchTotalSupplies[2].toNumber(), totalSupply3);
+      assert.strictEqual(batchTotalSupplies[2].toNumber(), totalSupply3);
       // Token3
-      assert.equal(batchTotalSupplies[3].toNumber(), totalSupply4);
+      assert.strictEqual(batchTotalSupplies[3].toNumber(), totalSupply4);
 
       // TOTAL PARTITIONS LENGTH
       //
-      assert.equal(totalPartitionsLengths.length, tokenAddresses.length);
+      assert.strictEqual(totalPartitionsLengths.length, tokenAddresses.length);
       //
       // Token1
-      assert.equal(
+      assert.strictEqual(
         totalPartitionsLengths[0].toNumber(),
         token1Partitions.length
       );
       // Token2
-      assert.equal(
+      assert.strictEqual(
         totalPartitionsLengths[1].toNumber(),
         token2Partitions.length
       );
       // Token3
-      assert.equal(
+      assert.strictEqual(
         totalPartitionsLengths[2].toNumber(),
         token3Partitions.length
       );
       // Token3
-      assert.equal(
+      assert.strictEqual(
         totalPartitionsLengths[3].toNumber(),
         token4Partitions.length
       );
 
       // TOTAL PARTITIONS
       //
-      assert.equal(
+      assert.strictEqual(
         batchTotalPartitions.length,
         token1Partitions.length +
           token2Partitions.length +
@@ -516,21 +581,21 @@ describe('BatchReader', function () {
       );
       //
       // Token1
-      assert.equal(batchTotalPartitions[0], token1Partitions[0]);
-      assert.equal(batchTotalPartitions[1], token1Partitions[1]);
-      assert.equal(batchTotalPartitions[2], token1Partitions[2]);
+      assert.strictEqual(batchTotalPartitions[0], token1Partitions[0]);
+      assert.strictEqual(batchTotalPartitions[1], token1Partitions[1]);
+      assert.strictEqual(batchTotalPartitions[2], token1Partitions[2]);
       // Token2
-      assert.equal(batchTotalPartitions[3], token2Partitions[0]);
-      assert.equal(batchTotalPartitions[4], token2Partitions[1]);
-      assert.equal(batchTotalPartitions[5], token2Partitions[2]);
+      assert.strictEqual(batchTotalPartitions[3], token2Partitions[0]);
+      assert.strictEqual(batchTotalPartitions[4], token2Partitions[1]);
+      assert.strictEqual(batchTotalPartitions[5], token2Partitions[2]);
       // Token3
       // NA
       // Token4
-      assert.equal(batchTotalPartitions[6], token4Partitions[0]);
+      assert.strictEqual(batchTotalPartitions[6], token4Partitions[0]);
 
       // PARTITION SUPPLIES
       //
-      assert.equal(
+      assert.strictEqual(
         batchPartitionSupplies.length,
         token1Partitions.length +
           token2Partitions.length +
@@ -539,67 +604,70 @@ describe('BatchReader', function () {
       );
       //
       // Token1
-      assert.equal(
+      assert.strictEqual(
         batchPartitionSupplies[0].toNumber(),
         totalSupply1Partition1
       );
-      assert.equal(
+      assert.strictEqual(
         batchPartitionSupplies[1].toNumber(),
         totalSupply1Partition2
       );
-      assert.equal(
+      assert.strictEqual(
         batchPartitionSupplies[2].toNumber(),
         totalSupply1Partition3
       );
       // Token2
-      assert.equal(
+      assert.strictEqual(
         batchPartitionSupplies[3].toNumber(),
         totalSupply2Partition1
       );
-      assert.equal(
+      assert.strictEqual(
         batchPartitionSupplies[4].toNumber(),
         totalSupply2Partition2
       );
-      assert.equal(
+      assert.strictEqual(
         batchPartitionSupplies[5].toNumber(),
         totalSupply2Partition3
       );
       // Token3
       // NA
       // Token4
-      assert.equal(
+      assert.strictEqual(
         batchPartitionSupplies[6].toNumber(),
         totalSupply4Partition1
       );
 
       // DEFAULT PARTITIONS LENGTH
       //
-      assert.equal(defaultPartitionsLengths.length, tokenAddresses.length);
+      assert.strictEqual(
+        defaultPartitionsLengths.length,
+        tokenAddresses.length
+      );
       //
       // Token1
-      assert.equal(
+      assert.strictEqual(
         defaultPartitionsLengths[0].toNumber(),
         token1DefaultPartitions.length
       );
       // Token2
-      assert.equal(
+      assert.strictEqual(
         defaultPartitionsLengths[1].toNumber(),
         token2DefaultPartitions.length
       );
       // Token3
-      assert.equal(
+      assert.strictEqual(
         defaultPartitionsLengths[2].toNumber(),
         token3DefaultPartitions.length
       );
       // Token4
-      assert.equal(
+      assert.strictEqual(
         defaultPartitionsLengths[3].toNumber(),
         token4DefaultPartitions.length
       );
 
       // DEFAULT PARTITIONS
       //
-      assert.equal(
+      assert.strictEqual(
         batchDefaultPartitions.length,
         token1DefaultPartitions.length +
           token2DefaultPartitions.length +
@@ -608,19 +676,19 @@ describe('BatchReader', function () {
       );
       //
       // Token1
-      assert.equal(batchDefaultPartitions[0], token1DefaultPartitions[0]);
-      assert.equal(batchDefaultPartitions[1], token1DefaultPartitions[1]);
-      assert.equal(batchDefaultPartitions[2], token1DefaultPartitions[2]);
+      assert.strictEqual(batchDefaultPartitions[0], token1DefaultPartitions[0]);
+      assert.strictEqual(batchDefaultPartitions[1], token1DefaultPartitions[1]);
+      assert.strictEqual(batchDefaultPartitions[2], token1DefaultPartitions[2]);
       // Token2
-      assert.equal(batchDefaultPartitions[3], token2DefaultPartitions[0]);
-      assert.equal(batchDefaultPartitions[4], token2DefaultPartitions[1]);
-      assert.equal(batchDefaultPartitions[5], token2DefaultPartitions[2]);
-      assert.equal(batchDefaultPartitions[6], token2DefaultPartitions[3]);
+      assert.strictEqual(batchDefaultPartitions[3], token2DefaultPartitions[0]);
+      assert.strictEqual(batchDefaultPartitions[4], token2DefaultPartitions[1]);
+      assert.strictEqual(batchDefaultPartitions[5], token2DefaultPartitions[2]);
+      assert.strictEqual(batchDefaultPartitions[6], token2DefaultPartitions[3]);
       // Token3
       // NA
       // Token4
-      assert.equal(batchDefaultPartitions[7], token4DefaultPartitions[0]);
-      assert.equal(batchDefaultPartitions[8], token4DefaultPartitions[1]);
+      assert.strictEqual(batchDefaultPartitions[7], token4DefaultPartitions[0]);
+      assert.strictEqual(batchDefaultPartitions[8], token4DefaultPartitions[1]);
     });
   });
 
@@ -645,72 +713,99 @@ describe('BatchReader', function () {
 
       // OWNERS
       //
-      assert.equal(batchOwners.length, tokenAddresses.length);
+      assert.strictEqual(batchOwners.length, tokenAddresses.length);
       //
       // Token1
-      assert.equal(batchOwners[0], controller1);
+      assert.strictEqual(batchOwners[0], await controller1Signer.getAddress());
       // Token2
-      assert.equal(batchOwners[1], controller1);
+      assert.strictEqual(batchOwners[1], await controller1Signer.getAddress());
       // Token3
-      assert.equal(batchOwners[2], owner);
+      assert.strictEqual(batchOwners[2], await signer.getAddress());
       // Token4
-      assert.equal(batchOwners[3], controller3);
+      assert.strictEqual(batchOwners[3], await controller3Signer.getAddress());
 
       // CONTROLLERS LENGTH
       //
-      assert.equal(batchControllersLength.length, tokenAddresses.length);
+      assert.strictEqual(batchControllersLength.length, tokenAddresses.length);
       //
       // Token1
-      assert.equal(batchControllersLength[0].toNumber(), 1);
+      assert.strictEqual(batchControllersLength[0].toNumber(), 1);
       // Token2
-      assert.equal(batchControllersLength[1].toNumber(), 1);
+      assert.strictEqual(batchControllersLength[1].toNumber(), 1);
       // Token3
-      assert.equal(batchControllersLength[2].toNumber(), 0);
+      assert.strictEqual(batchControllersLength[2].toNumber(), 0);
       // Token4
-      assert.equal(batchControllersLength[3].toNumber(), 3);
+      assert.strictEqual(batchControllersLength[3].toNumber(), 3);
 
       // CONTROLLERS
       //
-      assert.equal(batchControllers.length, 1 + 1 + 0 + 3);
+      assert.strictEqual(batchControllers.length, 1 + 1 + 0 + 3);
       //
       // Token1
-      assert.equal(batchControllers[0], controller1);
+      assert.strictEqual(
+        batchControllers[0],
+        await controller1Signer.getAddress()
+      );
       // Token2
-      assert.equal(batchControllers[1], controller1);
+      assert.strictEqual(
+        batchControllers[1],
+        await controller1Signer.getAddress()
+      );
       // Token3
       //
       // Token4
-      assert.equal(batchControllers[2], controller1);
-      assert.equal(batchControllers[3], controller2);
-      assert.equal(batchControllers[4], controller3);
+      assert.strictEqual(
+        batchControllers[2],
+        await controller1Signer.getAddress()
+      );
+      assert.strictEqual(
+        batchControllers[3],
+        await controller2Signer.getAddress()
+      );
+      assert.strictEqual(
+        batchControllers[4],
+        await controller3Signer.getAddress()
+      );
 
       // EXTENSION CONTROLLERS LENGTH
       //
-      assert.equal(
+      assert.strictEqual(
         batchExtensionControllersLength.length,
         tokenAddresses.length
       );
       //
       // Token1
-      assert.equal(batchExtensionControllersLength[0].toNumber(), 1);
+      assert.strictEqual(batchExtensionControllersLength[0].toNumber(), 1);
       // Token2
-      assert.equal(batchExtensionControllersLength[1].toNumber(), 1);
+      assert.strictEqual(batchExtensionControllersLength[1].toNumber(), 1);
       // Token3
-      assert.equal(batchExtensionControllersLength[2].toNumber(), 2);
+      assert.strictEqual(batchExtensionControllersLength[2].toNumber(), 2);
       // Token4
-      assert.equal(batchExtensionControllersLength[3].toNumber(), 0);
+      assert.strictEqual(batchExtensionControllersLength[3].toNumber(), 0);
 
       // EXTENSION CONTROLLERS
       //
-      assert.equal(batchExtensionControllers.length, 1 + 1 + 2 + 0);
+      assert.strictEqual(batchExtensionControllers.length, 1 + 1 + 2 + 0);
       //
       // Token1
-      assert.equal(batchExtensionControllers[0], controller1);
+      assert.strictEqual(
+        batchExtensionControllers[0],
+        await controller1Signer.getAddress()
+      );
       // Token2
-      assert.equal(batchExtensionControllers[1], controller1);
+      assert.strictEqual(
+        batchExtensionControllers[1],
+        await controller1Signer.getAddress()
+      );
       // Token3
-      assert.equal(batchExtensionControllers[2], controller1);
-      assert.equal(batchExtensionControllers[3], controller2);
+      assert.strictEqual(
+        batchExtensionControllers[2],
+        await controller1Signer.getAddress()
+      );
+      assert.strictEqual(
+        batchExtensionControllers[3],
+        await controller2Signer.getAddress()
+      );
       // Token4
       //
     });
@@ -738,90 +833,109 @@ describe('BatchReader', function () {
 
       // TOKEN EXTENSION ADDRESS
       //
-      assert.equal(batchTokenExtension.length, tokenAddresses.length);
+      assert.strictEqual(batchTokenExtension.length, tokenAddresses.length);
       //
       // Token1
-      assert.equal(batchTokenExtension[0], extension.address);
+      assert.strictEqual(batchTokenExtension[0], extension.address);
       // Token2
-      assert.equal(batchTokenExtension[1], extension.address);
+      assert.strictEqual(batchTokenExtension[1], extension.address);
       // Token3
-      assert.equal(batchTokenExtension[2], extension2.address);
+      assert.strictEqual(batchTokenExtension[2], extension2.address);
       // Token4
-      assert.equal(batchTokenExtension[3], ZERO_ADDRESS);
+      assert.strictEqual(batchTokenExtension[3], ZERO_ADDRESS);
 
       // CERTIFICATE VALIDATION
       //
-      assert.equal(batchCertificateActivated.length, tokenAddresses.length);
+      assert.strictEqual(
+        batchCertificateActivated.length,
+        tokenAddresses.length
+      );
       //
       // Token1
-      assert.equal(batchCertificateActivated[0], CERTIFICATE_VALIDATION_NONE);
+      assert.strictEqual(
+        batchCertificateActivated[0],
+        CERTIFICATE_VALIDATION_NONE
+      );
       // Token2
-      assert.equal(batchCertificateActivated[1], CERTIFICATE_VALIDATION_NONE);
+      assert.strictEqual(
+        batchCertificateActivated[1],
+        CERTIFICATE_VALIDATION_NONE
+      );
       // Token3
-      assert.equal(batchCertificateActivated[2], CERTIFICATE_VALIDATION_SALT);
+      assert.strictEqual(
+        batchCertificateActivated[2],
+        CERTIFICATE_VALIDATION_SALT
+      );
       // Token4
-      assert.equal(batchCertificateActivated[3], CERTIFICATE_VALIDATION_NONE);
+      assert.strictEqual(
+        batchCertificateActivated[3],
+        CERTIFICATE_VALIDATION_NONE
+      );
 
       // ALLOWLIST
       //
-      assert.equal(batchAllowlistActivated.length, tokenAddresses.length);
+      assert.strictEqual(batchAllowlistActivated.length, tokenAddresses.length);
       //
       // Token1
-      assert.equal(batchAllowlistActivated[0], false);
+      assert.strictEqual(batchAllowlistActivated[0], false);
       // Token2
-      assert.equal(batchAllowlistActivated[1], false);
+      assert.strictEqual(batchAllowlistActivated[1], false);
       // Token3
-      assert.equal(batchAllowlistActivated[2], true);
+      assert.strictEqual(batchAllowlistActivated[2], true);
       // Token4
-      assert.equal(batchAllowlistActivated[3], false);
+      assert.strictEqual(batchAllowlistActivated[3], false);
 
       // BLOCKLIST
       //
-      assert.equal(batchBlocklistActivated.length, tokenAddresses.length);
+      assert.strictEqual(batchBlocklistActivated.length, tokenAddresses.length);
       //
       // Token1
-      assert.equal(batchBlocklistActivated[0], true);
+      assert.strictEqual(batchBlocklistActivated[0], true);
       // Token2
-      assert.equal(batchBlocklistActivated[1], false);
+      assert.strictEqual(batchBlocklistActivated[1], false);
       // Token3
-      assert.equal(batchBlocklistActivated[2], true);
+      assert.strictEqual(batchBlocklistActivated[2], true);
       // Token4
-      assert.equal(batchBlocklistActivated[3], false);
+      assert.strictEqual(batchBlocklistActivated[3], false);
 
       // GRANULARITY BY PARTITION
       //
-      assert.equal(
+      assert.strictEqual(
         batchGranularityByPartitionActivated.length,
         tokenAddresses.length
       );
       //
       // Token1
-      assert.equal(batchGranularityByPartitionActivated[0], false);
+      assert.strictEqual(batchGranularityByPartitionActivated[0], false);
       // Token2
-      assert.equal(batchGranularityByPartitionActivated[1], true);
+      assert.strictEqual(batchGranularityByPartitionActivated[1], true);
       // Token3
-      assert.equal(batchGranularityByPartitionActivated[2], true);
+      assert.strictEqual(batchGranularityByPartitionActivated[2], true);
       // Token4
-      assert.equal(batchGranularityByPartitionActivated[3], false);
+      assert.strictEqual(batchGranularityByPartitionActivated[3], false);
 
       // HOLDS
       //
-      assert.equal(batchHoldsActivated.length, tokenAddresses.length);
+      assert.strictEqual(batchHoldsActivated.length, tokenAddresses.length);
       //
       // Token1
-      assert.equal(batchHoldsActivated[0], true);
+      assert.strictEqual(batchHoldsActivated[0], true);
       // Token2
-      assert.equal(batchHoldsActivated[1], true);
+      assert.strictEqual(batchHoldsActivated[1], true);
       // Token3
-      assert.equal(batchHoldsActivated[2], false);
+      assert.strictEqual(batchHoldsActivated[2], false);
       // Token4
-      assert.equal(batchHoldsActivated[3], false);
+      assert.strictEqual(batchHoldsActivated[3], false);
     });
   });
 
   describe('batchBalances', function () {
     it('returns the lists of ETH, ERC20 and ERC1400 balances (spendable or not)', async function () {
-      const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
+      const tokenHolders = [
+        tokenHolder1Signer.getAddress(),
+        tokenHolder2Signer.getAddress(),
+        tokenHolder3Signer.getAddress()
+      ];
       const tokenAddresses = [
         token1.address,
         token2.address,
@@ -843,89 +957,89 @@ describe('BatchReader', function () {
       // ETH BALANCES
       //
 
-      assert.equal(batchEthBalances.length, tokenHolders.length);
-      assert.equal(
+      assert.strictEqual(batchEthBalances.length, tokenHolders.length);
+      assert.strictEqual(
         batchEthBalances[0].toString(),
-        (await ethers.provider.getBalance(tokenHolders[0])).toString()
+        (await provider.getBalance(tokenHolders[0])).toString()
       );
-      assert.equal(
+      assert.strictEqual(
         batchEthBalances[1].toString(),
-        (await ethers.provider.getBalance(tokenHolders[1])).toString()
+        (await provider.getBalance(tokenHolders[1])).toString()
       );
-      assert.equal(
+      assert.strictEqual(
         batchEthBalances[2].toString(),
-        (await ethers.provider.getBalance(tokenHolders[2])).toString()
+        (await provider.getBalance(tokenHolders[2])).toString()
       );
 
       // BALANCES
       //
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf.length,
         tokenHolders.length * tokenAddresses.length
       );
       //
       // Tokenholder1
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf[0].toNumber(),
         issuanceAmount11 + issuanceAmount21 + issuanceAmount31
       );
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf[1].toNumber(),
         2 * (issuanceAmount21 + issuanceAmount31 + issuanceAmount41)
       );
-      assert.equal(batchBalancesOf[2].toNumber(), 0);
-      assert.equal(batchBalancesOf[3].toNumber(), 4 * issuanceAmount11);
+      assert.strictEqual(batchBalancesOf[2].toNumber(), 0);
+      assert.strictEqual(batchBalancesOf[3].toNumber(), 4 * issuanceAmount11);
       // Tokenholder2
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf[4].toNumber(),
         issuanceAmount12 + issuanceAmount22 + issuanceAmount32
       );
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf[5].toNumber(),
         2 * (issuanceAmount22 + issuanceAmount32 + issuanceAmount42)
       );
-      assert.equal(batchBalancesOf[6].toNumber(), 0);
-      assert.equal(batchBalancesOf[7].toNumber(), 0);
+      assert.strictEqual(batchBalancesOf[6].toNumber(), 0);
+      assert.strictEqual(batchBalancesOf[7].toNumber(), 0);
       // Tokenholder3
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf[8].toNumber(),
         issuanceAmount13 + issuanceAmount23 + issuanceAmount33
       );
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf[9].toNumber(),
         2 * (issuanceAmount23 + issuanceAmount33 + issuanceAmount43)
       );
-      assert.equal(batchBalancesOf[10].toNumber(), 0);
-      assert.equal(batchBalancesOf[11].toNumber(), 0);
+      assert.strictEqual(batchBalancesOf[10].toNumber(), 0);
+      assert.strictEqual(batchBalancesOf[11].toNumber(), 0);
 
       // TOTAL PARTITION LENGTHS
       //
-      assert.equal(totalPartitionsLengths.length, tokenAddresses.length);
+      assert.strictEqual(totalPartitionsLengths.length, tokenAddresses.length);
       //
       // Token1
-      assert.equal(
+      assert.strictEqual(
         totalPartitionsLengths[0].toNumber(),
         token1Partitions.length
       );
       // Token2
-      assert.equal(
+      assert.strictEqual(
         totalPartitionsLengths[1].toNumber(),
         token2Partitions.length
       );
       // Token3
-      assert.equal(
+      assert.strictEqual(
         totalPartitionsLengths[2].toNumber(),
         token3Partitions.length
       );
       // Token4
-      assert.equal(
+      assert.strictEqual(
         totalPartitionsLengths[3].toNumber(),
         token4Partitions.length
       );
 
       // TOTAL PARTITIONS
       //
-      assert.equal(
+      assert.strictEqual(
         batchTotalPartitions.length,
         token1Partitions.length +
           token2Partitions.length +
@@ -934,21 +1048,21 @@ describe('BatchReader', function () {
       );
       //
       // Token1
-      assert.equal(batchTotalPartitions[0], token1Partitions[0]);
-      assert.equal(batchTotalPartitions[1], token1Partitions[1]);
-      assert.equal(batchTotalPartitions[2], token1Partitions[2]);
+      assert.strictEqual(batchTotalPartitions[0], token1Partitions[0]);
+      assert.strictEqual(batchTotalPartitions[1], token1Partitions[1]);
+      assert.strictEqual(batchTotalPartitions[2], token1Partitions[2]);
       // Token2
-      assert.equal(batchTotalPartitions[3], token2Partitions[0]);
-      assert.equal(batchTotalPartitions[4], token2Partitions[1]);
-      assert.equal(batchTotalPartitions[5], token2Partitions[2]);
+      assert.strictEqual(batchTotalPartitions[3], token2Partitions[0]);
+      assert.strictEqual(batchTotalPartitions[4], token2Partitions[1]);
+      assert.strictEqual(batchTotalPartitions[5], token2Partitions[2]);
       // Token3
       // NA
       // Token4
-      assert.equal(batchTotalPartitions[6], token4Partitions[0]);
+      assert.strictEqual(batchTotalPartitions[6], token4Partitions[0]);
 
       // PARTITION BALANCES
       //
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOfByPartition.length,
         tokenHolders.length *
           (token1Partitions.length +
@@ -958,77 +1072,104 @@ describe('BatchReader', function () {
       );
       //
       // Tokenholder1 - token1
-      assert.equal(batchBalancesOfByPartition[0].toNumber(), issuanceAmount11);
-      assert.equal(batchBalancesOfByPartition[1].toNumber(), issuanceAmount21);
-      assert.equal(batchBalancesOfByPartition[2].toNumber(), issuanceAmount31);
+      assert.strictEqual(
+        batchBalancesOfByPartition[0].toNumber(),
+        issuanceAmount11
+      );
+      assert.strictEqual(
+        batchBalancesOfByPartition[1].toNumber(),
+        issuanceAmount21
+      );
+      assert.strictEqual(
+        batchBalancesOfByPartition[2].toNumber(),
+        issuanceAmount31
+      );
       // Tokenholder1 - token2
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOfByPartition[3].toNumber(),
         2 * issuanceAmount21
       );
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOfByPartition[4].toNumber(),
         2 * issuanceAmount31
       );
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOfByPartition[5].toNumber(),
         2 * issuanceAmount41
       );
       // Tokenholder1 - token3
       // NA
       // Tokenholder1 - token4
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOfByPartition[6].toNumber(),
         4 * issuanceAmount11
       );
       //
       // Tokenholder2 - token1
-      assert.equal(batchBalancesOfByPartition[7].toNumber(), issuanceAmount12);
-      assert.equal(batchBalancesOfByPartition[8].toNumber(), issuanceAmount22);
-      assert.equal(batchBalancesOfByPartition[9].toNumber(), issuanceAmount32);
+      assert.strictEqual(
+        batchBalancesOfByPartition[7].toNumber(),
+        issuanceAmount12
+      );
+      assert.strictEqual(
+        batchBalancesOfByPartition[8].toNumber(),
+        issuanceAmount22
+      );
+      assert.strictEqual(
+        batchBalancesOfByPartition[9].toNumber(),
+        issuanceAmount32
+      );
       // Tokenholder2 - token2
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOfByPartition[10].toNumber(),
         2 * issuanceAmount22
       );
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOfByPartition[11].toNumber(),
         2 * issuanceAmount32
       );
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOfByPartition[12].toNumber(),
         2 * issuanceAmount42
       );
       // Tokenholder2 - token3
       // NA
       // Tokenholder2 - token4
-      assert.equal(batchBalancesOfByPartition[13].toNumber(), 0);
+      assert.strictEqual(batchBalancesOfByPartition[13].toNumber(), 0);
       //
       // Tokenholder3 - token1
-      assert.equal(batchBalancesOfByPartition[14].toNumber(), issuanceAmount13);
-      assert.equal(batchBalancesOfByPartition[15].toNumber(), issuanceAmount23);
-      assert.equal(batchBalancesOfByPartition[16].toNumber(), issuanceAmount33);
+      assert.strictEqual(
+        batchBalancesOfByPartition[14].toNumber(),
+        issuanceAmount13
+      );
+      assert.strictEqual(
+        batchBalancesOfByPartition[15].toNumber(),
+        issuanceAmount23
+      );
+      assert.strictEqual(
+        batchBalancesOfByPartition[16].toNumber(),
+        issuanceAmount33
+      );
       // Tokenholder3 - token2
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOfByPartition[17].toNumber(),
         2 * issuanceAmount23
       );
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOfByPartition[18].toNumber(),
         2 * issuanceAmount33
       );
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOfByPartition[19].toNumber(),
         2 * issuanceAmount43
       );
       // Tokenholder3 - token3
       // NA
       // Tokenholder3 - token4
-      assert.equal(batchBalancesOfByPartition[20].toNumber(), 0);
+      assert.strictEqual(batchBalancesOfByPartition[20].toNumber(), 0);
 
       // SPENDABLE PARTITION BALANCES
       //
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition.length,
         tokenHolders.length *
           (token1Partitions.length +
@@ -1038,100 +1179,100 @@ describe('BatchReader', function () {
       );
       //
       // Tokenholder1 - token1
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[0].toNumber(),
         issuanceAmount11 - holdAmount
       );
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[1].toNumber(),
         issuanceAmount21
       );
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[2].toNumber(),
         issuanceAmount31
       );
       // Tokenholder1 - token2
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[3].toNumber(),
         2 * issuanceAmount21
       );
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[4].toNumber(),
         2 * issuanceAmount31
       );
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[5].toNumber(),
         2 * issuanceAmount41
       );
       // Tokenholder1 - token3
       // NA
       // Tokenholder1 - token4
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[6].toNumber(),
         4 * issuanceAmount11
       );
       //
       // Tokenholder2 - token1
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[7].toNumber(),
         issuanceAmount12
       );
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[8].toNumber(),
         issuanceAmount22
       );
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[9].toNumber(),
         issuanceAmount32
       );
       // Tokenholder2 - token2
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[10].toNumber(),
         2 * issuanceAmount22
       );
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[11].toNumber(),
         2 * issuanceAmount32
       );
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[12].toNumber(),
         2 * issuanceAmount42
       );
       // Tokenholder2 - token3
       // NA
       // Tokenholder2 - token4
-      assert.equal(batchSpendableBalancesOfByPartition[13].toNumber(), 0);
+      assert.strictEqual(batchSpendableBalancesOfByPartition[13].toNumber(), 0);
       //
       // Tokenholder3 - token1
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[14].toNumber(),
         issuanceAmount13
       );
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[15].toNumber(),
         issuanceAmount23
       );
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[16].toNumber(),
         issuanceAmount33
       );
       // Tokenholder3 - token2
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[17].toNumber(),
         2 * issuanceAmount23 - 2 * holdAmount
       );
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[18].toNumber(),
         2 * issuanceAmount33
       );
-      assert.equal(
+      assert.strictEqual(
         batchSpendableBalancesOfByPartition[19].toNumber(),
         2 * issuanceAmount43
       );
       // Tokenholder3 - token3
       // NA
       // Tokenholder3 - token4
-      assert.equal(batchSpendableBalancesOfByPartition[20].toNumber(), 0);
+      assert.strictEqual(batchSpendableBalancesOfByPartition[20].toNumber(), 0);
 
       //
       //
@@ -1147,66 +1288,70 @@ describe('BatchReader', function () {
 
       // ETH BALANCES
       //
-      assert.equal(batchEthBalances.length, tokenHolders.length);
-      assert.equal(
+      assert.strictEqual(batchEthBalances.length, tokenHolders.length);
+      assert.strictEqual(
         batchEthBalances2[0].toString(),
-        (await ethers.provider.getBalance(tokenHolders[0])).toString()
+        (await provider.getBalance(tokenHolders[0])).toString()
       );
-      assert.equal(
+      assert.strictEqual(
         batchEthBalances2[1].toString(),
-        (await ethers.provider.getBalance(tokenHolders[1])).toString()
+        (await provider.getBalance(tokenHolders[1])).toString()
       );
-      assert.equal(
+      assert.strictEqual(
         batchEthBalances2[2].toString(),
-        (await ethers.provider.getBalance(tokenHolders[2])).toString()
+        (await provider.getBalance(tokenHolders[2])).toString()
       );
 
       // BALANCES
       //
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf2.length,
         tokenHolders.length * tokenAddresses.length
       );
       //
       // Tokenholder1
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf2[0].toNumber(),
         issuanceAmount11 + issuanceAmount21 + issuanceAmount31
       );
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf2[1].toNumber(),
         2 * (issuanceAmount21 + issuanceAmount31 + issuanceAmount41)
       );
-      assert.equal(batchBalancesOf2[2].toNumber(), 0);
-      assert.equal(batchBalancesOf2[3].toNumber(), 4 * issuanceAmount11);
+      assert.strictEqual(batchBalancesOf2[2].toNumber(), 0);
+      assert.strictEqual(batchBalancesOf2[3].toNumber(), 4 * issuanceAmount11);
       // Tokenholder2
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf2[4].toNumber(),
         issuanceAmount12 + issuanceAmount22 + issuanceAmount32
       );
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf2[5].toNumber(),
         2 * (issuanceAmount22 + issuanceAmount32 + issuanceAmount42)
       );
-      assert.equal(batchBalancesOf2[6].toNumber(), 0);
-      assert.equal(batchBalancesOf2[7].toNumber(), 0);
+      assert.strictEqual(batchBalancesOf2[6].toNumber(), 0);
+      assert.strictEqual(batchBalancesOf2[7].toNumber(), 0);
       // Tokenholder3
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf2[8].toNumber(),
         issuanceAmount13 + issuanceAmount23 + issuanceAmount33
       );
-      assert.equal(
+      assert.strictEqual(
         batchBalancesOf2[9].toNumber(),
         2 * (issuanceAmount23 + issuanceAmount33 + issuanceAmount43)
       );
-      assert.equal(batchBalancesOf2[10].toNumber(), 0);
-      assert.equal(batchBalancesOf2[11].toNumber(), 0);
+      assert.strictEqual(batchBalancesOf2[10].toNumber(), 0);
+      assert.strictEqual(batchBalancesOf2[11].toNumber(), 0);
     });
   });
 
   describe('batchERC721Balances', function () {
     it('returns the list of minted tokens', async function () {
-      const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
+      const tokenHolders = [
+        tokenHolder1Signer.getAddress(),
+        tokenHolder2Signer.getAddress(),
+        tokenHolder3Signer.getAddress()
+      ];
       const tokenAddresses = [token5.address, token6.address];
 
       const batchERC721Balances = await balanceReader
@@ -1216,14 +1361,14 @@ describe('BatchReader', function () {
       const batchEthBalances = batchERC721Balances[0];
       const batchBalancesOf = batchERC721Balances[1];
 
-      assert.equal(batchBalancesOf.length, tokenAddresses.length);
-      assert.equal(batchEthBalances.length, tokenHolders.length);
+      assert.strictEqual(batchBalancesOf.length, tokenAddresses.length);
+      assert.strictEqual(batchEthBalances.length, tokenHolders.length);
 
       const token5Balances = batchBalancesOf[0];
       const token6Balances = batchBalancesOf[1];
 
-      assert.equal(token5Balances.length, tokenHolders.length);
-      assert.equal(token6Balances.length, tokenHolders.length);
+      assert.strictEqual(token5Balances.length, tokenHolders.length);
+      assert.strictEqual(token6Balances.length, tokenHolders.length);
 
       const token5Holder1 = token5Balances[0];
       const token5Holder2 = token5Balances[1];
@@ -1233,53 +1378,57 @@ describe('BatchReader', function () {
       const token6Holder2 = token6Balances[1];
       const token6Holder3 = token6Balances[2];
 
-      assert.equal(token5Holder1.length, 4);
-      assert.equal(token5Holder2.length, 3);
-      assert.equal(token5Holder3.length, 7);
+      assert.strictEqual(token5Holder1.length, 4);
+      assert.strictEqual(token5Holder2.length, 3);
+      assert.strictEqual(token5Holder3.length, 7);
 
-      assert.equal(token6Holder1.length, 4);
-      assert.equal(token6Holder2.length, 3);
-      assert.equal(token6Holder3.length, 7);
+      assert.strictEqual(token6Holder1.length, 4);
+      assert.strictEqual(token6Holder2.length, 3);
+      assert.strictEqual(token6Holder3.length, 7);
 
-      assert.equal(token5Holder1[0].toNumber(), 1);
-      assert.equal(token5Holder1[1].toNumber(), 2);
-      assert.equal(token5Holder1[2].toNumber(), 3);
-      assert.equal(token5Holder1[3].toNumber(), 4);
+      assert.strictEqual(token5Holder1[0].toNumber(), 1);
+      assert.strictEqual(token5Holder1[1].toNumber(), 2);
+      assert.strictEqual(token5Holder1[2].toNumber(), 3);
+      assert.strictEqual(token5Holder1[3].toNumber(), 4);
 
-      assert.equal(token5Holder2[0].toNumber(), 5);
-      assert.equal(token5Holder2[1].toNumber(), 6);
-      assert.equal(token5Holder2[2].toNumber(), 7);
+      assert.strictEqual(token5Holder2[0].toNumber(), 5);
+      assert.strictEqual(token5Holder2[1].toNumber(), 6);
+      assert.strictEqual(token5Holder2[2].toNumber(), 7);
 
-      assert.equal(token5Holder3[0].toNumber(), 8);
-      assert.equal(token5Holder3[1].toNumber(), 9);
-      assert.equal(token5Holder3[2].toNumber(), 10);
-      assert.equal(token5Holder3[3].toNumber(), 11);
-      assert.equal(token5Holder3[4].toNumber(), 12);
-      assert.equal(token5Holder3[5].toNumber(), 13);
-      assert.equal(token5Holder3[6].toNumber(), 14);
+      assert.strictEqual(token5Holder3[0].toNumber(), 8);
+      assert.strictEqual(token5Holder3[1].toNumber(), 9);
+      assert.strictEqual(token5Holder3[2].toNumber(), 10);
+      assert.strictEqual(token5Holder3[3].toNumber(), 11);
+      assert.strictEqual(token5Holder3[4].toNumber(), 12);
+      assert.strictEqual(token5Holder3[5].toNumber(), 13);
+      assert.strictEqual(token5Holder3[6].toNumber(), 14);
 
-      assert.equal(token6Holder1[0].toNumber(), 10);
-      assert.equal(token6Holder1[1].toNumber(), 20);
-      assert.equal(token6Holder1[2].toNumber(), 30);
-      assert.equal(token6Holder1[3].toNumber(), 40);
+      assert.strictEqual(token6Holder1[0].toNumber(), 10);
+      assert.strictEqual(token6Holder1[1].toNumber(), 20);
+      assert.strictEqual(token6Holder1[2].toNumber(), 30);
+      assert.strictEqual(token6Holder1[3].toNumber(), 40);
 
-      assert.equal(token6Holder2[0].toNumber(), 50);
-      assert.equal(token6Holder2[1].toNumber(), 60);
-      assert.equal(token6Holder2[2].toNumber(), 70);
+      assert.strictEqual(token6Holder2[0].toNumber(), 50);
+      assert.strictEqual(token6Holder2[1].toNumber(), 60);
+      assert.strictEqual(token6Holder2[2].toNumber(), 70);
 
-      assert.equal(token6Holder3[0].toNumber(), 80);
-      assert.equal(token6Holder3[1].toNumber(), 90);
-      assert.equal(token6Holder3[2].toNumber(), 100);
-      assert.equal(token6Holder3[3].toNumber(), 110);
-      assert.equal(token6Holder3[4].toNumber(), 120);
-      assert.equal(token6Holder3[5].toNumber(), 130);
-      assert.equal(token6Holder3[6].toNumber(), 140);
+      assert.strictEqual(token6Holder3[0].toNumber(), 80);
+      assert.strictEqual(token6Holder3[1].toNumber(), 90);
+      assert.strictEqual(token6Holder3[2].toNumber(), 100);
+      assert.strictEqual(token6Holder3[3].toNumber(), 110);
+      assert.strictEqual(token6Holder3[4].toNumber(), 120);
+      assert.strictEqual(token6Holder3[5].toNumber(), 130);
+      assert.strictEqual(token6Holder3[6].toNumber(), 140);
     });
   });
 
   describe('batchValidations', function () {
     it('returns the lists of allowlisted and blocklisted', async function () {
-      const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
+      const tokenHolders = [
+        tokenHolder1Signer.getAddress(),
+        tokenHolder2Signer.getAddress(),
+        tokenHolder3Signer.getAddress()
+      ];
       const tokenAddresses = [
         token1.address,
         token2.address,
@@ -1296,49 +1445,49 @@ describe('BatchReader', function () {
 
       // ALLOWLISTED
       //
-      assert.equal(
+      assert.strictEqual(
         batchAllowlisted.length,
         tokenAddresses.length * tokenHolders.length
       );
       //
       // Tokenholder1
-      assert.equal(batchAllowlisted[0], true);
-      assert.equal(batchAllowlisted[1], false);
-      assert.equal(batchAllowlisted[2], false);
-      assert.equal(batchAllowlisted[3], false);
+      assert.strictEqual(batchAllowlisted[0], true);
+      assert.strictEqual(batchAllowlisted[1], false);
+      assert.strictEqual(batchAllowlisted[2], false);
+      assert.strictEqual(batchAllowlisted[3], false);
       // Tokenholder2
-      assert.equal(batchAllowlisted[4], true);
-      assert.equal(batchAllowlisted[5], false);
-      assert.equal(batchAllowlisted[6], false);
-      assert.equal(batchAllowlisted[7], false);
+      assert.strictEqual(batchAllowlisted[4], true);
+      assert.strictEqual(batchAllowlisted[5], false);
+      assert.strictEqual(batchAllowlisted[6], false);
+      assert.strictEqual(batchAllowlisted[7], false);
       // Tokenholder3
-      assert.equal(batchAllowlisted[8], false);
-      assert.equal(batchAllowlisted[9], true);
-      assert.equal(batchAllowlisted[10], false);
-      assert.equal(batchAllowlisted[11], false);
+      assert.strictEqual(batchAllowlisted[8], false);
+      assert.strictEqual(batchAllowlisted[9], true);
+      assert.strictEqual(batchAllowlisted[10], false);
+      assert.strictEqual(batchAllowlisted[11], false);
 
       // BLOCKLISTED
       //
-      assert.equal(
+      assert.strictEqual(
         batchBlocklisted.length,
         tokenAddresses.length * tokenHolders.length
       );
       //
       // Tokenholder1
-      assert.equal(batchBlocklisted[0], false);
-      assert.equal(batchBlocklisted[1], false);
-      assert.equal(batchBlocklisted[2], false);
-      assert.equal(batchBlocklisted[3], false);
+      assert.strictEqual(batchBlocklisted[0], false);
+      assert.strictEqual(batchBlocklisted[1], false);
+      assert.strictEqual(batchBlocklisted[2], false);
+      assert.strictEqual(batchBlocklisted[3], false);
       // Tokenholder2
-      assert.equal(batchBlocklisted[4], false);
-      assert.equal(batchBlocklisted[5], true);
-      assert.equal(batchBlocklisted[6], false);
-      assert.equal(batchBlocklisted[7], false);
+      assert.strictEqual(batchBlocklisted[4], false);
+      assert.strictEqual(batchBlocklisted[5], true);
+      assert.strictEqual(batchBlocklisted[6], false);
+      assert.strictEqual(batchBlocklisted[7], false);
       // Tokenholder3
-      assert.equal(batchBlocklisted[8], true);
-      assert.equal(batchBlocklisted[9], true);
-      assert.equal(batchBlocklisted[10], false);
-      assert.equal(batchBlocklisted[11], false);
+      assert.strictEqual(batchBlocklisted[8], true);
+      assert.strictEqual(batchBlocklisted[9], true);
+      assert.strictEqual(batchBlocklisted[10], false);
+      assert.strictEqual(batchBlocklisted[11], false);
     });
   });
 });

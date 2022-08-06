@@ -1,4 +1,5 @@
-import { artifacts, ethers } from 'hardhat';
+import { artifacts } from 'hardhat';
+
 import { CERTIFICATE_VALIDATION_DEFAULT } from '../../test/common/extension';
 import { ZERO_BYTE } from '../../test/utils/assert';
 import {
@@ -6,6 +7,7 @@ import {
   ERC1400TokensValidator__factory,
   Swaps__factory
 } from '../../typechain-types';
+import { getSigners } from '../../test/common/wallet';
 
 type Args = {
   address: string;
@@ -91,7 +93,7 @@ const SECONDS_IN_AN_HOUR = 3600;
 const SECONDS_IN_A_DAY = 24 * SECONDS_IN_AN_HOUR;
 
 export default async function (args: Args) {
-  const [owner, controller, tokenHolder, recipient] = await ethers.getSigners();
+  const [owner, controller, tokenHolder, recipient] = getSigners();
 
   // require fixture first
   await (
@@ -106,21 +108,19 @@ export default async function (args: Args) {
   const extension = await new ERC1400TokensValidator__factory(owner).deploy();
 
   const transferAmount = 300;
-  const ERC1400HoldableCertificateToken = artifacts.require(
-    'ERC1400HoldableCertificateToken'
-  );
 
-  const token1 = await ERC1400HoldableCertificateToken.new(
+  const token1 = await new ERC1400HoldableCertificateToken__factory(
+    controller
+  ).deploy(
     'ERC1400Token',
     'DAU',
     2,
-    [controller.address],
+    [controller.getAddress()],
     partitions,
     extension.address,
-    owner.address,
+    owner.getAddress(),
     CERTIFICATE_SIGNER,
-    CERTIFICATE_VALIDATION_DEFAULT,
-    { from: controller.address }
+    CERTIFICATE_VALIDATION_DEFAULT
   );
 
   const token2 = await new ERC1400HoldableCertificateToken__factory(
@@ -129,35 +129,11 @@ export default async function (args: Args) {
     'ERC1400Token',
     'DAU',
     2,
-    [controller.address],
+    [controller.getAddress()],
     partitions,
     extension.address,
-    owner.address,
+    owner.getAddress(),
     CERTIFICATE_SIGNER,
     CERTIFICATE_VALIDATION_DEFAULT
-  );
-
-  console.log(
-    'abi',
-
-    token1.contract.methods
-      .operatorTransferByPartition(
-        partition1,
-        tokenHolder.address,
-        recipient.address,
-        transferAmount,
-        ZERO_BYTE,
-        ZERO_BYTE
-      )
-      .encodeABI(),
-
-    token2.interface.encodeFunctionData('operatorTransferByPartition', [
-      partition1,
-      tokenHolder.address,
-      recipient.address,
-      transferAmount,
-      ZERO_BYTE,
-      ZERO_BYTE
-    ])
   );
 }

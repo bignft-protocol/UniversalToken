@@ -1,5 +1,5 @@
-import { ethers } from 'hardhat';
-import { assert } from 'chai';
+import { ethers } from 'ethers';
+import assert from 'assert';
 import {
   nowSeconds,
   advanceTime,

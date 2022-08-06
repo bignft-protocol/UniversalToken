@@ -1,7 +1,5 @@
-import { ethers } from 'hardhat';
-import { assert } from 'chai';
-// @ts-ignore
-import { expectRevert } from '@openzeppelin/test-helpers';
+import { ethers } from 'ethers';
+import assert from 'assert';
 import { ZERO_ADDRESS, ZERO_BYTE } from './utils/assert';
 import {
   ERC1400,
@@ -13,7 +11,6 @@ import {
   ERC1820Registry,
   ERC1820Registry__factory
 } from '../typechain-types';
-import { Signer } from 'ethers';
 import truffleFixture from './truffle-fixture';
 import { getSigners } from './common/wallet';
 
@@ -139,7 +136,7 @@ describe('ERC1400 with sender and recipient hooks', function () {
     describe('when the transfer fails', function () {
       it('sender hook reverts', async function () {
         // Default sender hook failure data for the mock only: 0x1100000000000000000000000000000000000000000000000000000000000000
-        await expectRevert.unspecified(
+        await assertRevert(
           token
             .connect(tokenHolderSigner)
             .transferWithData(
@@ -151,7 +148,7 @@ describe('ERC1400 with sender and recipient hooks', function () {
       });
       it('recipient hook reverts', async function () {
         // Default recipient hook failure data for the mock only: 0x2200000000000000000000000000000000000000000000000000000000000000
-        await expectRevert.unspecified(
+        await assertRevert(
           token
             .connect(tokenHolderSigner)
             .transferWithData(

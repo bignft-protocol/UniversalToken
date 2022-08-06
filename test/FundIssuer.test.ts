@@ -10,11 +10,9 @@
  ***************************************************************************************************************
  */
 
-import { ethers } from 'hardhat';
-import { assert } from 'chai';
+import { ethers } from 'ethers';
+import assert from 'assert';
 import { advanceTimeAndBlock } from './utils/time';
-// @ts-ignore
-import { expectRevert } from '@openzeppelin/test-helpers';
 import {
   FundIssuer,
   ERC1400,
@@ -1124,7 +1122,7 @@ describe('Fund issuance', function () {
             it('reverts', async function () {
               const chainTime = (await ethers.provider.getBlock('latest'))
                 .timestamp;
-              await expectRevert.unspecified(
+              await assertRevert(
                 fic
                   .connect(tokenController1Signer)
                   .setAssetRules(
@@ -1147,7 +1145,7 @@ describe('Fund issuance', function () {
             it('reverts', async function () {
               const chainTime = (await ethers.provider.getBlock('latest'))
                 .timestamp;
-              await expectRevert.unspecified(
+              await assertRevert(
                 fic
                   .connect(tokenController1Signer)
                   .setAssetRules(
@@ -1170,7 +1168,7 @@ describe('Fund issuance', function () {
             it('reverts', async function () {
               const chainTime = (await ethers.provider.getBlock('latest'))
                 .timestamp;
-              await expectRevert.unspecified(
+              await assertRevert(
                 fic
                   .connect(tokenController1Signer)
                   .setAssetRules(
@@ -1196,7 +1194,7 @@ describe('Fund issuance', function () {
           const chainTime = (await ethers.provider.getBlock('latest'))
             .timestamp;
 
-          await expectRevert.unspecified(
+          await assertRevert(
             setAssetRules(
               fic,
               tokenController1Signer,
@@ -1219,7 +1217,7 @@ describe('Fund issuance', function () {
     describe('when caller is not the token controller', function () {
       it('reverts', async function () {
         const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
-        await expectRevert.unspecified(
+        await assertRevert(
           setAssetRules(
             fic,
             tokenController2Signer,
@@ -1300,7 +1298,7 @@ describe('Fund issuance', function () {
           });
           describe('when value is nil', function () {
             it('reverts', async function () {
-              await expectRevert.unspecified(
+              await assertRevert(
                 subscribe(
                   fic,
                   asset.address,
@@ -1338,7 +1336,7 @@ describe('Fund issuance', function () {
           });
           describe('when amount is nil', function () {
             it('reverts', async function () {
-              await expectRevert.unspecified(
+              await assertRevert(
                 subscribe(
                   fic,
                   asset.address,
@@ -1378,7 +1376,7 @@ describe('Fund issuance', function () {
             true
           );
 
-          await expectRevert.unspecified(
+          await assertRevert(
             subscribe(
               fic,
               asset.address,
@@ -1527,7 +1525,7 @@ describe('Fund issuance', function () {
               false
             );
 
-            await expectRevert.unspecified(
+            await assertRevert(
               subscribe(
                 fic,
                 asset.address,
@@ -1547,7 +1545,7 @@ describe('Fund issuance', function () {
       });
       describe('when rules are not defined for the asset', function () {
         it('reverts', async function () {
-          await expectRevert.unspecified(
+          await assertRevert(
             subscribe(
               fic,
               asset.address,
@@ -1644,7 +1642,7 @@ describe('Fund issuance', function () {
             const orderIndex = (
               await fic.getInvestorOrders(tokenHolder1)
             )[0].toNumber();
-            await expectRevert.unspecified(
+            await assertRevert(
               fic.connect(tokenHolder2Signer).cancelOrder(orderIndex)
             );
           });
@@ -1672,7 +1670,7 @@ describe('Fund issuance', function () {
           const orderIndex = (
             await fic.getInvestorOrders(tokenHolder1)
           )[0].toNumber();
-          await expectRevert.unspecified(
+          await assertRevert(
             fic.connect(tokenHolder1Signer).cancelOrder(orderIndex)
           );
         });
@@ -1681,7 +1679,7 @@ describe('Fund issuance', function () {
     describe('when order can not be rejected', function () {
       describe('when order doesnt exist', function () {
         it('reverts', async function () {
-          await expectRevert.unspecified(
+          await assertRevert(
             fic.connect(tokenHolder1Signer).cancelOrder(999999)
           );
         });
@@ -1856,7 +1854,7 @@ describe('Fund issuance', function () {
                 0
               );
 
-              await expectRevert.unspecified(
+              await assertRevert(
                 fic.connect(tokenController2Signer).valuate(cycleIndex, 1000, 0)
               );
             });
@@ -1876,7 +1874,7 @@ describe('Fund issuance', function () {
               0
             );
 
-            await expectRevert.unspecified(
+            await assertRevert(
               fic
                 .connect(tokenController1Signer)
                 .valuate(cycleIndex, 1000, 1000)
@@ -1949,7 +1947,7 @@ describe('Fund issuance', function () {
             0
           );
 
-          await expectRevert.unspecified(
+          await assertRevert(
             fic2.connect(tokenController1Signer).valuate(cycleIndex, 0, 1000)
           );
         });
@@ -1971,7 +1969,7 @@ describe('Fund issuance', function () {
 
         await assertCycleAssetValue(fic, cycleIndex, ASSET_VALUE_UNKNOWN, 0, 0);
 
-        await expectRevert.unspecified(
+        await assertRevert(
           fic.connect(tokenController1Signer).valuate(cycleIndex, 1000, 0)
         );
       });
@@ -1999,7 +1997,7 @@ describe('Fund issuance', function () {
 
         await assertCycleAssetValue(fic, cycleIndex, ASSET_VALUE_UNKNOWN, 0, 0);
 
-        await expectRevert.unspecified(
+        await assertRevert(
           fic.connect(tokenController1Signer).valuate(cycleIndex, 1000, 0)
         );
       });

@@ -1,4 +1,5 @@
-import { ethers } from 'hardhat';
+import { ethers } from 'ethers';
+import { getSigner } from '../../test/common/wallet';
 import { ERC1400__factory } from '../../typechain-types';
 
 const partition1 =
@@ -20,7 +21,7 @@ type Args = {
 };
 
 export default async function (args: Args) {
-  const [owner] = await ethers.getSigners();
+  const owner = getSigner();
 
   const erc1400 = ERC1400__factory.connect(args.address, owner);
 
@@ -35,13 +36,12 @@ export default async function (args: Args) {
   }
 
   if (args.holder) {
-    const tokenHolder = args.holder ?? owner.address;
+    const tokenHolder = args.holder ?? owner.getAddress();
     await erc1400.issueByPartition(
       partition1,
       tokenHolder,
       args.amount,
-      ZERO_BYTES32,
-      { from: owner.address }
+      ZERO_BYTES32
     );
 
     const balance = await erc1400.balanceOf(tokenHolder);

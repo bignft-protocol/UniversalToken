@@ -1,6 +1,5 @@
-import { BigNumber, BigNumberish, BytesLike, Event } from 'ethers';
-import { ethers } from 'hardhat';
-import { assert } from 'chai';
+import { ethers, BigNumber, BigNumberish, BytesLike, Event } from 'ethers';
+import assert from 'assert';
 import {
   ERC1400,
   ERC1400HoldableCertificateToken,
@@ -21,6 +20,8 @@ import {
 } from './extract';
 
 import { ERC1400_TOKENS_VALIDATOR } from '../common/extension';
+import { provider } from '../../test/common/wallet';
+import { PromiseOrValue } from 'typechain-types/common';
 
 export const STATE_PENDING = 1;
 export const STATE_EXECUTED = 2;
@@ -54,17 +55,20 @@ export const FALSE_BYTES32 =
 
 export const assertBalanceOf = async (
   _contract: ERC20,
-  _tokenHolder: string,
+  _tokenHolder: PromiseOrValue<string>,
   _amount: BigNumberish,
   _balanceIsExact: boolean
 ) => {
   const balance = await _contract.balanceOf(_tokenHolder);
-  assert.isTrue(_balanceIsExact ? balance.eq(_amount) : balance.gte(_amount));
+  assert.strictEqual(
+    _balanceIsExact ? balance.eq(_amount) : balance.gte(_amount),
+    true
+  );
 };
 
 export const assertBalanceOfByPartition = async (
   _contract: ERC1400,
-  _tokenHolder: string,
+  _tokenHolder: PromiseOrValue<string>,
   _partition: BytesLike,
   _amount: BigNumberish
 ) => {
@@ -73,7 +77,7 @@ export const assertBalanceOfByPartition = async (
     _tokenHolder
   );
 
-  assert.equal(
+  assert.strictEqual(
     balanceByPartition.isZero() || balanceByPartition.eq(_amount),
     true
   );
@@ -86,32 +90,32 @@ export const assertTokenOf = async (
 ) => {
   const ownerOf = await _contract.ownerOf(_tokenId);
 
-  assert.equal(ownerOf, _tokenHolder);
+  assert.strictEqual(ownerOf, _tokenHolder);
 };
 
 export const assertERC20Allowance = async (
   _contract: ERC20,
-  _tokenHolder: string,
+  _tokenHolder: PromiseOrValue<string>,
   _spender: string,
   _amount: number
 ) => {
   const allowance = (
     await _contract.allowance(_tokenHolder, _spender)
   ).toNumber();
-  assert.equal(allowance, _amount);
+  assert.strictEqual(allowance, _amount);
 };
 
 export const assertERC1400Allowance = async (
   _partition: BytesLike,
   _contract: ERC1400,
-  _tokenHolder: string,
+  _tokenHolder: PromiseOrValue<string>,
   _spender: string,
   _amount: number
 ) => {
   const allowance = (
     await _contract.allowanceByPartition(_partition, _tokenHolder, _spender)
   ).toNumber();
-  assert.equal(allowance, _amount);
+  assert.strictEqual(allowance, _amount);
 };
 
 export const assertERC721Allowance = async (
@@ -120,60 +124,58 @@ export const assertERC721Allowance = async (
   _tokenId: number
 ) => {
   const approvedOf = await _contract.getApproved(_tokenId);
-  assert.equal(approvedOf, _tokenHolder);
+  assert.strictEqual(approvedOf, _tokenHolder);
 };
 
 export const assertEtherBalance = async (
-  _etherHolder: string,
+  _etherHolder: PromiseOrValue<string>,
   _balance: BigNumberish,
   _balanceIsExact: boolean
 ) => {
-  const balance = await ethers.provider.getBalance(_etherHolder);
-  assert.isTrue(
-    _balanceIsExact ? balance.eq(_balance) : balance.sub(_balance).lt(0.1)
+  const balance = await provider.getBalance(_etherHolder);
+  assert.strictEqual(
+    _balanceIsExact ? balance.eq(_balance) : balance.sub(_balance).lt(0.1),
+    true
   );
 };
 
 export const assertAssetRules = async (
   _contract: FundIssuer,
-  _assetAddress: string,
-  _assetClass: any,
-  _firstStartTime: any,
-  _subscriptionPeriodLength: any,
-  _valuationPeriodLength: any,
-  _paymentPeriodLength: any,
+  _assetAddress: PromiseOrValue<string>,
+  _assetClass: BytesLike,
+  _firstStartTime: BigNumberish,
+  _subscriptionPeriodLength: BigNumberish,
+  _valuationPeriodLength: BigNumberish,
+  _paymentPeriodLength: BigNumberish,
   _assetValueType: number,
   _assetValue: number,
   _reverseAssetValue: number,
-  _paymentType: any,
-  _paymentAddress: any,
-  _paymentPartition: any,
-  _fundAddress: any,
-  _subscriptionsOpened: any
+  _paymentType: number,
+  _paymentAddress: string,
+  _paymentPartition: string,
+  _fundAddress: string,
+  _subscriptionsOpened: boolean
 ) => {
   const rules = await _contract.getAssetRules(_assetAddress, _assetClass);
 
-  assert.equal(rules[0], _firstStartTime);
-  assert.equal(rules[1], _subscriptionPeriodLength);
-  assert.equal(rules[2], _valuationPeriodLength);
-  assert.equal(rules[3], _paymentPeriodLength);
-  assert.equal(rules[4], _paymentType);
-  assert.equal(rules[5], _paymentAddress);
-  assert.equal(rules[6], _paymentPartition);
-  assert.equal(rules[7], _fundAddress);
-  if (_subscriptionsOpened) {
-    assert.isTrue(rules[8]);
-  } else {
-    assert.isFalse(rules[8]);
-  }
+  assert.strictEqual(rules[0], _firstStartTime);
+  assert.strictEqual(rules[1], _subscriptionPeriodLength);
+  assert.strictEqual(rules[2], _valuationPeriodLength);
+  assert.strictEqual(rules[3], _paymentPeriodLength);
+  assert.strictEqual(rules[4], _paymentType);
+  assert.strictEqual(rules[5], _paymentAddress);
+  assert.strictEqual(rules[6], _paymentPartition);
+  assert.strictEqual(rules[7], _fundAddress);
+
+  assert.strictEqual(rules[8] === _subscriptionsOpened, true);
 
   const assetValueRules = await _contract.getAssetValueRules(
     _assetAddress,
     _assetClass
   );
-  assert.equal(assetValueRules[0], _assetValueType);
-  assert.equal(assetValueRules[1].toNumber(), _assetValue);
-  assert.equal(assetValueRules[2].toNumber(), _reverseAssetValue);
+  assert.strictEqual(assetValueRules[0], _assetValueType);
+  assert.strictEqual(assetValueRules[1].toNumber(), _assetValue);
+  assert.strictEqual(assetValueRules[2].toNumber(), _reverseAssetValue);
 };
 
 export const assertCycle = async (
@@ -182,30 +184,26 @@ export const assertCycle = async (
   _assetAddress: string,
   _assetClass: any,
   _startTime: any,
-  _subscriptionPeriodLength: any,
-  _valuationPeriodLength: any,
-  _paymentPeriodLength: any,
-  _paymentType: any,
+  _subscriptionPeriodLength: BigNumberish,
+  _valuationPeriodLength: BigNumberish,
+  _paymentPeriodLength: BigNumberish,
+  _paymentType: number,
   _paymentAddress: string,
-  _paymentPartition: BytesLike,
+  _paymentPartition: string,
   _finalized: boolean
 ) => {
   const cycle = await _contract.getCycle(_cycleIndex);
 
-  assert.equal(cycle[0], _assetAddress);
-  assert.equal(cycle[1], _assetClass);
-  assert.equal(cycle[2], _startTime);
-  assert.equal(cycle[3], _subscriptionPeriodLength);
-  assert.equal(cycle[4], _valuationPeriodLength);
-  assert.equal(cycle[5], _paymentPeriodLength);
-  assert.equal(cycle[6], _paymentType);
-  assert.equal(cycle[7], _paymentAddress);
-  assert.equal(cycle[8], _paymentPartition);
-  if (_finalized) {
-    assert.isTrue(cycle[9]);
-  } else {
-    assert.isFalse(cycle[9]);
-  }
+  assert.strictEqual(cycle[0], _assetAddress);
+  assert.strictEqual(cycle[1], _assetClass);
+  assert.strictEqual(cycle[2], _startTime);
+  assert.strictEqual(cycle[3], _subscriptionPeriodLength);
+  assert.strictEqual(cycle[4], _valuationPeriodLength);
+  assert.strictEqual(cycle[5], _paymentPeriodLength);
+  assert.strictEqual(cycle[6], _paymentType);
+  assert.strictEqual(cycle[7], _paymentAddress);
+  assert.strictEqual(cycle[8], _paymentPartition);
+  assert.strictEqual(cycle[9] === _finalized, true);
 };
 
 export const assertCycleState = async (
@@ -219,7 +217,7 @@ export const assertCycleState = async (
   ).toNumber();
   const cycleState = await _contract.getCycleState(cycleIndex);
 
-  assert.equal(cycleState, _state);
+  assert.strictEqual(cycleState, _state);
 };
 
 export const assertCycleAssetValue = async (
@@ -231,9 +229,9 @@ export const assertCycleAssetValue = async (
 ) => {
   const valueData = await _contract.getCycleAssetValue(_cycleIndex);
 
-  assert.equal(valueData[0], _assetValueType);
-  assert.equal(valueData[1].toNumber(), _assetValue);
-  assert.equal(valueData[2].toNumber(), _reverseAssetValue);
+  assert.strictEqual(valueData[0], _assetValueType);
+  assert.strictEqual(valueData[1].toNumber(), _assetValue);
+  assert.strictEqual(valueData[2].toNumber(), _reverseAssetValue);
 };
 
 export const assertOrder = async (
@@ -248,20 +246,20 @@ export const assertOrder = async (
 ) => {
   const order = await _contract.getOrder(_orderIndex);
 
-  assert.equal(order[0].toNumber(), _cycleIndex);
-  assert.equal(order[1], _investor);
-  assert.equal(order[2].toNumber(), _value);
-  assert.equal(order[3].toNumber(), _amount);
-  assert.equal(order[4], _orderType);
+  assert.strictEqual(order[0].toNumber(), _cycleIndex);
+  assert.strictEqual(order[1], _investor);
+  assert.strictEqual(order[2].toNumber(), _value);
+  assert.strictEqual(order[3].toNumber(), _amount);
+  assert.strictEqual(order[4], _orderType);
 
-  assert.equal(order[5], _state);
+  assert.strictEqual(order[5], _state);
 };
 
 export const assertTokenTransferred = async (
   dvp: Swaps,
   token1: ERC20 | ERC721 | ERC1400 | undefined,
   token2: ERC20 | ERC721 | ERC1400 | undefined,
-  holder1: any,
+  holder1: string,
   holder2: string,
   tokenStandard1: BigNumberish,
   tokenStandard2: BigNumberish,
@@ -496,7 +494,7 @@ export const assertGlobalBalancesAreCorrect = async (
   const tokenStandard1 = extractTokenStandard(tokenData1);
   const tokenAccepted1 = extractTokenAccepted(tokenData1);
   const tradeType1 = tokenData1.tradeType;
-  assert.equal(tokenAddress1, token1 ? token1.address : ZERO_ADDRESS);
+  assert.strictEqual(tokenAddress1, token1 ? token1.address : ZERO_ADDRESS);
 
   let tokenData2 = trade.userTradeData2;
   const tokenAddress2 = extractTokenAddress(tokenData2);
@@ -504,7 +502,7 @@ export const assertGlobalBalancesAreCorrect = async (
   const tokenStandard2 = extractTokenStandard(tokenData2);
   const tokenAccepted2 = extractTokenAccepted(tokenData2);
   const tradeType2 = tokenData2.tradeType;
-  assert.equal(tokenAddress2, token2 ? token2.address : ZERO_ADDRESS);
+  assert.strictEqual(tokenAddress2, token2 ? token2.address : ZERO_ADDRESS);
 
   const tradeState = Number(trade.state);
 
@@ -655,7 +653,7 @@ export const assertTradeState = async (
   _tradeState: number
 ) => {
   const trade = await _contract.getTrade(_tradeIndex);
-  assert.equal(Number(trade.state), _tradeState);
+  assert.strictEqual(Number(trade.state), _tradeState);
 };
 
 export const assertTradeAccepted = async (
@@ -669,11 +667,11 @@ export const assertTradeAccepted = async (
   const holder2 = trade.holder2;
 
   if (_requester === holder1) {
-    assert.equal(extractTokenAccepted(trade.userTradeData1), _accepted);
+    assert.strictEqual(extractTokenAccepted(trade.userTradeData1), _accepted);
   }
 
   if (_requester === holder2) {
-    assert.equal(extractTokenAccepted(trade.userTradeData2), _accepted);
+    assert.strictEqual(extractTokenAccepted(trade.userTradeData2), _accepted);
   }
 };
 
@@ -749,10 +747,10 @@ export const fullAssertTrade = async (
 ) => {
   const trade = await _contract.getTrade(_tradeIndex);
 
-  assert.equal(trade.holder1, _holder1);
-  assert.equal(trade.holder2, _holder2);
-  assert.equal(trade.executer, _executer);
-  assert.equal(trade.expirationDate.sub(_expirationDate).lte(1), true);
+  assert.strictEqual(trade.holder1, _holder1);
+  assert.strictEqual(trade.holder2, _holder2);
+  assert.strictEqual(trade.executer, _executer);
+  assert.strictEqual(trade.expirationDate.sub(_expirationDate).lte(1), true);
 
   const tokenData1 = trade.userTradeData1;
   const tokenAddress1 = extractTokenAddress(tokenData1);
@@ -762,13 +760,16 @@ export const fullAssertTrade = async (
   const tokenStandard1 = extractTokenStandard(tokenData1);
   let tokenAccepted1 = extractTokenAccepted(tokenData1);
   let tokenApproved1 = extractTokenApproved(tokenData1);
-  assert.equal(tokenAddress1, _token1Address);
-  assert.isTrue(tokenAmount1.eq(_token1Amount));
-  assert.equal(tokenId1, _token1Id);
-  assert.equal(tokenStandard1, _token1Standard);
-  assert.equal(tokenAccepted1, _token1Accepted);
-  assert.equal(tokenApproved1, _token1Approved);
-  assert.equal(tokenData1.tradeType, _tradeType1);
+  assert.strictEqual(tokenAddress1, _token1Address);
+  assert.strictEqual(tokenAmount1.eq(_token1Amount), true);
+  assert.strictEqual(tokenId1, _token1Id);
+  assert.strictEqual(
+    tokenStandard1,
+    BigNumber.from(_token1Standard).toNumber()
+  );
+  assert.strictEqual(tokenAccepted1, _token1Accepted);
+  assert.strictEqual(tokenApproved1, _token1Approved);
+  assert.strictEqual(tokenData1.tradeType, _tradeType1);
 
   const tokenData2 = trade.userTradeData2;
   const tokenAddress2 = extractTokenAddress(tokenData2);
@@ -777,87 +778,99 @@ export const fullAssertTrade = async (
   const tokenStandard2 = extractTokenStandard(tokenData2);
   let tokenAccepted2 = extractTokenAccepted(tokenData2);
   let tokenApproved2 = extractTokenApproved(tokenData2);
-  assert.equal(tokenAddress2, _token2Address);
-  assert.equal(tokenAmount2, _token2Amount);
-  assert.equal(tokenId2, _token2Id);
-  assert.equal(tokenStandard2, _token2Standard);
-  assert.equal(tokenAccepted2, _token2Accepted);
-  assert.equal(tokenApproved2, _token2Approved);
-  assert.equal(tokenData2.tradeType, _tradeType2);
+  assert.strictEqual(tokenAddress2, _token2Address);
+  assert.strictEqual(tokenAmount2.eq(_token2Amount), true);
+  assert.strictEqual(tokenId2, _token2Id);
+  assert.strictEqual(
+    tokenStandard2,
+    BigNumber.from(_token2Standard).toNumber()
+  );
+  assert.strictEqual(tokenAccepted2, _token2Accepted);
+  assert.strictEqual(tokenApproved2, _token2Approved);
+  assert.strictEqual(tokenData2.tradeType, _tradeType2);
 
-  assert.equal(Number(trade.state), _tradeState);
+  assert.strictEqual(trade.state, _tradeState);
 };
 
 export const assertTransferEvent = (
   _logs: Event[],
   _fromPartition: string,
-  _operator: any,
-  _from: any,
-  _to: any,
+  _operator: string,
+  _from: string,
+  _to: string,
   _amount: number,
   _data: string | null,
   _operatorData: string | null
 ) => {
   let i = 0;
   if (_logs.length === 3) {
-    assert.equal(_logs[0].event, 'Checked');
-    assert.equal(_logs[0].args?.sender, _operator);
+    assert.strictEqual(_logs[0].event, 'Checked');
+    assert.strictEqual(_logs[0].args?.sender, _operator);
     i = 1;
   }
 
-  assert.equal(_logs[i].event, 'Transfer');
-  assert.equal(_logs[i].args?.from, _from);
-  assert.equal(_logs[i].args?.to, _to);
-  assert.equal(_logs[i].args?.value, _amount);
+  assert.strictEqual(_logs[i].event, 'Transfer');
+  assert.strictEqual(_logs[i].args?.from, _from);
+  assert.strictEqual(_logs[i].args?.to, _to);
+  assert.strictEqual(BigNumber.from(_logs[i].args?.value).toNumber(), _amount);
 
-  assert.equal(_logs[i + 1].event, 'TransferByPartition');
-  assert.equal(_logs[i + 1].args?.fromPartition, _fromPartition);
-  assert.equal(_logs[i + 1].args?.operator, _operator);
-  assert.equal(_logs[i + 1].args?.from, _from);
-  assert.equal(_logs[i + 1].args?.to, _to);
-  assert.equal(_logs[i + 1].args?.value, _amount);
-  assert.equal(_logs[i + 1].args?.data, _data);
-  assert.equal(_logs[i + 1].args?.operatorData, _operatorData);
+  assert.strictEqual(_logs[i + 1].event, 'TransferByPartition');
+  assert.strictEqual(_logs[i + 1].args?.fromPartition, _fromPartition);
+  assert.strictEqual(_logs[i + 1].args?.operator, _operator);
+  assert.strictEqual(_logs[i + 1].args?.from, _from);
+  assert.strictEqual(_logs[i + 1].args?.to, _to);
+  assert.strictEqual(
+    BigNumber.from(_logs[i + 1].args?.value).toNumber(),
+    _amount
+  );
+  assert.strictEqual(_logs[i + 1].args?.data, _data);
+  assert.strictEqual(_logs[i + 1].args?.operatorData, _operatorData);
 };
 
 export const assertBurnEvent = (
   _logs: Event[],
   _fromPartition: string,
-  _operator: any,
-  _from: any,
+  _operator: string,
+  _from: string,
   _amount: number,
   _data: string | null,
   _operatorData: string | null
 ) => {
   let i = 0;
   if (_logs.length === 4) {
-    assert.equal(_logs[0].event, 'Checked');
-    assert.equal(_logs[0].args?.sender, _operator);
+    assert.strictEqual(_logs[0].event, 'Checked');
+    assert.strictEqual(_logs[0].args?.sender, _operator);
     i = 1;
   }
 
-  assert.equal(_logs[i].event, 'Redeemed');
-  assert.equal(_logs[i].args?.operator, _operator);
-  assert.equal(_logs[i].args?.from, _from);
-  assert.equal(_logs[i].args?.value, _amount);
-  assert.equal(_logs[i].args?.data, _data);
+  assert.strictEqual(_logs[i].event, 'Redeemed');
+  assert.strictEqual(_logs[i].args?.operator, _operator);
+  assert.strictEqual(_logs[i].args?.from, _from);
+  assert.strictEqual(BigNumber.from(_logs[i].args?.value).toNumber(), _amount);
+  assert.strictEqual(_logs[i].args?.data, _data);
 
-  assert.equal(_logs[i + 1].event, 'Transfer');
-  assert.equal(_logs[i + 1].args?.from, _from);
-  assert.equal(_logs[i + 1].args?.to, ZERO_ADDRESS);
-  assert.equal(_logs[i + 1].args?.value, _amount);
+  assert.strictEqual(_logs[i + 1].event, 'Transfer');
+  assert.strictEqual(_logs[i + 1].args?.from, _from);
+  assert.strictEqual(_logs[i + 1].args?.to, ZERO_ADDRESS);
+  assert.strictEqual(
+    BigNumber.from(_logs[i + 1].args?.value).toNumber(),
+    _amount
+  );
 
-  assert.equal(_logs[i + 2].event, 'RedeemedByPartition');
-  assert.equal(_logs[i + 2].args?.partition, _fromPartition);
-  assert.equal(_logs[i + 2].args?.operator, _operator);
-  assert.equal(_logs[i + 2].args?.from, _from);
-  assert.equal(_logs[i + 2].args?.value, _amount);
-  assert.equal(_logs[i + 2].args?.operatorData, _operatorData);
+  assert.strictEqual(_logs[i + 2].event, 'RedeemedByPartition');
+  assert.strictEqual(_logs[i + 2].args?.partition, _fromPartition);
+  assert.strictEqual(_logs[i + 2].args?.operator, _operator);
+  assert.strictEqual(_logs[i + 2].args?.from, _from);
+  assert.strictEqual(
+    BigNumber.from(_logs[i + 2].args?.value).toNumber(),
+    _amount
+  );
+  assert.strictEqual(_logs[i + 2].args?.operatorData, _operatorData);
 };
 
 export const assertBalances = async (
   _contract: ERC1400,
-  _tokenHolder: string,
+  _tokenHolder: PromiseOrValue<string>,
   _partitions: BytesLike[],
   _amounts: BigNumberish[]
 ) => {
@@ -876,7 +889,7 @@ export const assertBalances = async (
 
 export const assertBalanceOfSecurityToken = async (
   _contract: ERC1400 | ERC20,
-  _tokenHolder: any,
+  _tokenHolder: PromiseOrValue<string>,
   _partition: string,
   _amount: number
 ) => {
@@ -891,11 +904,11 @@ export const assertBalanceOfSecurityToken = async (
 
 export const assertBalance = async (
   _contract: ERC1400 | ERC20,
-  _tokenHolder: any,
+  _tokenHolder: PromiseOrValue<string>,
   _amount: BigNumberish
 ) => {
   const balance = await _contract.balanceOf(_tokenHolder);
-  assert.equal(balance.eq(_amount), true);
+  assert.strictEqual(balance.eq(_amount), true);
 };
 
 export const assertTotalSupply = async (
@@ -903,7 +916,7 @@ export const assertTotalSupply = async (
   _amount: BigNumberish
 ) => {
   const totalSupply = await _contract.totalSupply();
-  assert.equal(totalSupply.eq(_amount), true);
+  assert.strictEqual(totalSupply.eq(_amount), true);
 };
 
 export const assertTokenHasExtension = async (
@@ -915,7 +928,7 @@ export const assertTokenHasExtension = async (
     _token.address,
     ethers.utils.id(ERC1400_TOKENS_VALIDATOR)
   );
-  assert.equal(extensionImplementer, _extension.address);
+  assert.strictEqual(extensionImplementer, _extension.address);
 };
 
 export const assertCertificateActivated = async (
@@ -924,7 +937,7 @@ export const assertCertificateActivated = async (
   _expectedValue: number
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  assert.equal(_expectedValue, tokenSetup[0]);
+  assert.strictEqual(_expectedValue, tokenSetup[0]);
 };
 
 export const assertAllowListActivated = async (
@@ -933,7 +946,7 @@ export const assertAllowListActivated = async (
   _expectedValue: boolean
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  assert.equal(_expectedValue, tokenSetup[1]);
+  assert.strictEqual(_expectedValue, tokenSetup[1]);
 };
 
 export const assertBlockListActivated = async (
@@ -942,7 +955,7 @@ export const assertBlockListActivated = async (
   _expectedValue: boolean
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  assert.equal(_expectedValue, tokenSetup[2]);
+  assert.strictEqual(_expectedValue, tokenSetup[2]);
 };
 
 export const assertGranularityByPartitionActivated = async (
@@ -951,7 +964,7 @@ export const assertGranularityByPartitionActivated = async (
   _expectedValue: boolean
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  assert.equal(_expectedValue, tokenSetup[3]);
+  assert.strictEqual(_expectedValue, tokenSetup[3]);
 };
 
 export const assertHoldsActivated = async (
@@ -960,7 +973,7 @@ export const assertHoldsActivated = async (
   _expectedValue: boolean
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  assert.equal(_expectedValue, tokenSetup[4]);
+  assert.strictEqual(_expectedValue, tokenSetup[4]);
 };
 
 export const assertIsTokenController = async (
@@ -971,7 +984,7 @@ export const assertIsTokenController = async (
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
   const controllerList = tokenSetup[5];
-  assert.equal(_value, controllerList.includes(_controller));
+  assert.strictEqual(_value, controllerList.includes(_controller));
 };
 
 export const assertEscResponse = async (
@@ -980,7 +993,34 @@ export const assertEscResponse = async (
   _additionalCode: string,
   _destinationPartition: string
 ) => {
-  assert.equal(_response[0], _escCode);
-  assert.equal(_response[1], _additionalCode);
-  assert.equal(_response[2], _destinationPartition);
+  assert.strictEqual(_response[0], _escCode);
+  assert.strictEqual(_response[1], _additionalCode);
+  assert.strictEqual(_response[2], _destinationPartition);
 };
+
+export async function assertRevert(
+  promise: Promise<any>,
+  revert: string = 'revert'
+) {
+  try {
+    await promise;
+  } catch (error) {
+    const msg = (error as Error).message;
+    if (msg.indexOf(revert) === -1) {
+      // When the exception was a revert, the resulting string will include only
+      // the revert reason, otherwise it will be the type of exception (e.g. 'invalid opcode')
+      const actualError = msg.replace(
+        /Returned error: VM Exception while processing transaction: (revert )?/,
+        ''
+      );
+      assert.strictEqual(
+        actualError,
+        revert,
+        'Wrong kind of exception received'
+      );
+    }
+    return;
+  }
+
+  assert.fail('Expected an exception but none was received');
+}

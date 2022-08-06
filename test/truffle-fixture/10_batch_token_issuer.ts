@@ -1,5 +1,5 @@
-import { ethers } from 'hardhat';
-import { getSigners } from '../../test/common/wallet';
+import { ethers } from 'ethers';
+import { getSigner } from '../../test/common/wallet';
 import {
   BatchTokenIssuer__factory,
   ERC1820Registry__factory
@@ -8,7 +8,7 @@ import {
 const BATCH_ISSUER = 'BatchTokenIssuer';
 
 export default async function () {
-  const [owner] = getSigners(1);
+  const owner = getSigner();
 
   const batchTokenIssuer = await new BatchTokenIssuer__factory(owner).deploy();
   BatchTokenIssuer__factory.setAsDeployed(batchTokenIssuer);
@@ -19,16 +19,17 @@ export default async function () {
 
   const registry = ERC1820Registry__factory.deployed;
 
-  await registry.setInterfaceImplementer(
-    owner.address,
-    ethers.utils.id(BATCH_ISSUER),
-    batchTokenIssuer.address,
-    { from: owner.address }
-  );
+  await registry
+    .connect(owner)
+    .setInterfaceImplementer(
+      owner.getAddress(),
+      ethers.utils.id(BATCH_ISSUER),
+      batchTokenIssuer.address
+    );
 
   const registeredBatchTokenIssuerAddress =
     await registry.getInterfaceImplementer(
-      owner.address,
+      owner.getAddress(),
       ethers.utils.id(BATCH_ISSUER)
     );
 

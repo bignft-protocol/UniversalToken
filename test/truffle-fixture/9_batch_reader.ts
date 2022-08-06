@@ -1,5 +1,5 @@
-import { ethers } from 'hardhat';
-import { getSigners } from '../../test/common/wallet';
+import { ethers } from 'ethers';
+import { getSigner } from '../../test/common/wallet';
 import {
   BatchReader__factory,
   ERC1820Registry__factory,
@@ -10,7 +10,7 @@ const BALANCE_READER = 'BatchBalanceReader';
 const READER = 'BatchReader';
 
 export default async function () {
-  const [owner] = getSigners(1);
+  const owner = getSigner();
 
   const batchReader = await new BatchReader__factory(owner).deploy();
   BatchReader__factory.setAsDeployed(batchReader);
@@ -21,15 +21,16 @@ export default async function () {
 
   const registry = ERC1820Registry__factory.deployed;
 
-  await registry.setInterfaceImplementer(
-    owner.address,
-    ethers.utils.id(READER),
-    batchReader.address,
-    { from: owner.address }
-  );
+  await registry
+    .connect(owner)
+    .setInterfaceImplementer(
+      owner.getAddress(),
+      ethers.utils.id(READER),
+      batchReader.address
+    );
 
   const registeredBatchReaderAddress = await registry.getInterfaceImplementer(
-    owner.address,
+    owner.getAddress(),
     ethers.utils.id(READER)
   );
 
@@ -50,16 +51,17 @@ export default async function () {
     batchBalanceReader.address
   );
 
-  await registry.setInterfaceImplementer(
-    owner.address,
-    ethers.utils.id(BALANCE_READER),
-    batchBalanceReader.address,
-    { from: owner.address }
-  );
+  await registry
+    .connect(owner)
+    .setInterfaceImplementer(
+      owner.getAddress(),
+      ethers.utils.id(BALANCE_READER),
+      batchBalanceReader.address
+    );
 
   const registeredBatchBalanceReaderAddress =
     await registry.getInterfaceImplementer(
-      owner.address,
+      owner.getAddress(),
       ethers.utils.id(BALANCE_READER)
     );
 

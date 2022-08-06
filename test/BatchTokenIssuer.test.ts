@@ -1,8 +1,9 @@
-import { ethers } from 'hardhat';
-
-// @ts-ignore
-import { expectRevert } from '@openzeppelin/test-helpers';
-import { assertBalanceOfByPartition, ZERO_BYTE } from './utils/assert';
+import { ethers } from 'ethers';
+import {
+  assertBalanceOfByPartition,
+  assertRevert,
+  ZERO_BYTE
+} from './utils/assert';
 import {
   BatchTokenIssuer,
   BatchTokenIssuer__factory,
@@ -11,7 +12,6 @@ import {
   ERC1400TokensValidator,
   ERC1400TokensValidator__factory
 } from '../typechain-types';
-import { Signer } from 'ethers';
 import truffleFixture from './truffle-fixture';
 import { getSigners } from './common/wallet';
 
@@ -42,9 +42,7 @@ const CERTIFICATE_VALIDATION_DEFAULT = CERTIFICATE_VALIDATION_SALT;
 const MAX_NUMBER_OF_ISSUANCES_IN_A_BATCH = 40;
 
 describe('BatchTokenIssuer', function () {
-  const signers = getSigners(3);
-  const [signer, controllerSigner, unknownSigner] = signers;
-  const [owner, controller, unknown] = signers.map((s) => s.address);
+  const [signer, controllerSigner, unknownSigner] = getSigners(3);
 
   let extension: ERC1400TokensValidator;
   let token: ERC1400HoldableCertificateToken;
@@ -68,10 +66,10 @@ describe('BatchTokenIssuer', function () {
       'ERC1400Token',
       'DAU',
       1,
-      [controller],
+      [controllerSigner.getAddress()],
       [partition1],
       extension.address,
-      owner,
+      signer.getAddress(),
       CERTIFICATE_SIGNER,
       CERTIFICATE_VALIDATION_DEFAULT
     );
@@ -124,7 +122,7 @@ describe('BatchTokenIssuer', function () {
       });
       describe('when the operator is not a minter', function () {
         it('reverts', async function () {
-          await expectRevert.unspecified(
+          await assertRevert(
             batchIssuer
               .connect(unknownSigner)
               .batchIssueByPartition(
@@ -139,8 +137,8 @@ describe('BatchTokenIssuer', function () {
     });
     describe('when tokenHoler list is not correct', function () {
       it('reverts', async function () {
-        tokenHolders.push(unknown);
-        await expectRevert.unspecified(
+        tokenHolders.push(await unknownSigner.getAddress());
+        await assertRevert(
           batchIssuer
             .connect(controllerSigner)
             .batchIssueByPartition(
@@ -155,7 +153,7 @@ describe('BatchTokenIssuer', function () {
     describe('when values list is not correct', function () {
       it('reverts', async function () {
         values.push(10);
-        await expectRevert.unspecified(
+        await assertRevert(
           batchIssuer
             .connect(controllerSigner)
             .batchIssueByPartition(

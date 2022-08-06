@@ -1,4 +1,4 @@
-import { ethers } from 'hardhat';
+import { ethers } from 'ethers';
 import { getSigners } from '../../test/common/wallet';
 
 type Args = {
@@ -16,7 +16,7 @@ export default async function ({ num = 10, amount = '0' }: Args) {
     for (let i = 1; i <= num; i++) {
       // wait 1 block confirm
       const res = await signers[0].sendTransaction({
-        to: signers[0].address,
+        to: signers[0].getAddress(),
         value: sendAmount
       });
       // last transaction need confirm block
@@ -28,6 +28,6 @@ export default async function ({ num = 10, amount = '0' }: Args) {
 
   for (let i = 0; i <= num; i++) {
     const signer = signers[i];
-    console.log(i, signer.address, await signer.getBalance());
+    console.log(i, await signer.getAddress(), await signer.getBalance());
   }
 }

@@ -1,7 +1,6 @@
-import { ethers } from 'hardhat';
 import { ERC1400__factory } from '../../typechain-types';
 import fs from 'fs';
-import path from 'path';
+import { getSigner } from '../../test/common/wallet';
 
 const partition1 =
   '0x7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
@@ -16,28 +15,31 @@ type Args = {
   name: string;
   symbol: string;
   address?: string;
+  ['contract-arguments']?: string;
 };
 
 export default async function (args: Args) {
-  const [owner] = await ethers.getSigners();
+  const owner = getSigner();
 
-  fs.writeFileSync(
-    path.join(__dirname, '..', '..', 'contract-arguments.js'),
-    `module.exports = [
+  if (args['contract-arguments']) {
+    fs.writeFileSync(
+      args['contract-arguments'],
+      `module.exports = [
     '${args.name}',
     '${args.symbol}',
     1,
-    ['${args.address ?? owner.address}'],
+    ['${args.address ?? (await owner.getAddress())}'],
     ${JSON.stringify(partitions)},
   ];
-  `
-  );
+`
+    );
+  }
 
   const erc1400 = await new ERC1400__factory(owner).deploy(
     args.name,
     args.symbol,
     1,
-    [args.address ?? owner.address],
+    [args.address ?? (await owner.getAddress())],
     partitions
   );
 

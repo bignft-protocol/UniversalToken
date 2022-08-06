@@ -1,5 +1,5 @@
-import { ethers } from 'hardhat';
-import { getSigners } from '../../test/common/wallet';
+import { ethers } from 'ethers';
+import { getSigner } from '../../test/common/wallet';
 import {
   ERC1820Registry__factory,
   Swaps__factory
@@ -8,7 +8,7 @@ import {
 const DELIVERY_VS_PAYMENT = 'DeliveryVsPayment';
 
 export default async function () {
-  const [owner] = getSigners(1);
+  const owner = getSigner();
 
   const dvpContract = await new Swaps__factory(owner).deploy(false);
   Swaps__factory.setAsDeployed(dvpContract);
@@ -16,15 +16,16 @@ export default async function () {
 
   const registry = ERC1820Registry__factory.deployed;
 
-  await registry.setInterfaceImplementer(
-    owner.address,
-    ethers.utils.id(DELIVERY_VS_PAYMENT),
-    dvpContract.address,
-    { from: owner.address }
-  );
+  await registry
+    .connect(owner)
+    .setInterfaceImplementer(
+      owner.getAddress(),
+      ethers.utils.id(DELIVERY_VS_PAYMENT),
+      dvpContract.address
+    );
 
   const registeredDVPAddress = await registry.getInterfaceImplementer(
-    owner.address,
+    owner.getAddress(),
     ethers.utils.id(DELIVERY_VS_PAYMENT)
   );
 

@@ -1,5 +1,5 @@
-import { ethers } from 'hardhat';
-import { assert } from 'chai';
+import { ethers } from 'ethers';
+import assert from 'assert';
 import { advanceTimeAndBlock } from './utils/time';
 import { newSecretHashPair, newHoldId } from './utils/crypto';
 import {
@@ -28,10 +28,9 @@ import {
   assertBalanceOfSecurityToken,
   assertTotalSupply,
   assertBalance,
-  assertEscResponse
+  assertEscResponse,
+  assertRevert
 } from './utils/assert';
-// @ts-ignore
-import { expectRevert } from '@openzeppelin/test-helpers';
 import {
   AllowlistMock,
   AllowlistMock__factory,
@@ -747,7 +746,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
         const validatorContract2 = await new ERC1400TokensValidator__factory(
           controllerSigner
         ).deploy();
-        await expectRevert.unspecified(
+        await assertRevert(
           token
             .connect(controllerSigner)
             .setTokenExtension(
@@ -848,7 +847,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
               await extension.isCertificateSigner(token.address, unknown),
               false
             );
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(unknownSigner)
                 .addCertificateSigner(token.address, unknown)
@@ -896,7 +895,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
               await extension.isCertificateSigner(token.address, unknown),
               true
             );
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(tokenHolderSigner)
                 .removeCertificateSigner(token.address, unknown)
@@ -944,7 +943,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             ),
             false
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             certificateSignerMock
               .connect(unknownSigner)
               .addCertificateSigner(token.address, unknown)
@@ -1072,7 +1071,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
               await extension.isAllowlistAdmin(token.address, unknown),
               false
             );
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(unknownSigner)
                 .addAllowlistAdmin(token.address, unknown)
@@ -1120,7 +1119,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
               await extension.isAllowlistAdmin(token.address, unknown),
               true
             );
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(tokenHolderSigner)
                 .removeAllowlistAdmin(token.address, unknown)
@@ -1157,7 +1156,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             true
           );
 
-          await expectRevert.unspecified(
+          await assertRevert(
             allowlistMock
               .connect(unknownSigner)
               .mockFunction(token.address, true)
@@ -1178,7 +1177,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await allowlistMock.isAllowlistAdmin(token.address, unknown),
             false
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             allowlistMock
               .connect(unknownSigner)
               .addAllowlistAdmin(token.address, unknown)
@@ -1300,7 +1299,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
               await extension.isBlocklistAdmin(token.address, unknown),
               false
             );
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(unknownSigner)
                 .addBlocklistAdmin(token.address, unknown)
@@ -1348,7 +1347,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
               await extension.isBlocklistAdmin(token.address, unknown),
               true
             );
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(tokenHolderSigner)
                 .removeBlocklistAdmin(token.address, unknown)
@@ -1385,7 +1384,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             true
           );
 
-          await expectRevert.unspecified(
+          await assertRevert(
             blocklistMock
               .connect(unknownSigner)
               .mockFunction(token.address, true)
@@ -1406,7 +1405,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await blocklistMock.isBlocklistAdmin(token.address, unknown),
             false
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             blocklistMock
               .connect(unknownSigner)
               .addBlocklistAdmin(token.address, unknown)
@@ -1511,7 +1510,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
               await extension.isPauser(token.address, unknown),
               false
             );
-            await expectRevert.unspecified(
+            await assertRevert(
               extension.connect(unknownSigner).addPauser(token.address, unknown)
             );
             assert.equal(
@@ -1553,7 +1552,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
               await extension.isPauser(token.address, unknown),
               true
             );
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(tokenHolderSigner)
                 .removePauser(token.address, unknown)
@@ -1579,7 +1578,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await pauserMock.isPauser(token.address, unknown),
             false
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             pauserMock.connect(unknownSigner).mockFunction(token.address, true)
           );
           await pauserMock.connect(signer).addPauser(token.address, unknown);
@@ -1635,7 +1634,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
     });
     describe('when the caller is not the contract owner', function () {
       it('reverts', async function () {
-        await expectRevert.unspecified(
+        await assertRevert(
           setAllowListActivated(
             extension,
             token,
@@ -1663,7 +1662,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
     });
     describe('when the caller is not the contract owner', function () {
       it('reverts', async function () {
-        await expectRevert.unspecified(
+        await assertRevert(
           setAllowListActivated(extension, token, unknown, false)
         );
       });
@@ -1686,7 +1685,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
     });
     describe('when the caller is not the contract owner', function () {
       it('reverts', async function () {
-        await expectRevert.unspecified(
+        await assertRevert(
           setBlockListActivated(extension, token, unknown, false)
         );
       });
@@ -1714,7 +1713,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
     });
     describe('when the caller is not the contract owner', function () {
       it('reverts', async function () {
-        await expectRevert.unspecified(
+        await assertRevert(
           setGranularityByPartitionActivated(extension, token, unknown, false)
         );
       });
@@ -2300,7 +2299,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             );
           });
           it('fails issuing when when certificate is not provided', async function () {
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(controllerSigner)
                 .issue(tokenHolder, issuanceAmount, ZERO_BYTE)
@@ -2358,7 +2357,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             );
           });
           it('fails issuing when certificate is not provided', async function () {
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(controllerSigner)
                 .issueByPartition(
@@ -2373,7 +2372,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await extension
               .connect(controllerSigner)
               .addAllowlisted(token.address, tokenHolder);
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(controllerSigner)
                 .issueByPartition(
@@ -2411,7 +2410,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await assertTotalSupply(token, issuanceAmount);
             await assertBalance(token, tokenHolder, issuanceAmount);
 
-            await expectRevert.unspecified(
+            await assertRevert(
               token.connect(tokenHolderSigner).redeem(issuanceAmount, ZERO_BYTE)
             );
 
@@ -2449,7 +2448,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await assertBalance(token, tokenHolder, issuanceAmount);
 
             await token.connect(tokenHolderSigner).authorizeOperator(operator);
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(operatorSigner)
                 .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE)
@@ -2484,7 +2483,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             );
           });
           it('fails redeems when sender when certificate is not provided', async function () {
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(tokenHolderSigner)
                 .redeemByPartition(partition1, redeemAmount, ZERO_BYTE)
@@ -2501,7 +2500,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await extension
               .connect(controllerSigner)
               .addAllowlisted(token.address, tokenHolder);
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(tokenHolderSigner)
                 .redeemByPartition(partition1, redeemAmount, ZERO_BYTE)
@@ -2580,7 +2579,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await token
               .connect(tokenHolderSigner)
               .authorizeOperatorByPartition(partition1, operator);
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(operatorSigner)
                 .operatorRedeemByPartition(
@@ -2631,7 +2630,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await assertBalance(token, tokenHolder, issuanceAmount);
             await assertBalance(token, recipient, 0);
 
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(tokenHolderSigner)
                 .transferWithData(recipient, transferAmount, ZERO_BYTE)
@@ -2682,7 +2681,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
 
             await token.connect(tokenHolderSigner).authorizeOperator(operator);
 
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(operatorSigner)
                 .transferFromWithData(
@@ -2750,7 +2749,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             );
             await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
 
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(tokenHolderSigner)
                 .transferByPartition(
@@ -2784,7 +2783,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             );
             await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
 
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(tokenHolderSigner)
                 .transferByPartition(
@@ -3044,7 +3043,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
               ).toNumber(),
               approvedAmount
             );
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(operatorSigner)
                 .operatorTransferByPartition(
@@ -3107,7 +3106,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await assertBalance(token, tokenHolder, issuanceAmount);
             await assertBalance(token, recipient, 0);
 
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(tokenHolderSigner)
                 .transfer(recipient, transferAmount)
@@ -3123,7 +3122,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await assertBalance(token, tokenHolder, issuanceAmount);
             await assertBalance(token, recipient, 0);
 
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(tokenHolderSigner)
                 .transfer(recipient, transferAmount)
@@ -3164,7 +3163,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await assertBalance(token, recipient, 0);
 
             await token.connect(tokenHolderSigner).authorizeOperator(operator);
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(operatorSigner)
                 .transferFrom(tokenHolder, recipient, transferAmount)
@@ -3181,7 +3180,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             await assertBalance(token, recipient, 0);
 
             await token.connect(tokenHolderSigner).authorizeOperator(operator);
-            await expectRevert.unspecified(
+            await assertRevert(
               token
                 .connect(operatorSigner)
                 .transferFrom(tokenHolder, recipient, transferAmount)
@@ -3237,7 +3236,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             clock, // clock
             controller
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3261,7 +3260,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             clock, // clock
             controller
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3291,7 +3290,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             CERTIFICATE_VALIDITY_PERIOD * SECONDS_IN_AN_HOUR + 100
           );
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3330,7 +3329,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             partition1,
             2 * issuanceAmount
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3358,7 +3357,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             clock, // clock
             controller
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3382,7 +3381,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             clock, // clock
             tokenHolder
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3394,7 +3393,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           );
         });
         it('fails issuing when certificate is not valid (certificate with v=27) [for coverage]', async function () {
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3406,7 +3405,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           );
         });
         it('fails issuing when certificate is not valid (certificate with v=28) [for coverage]', async function () {
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3418,7 +3417,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           );
         });
         it('fails issuing when certificate is not valid (certificate with v=29) [for coverage]', async function () {
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3487,7 +3486,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             clock, // clock
             controller
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3511,7 +3510,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             clock, // clock
             controller
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3541,7 +3540,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             CERTIFICATE_VALIDITY_PERIOD * SECONDS_IN_AN_HOUR + 100
           );
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3580,7 +3579,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             partition1,
             2 * issuanceAmount
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3608,7 +3607,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             clock, // clock
             controller
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3632,7 +3631,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
             clock, // clock
             tokenHolder
           );
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3644,7 +3643,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           );
         });
         it('fails issuing when certificate is not valid (certificate with v=27) [for coverage]', async function () {
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3656,7 +3655,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           );
         });
         it('fails issuing when certificate is not valid (certificate with v=28) [for coverage]', async function () {
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3668,7 +3667,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           );
         });
         it('fails issuing when certificate is not valid (certificate with v=29) [for coverage]', async function () {
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3731,7 +3730,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await extension
             .connect(controllerSigner)
             .removeAllowlisted(token.address, tokenHolder);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issue(tokenHolder, issuanceAmount, ZERO_BYTE)
@@ -3760,7 +3759,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await extension
             .connect(controllerSigner)
             .removeAllowlisted(token.address, tokenHolder);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -3791,7 +3790,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertTotalSupply(token, issuanceAmount);
           await assertBalance(token, tokenHolder, issuanceAmount);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token.connect(tokenHolderSigner).redeem(issuanceAmount, ZERO_BYTE)
           );
 
@@ -3820,7 +3819,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, tokenHolder, issuanceAmount);
 
           await token.connect(tokenHolderSigner).authorizeOperator(operator);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(operatorSigner)
               .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE)
@@ -3847,7 +3846,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await extension
             .connect(controllerSigner)
             .removeAllowlisted(token.address, tokenHolder);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(tokenHolderSigner)
               .redeemByPartition(partition1, redeemAmount, ZERO_BYTE)
@@ -3890,7 +3889,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await token
             .connect(tokenHolderSigner)
             .authorizeOperatorByPartition(partition1, operator);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(operatorSigner)
               .operatorRedeemByPartition(
@@ -3939,7 +3938,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, tokenHolder, issuanceAmount);
           await assertBalance(token, recipient, 0);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(tokenHolderSigner)
               .transferWithData(recipient, transferAmount, ZERO_BYTE)
@@ -3952,7 +3951,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, tokenHolder, issuanceAmount);
           await assertBalance(token, recipient, 0);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(tokenHolderSigner)
               .transferWithData(recipient, transferAmount, ZERO_BYTE)
@@ -4039,7 +4038,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           );
           await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(tokenHolderSigner)
               .transferByPartition(
@@ -4067,7 +4066,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           );
           await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(tokenHolderSigner)
               .transferByPartition(
@@ -4190,7 +4189,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, tokenHolder, issuanceAmount);
           await assertBalance(token, recipient, 0);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token.connect(tokenHolderSigner).transfer(recipient, transferAmount)
           );
 
@@ -4201,7 +4200,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, tokenHolder, issuanceAmount);
           await assertBalance(token, recipient, 0);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token.connect(tokenHolderSigner).transfer(recipient, transferAmount)
           );
 
@@ -4234,7 +4233,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, recipient, 0);
 
           await token.connect(tokenHolderSigner).authorizeOperator(operator);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(operatorSigner)
               .transferFrom(tokenHolder, recipient, transferAmount)
@@ -4248,7 +4247,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, recipient, 0);
 
           await token.connect(tokenHolderSigner).authorizeOperator(operator);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(operatorSigner)
               .transferFrom(tokenHolder, recipient, transferAmount)
@@ -4337,7 +4336,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await extension
             .connect(controllerSigner)
             .addBlocklisted(token.address, tokenHolder);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issue(tokenHolder, issuanceAmount, ZERO_BYTE)
@@ -4366,7 +4365,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await extension
             .connect(controllerSigner)
             .addBlocklisted(token.address, tokenHolder);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(controllerSigner)
               .issueByPartition(
@@ -4397,7 +4396,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertTotalSupply(token, issuanceAmount);
           await assertBalance(token, tokenHolder, issuanceAmount);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token.connect(tokenHolderSigner).redeem(issuanceAmount, ZERO_BYTE)
           );
 
@@ -4426,7 +4425,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, tokenHolder, issuanceAmount);
 
           await token.connect(tokenHolderSigner).authorizeOperator(operator);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(operatorSigner)
               .redeemFrom(tokenHolder, issuanceAmount, ZERO_BYTE)
@@ -4453,7 +4452,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await extension
             .connect(controllerSigner)
             .addBlocklisted(token.address, tokenHolder);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(tokenHolderSigner)
               .redeemByPartition(partition1, redeemAmount, ZERO_BYTE)
@@ -4496,7 +4495,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await token
             .connect(tokenHolderSigner)
             .authorizeOperatorByPartition(partition1, operator);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(operatorSigner)
               .operatorRedeemByPartition(
@@ -4539,7 +4538,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, tokenHolder, issuanceAmount);
           await assertBalance(token, recipient, 0);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(tokenHolderSigner)
               .transferWithData(recipient, transferAmount, ZERO_BYTE)
@@ -4555,7 +4554,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, tokenHolder, issuanceAmount);
           await assertBalance(token, recipient, 0);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(tokenHolderSigner)
               .transferWithData(recipient, transferAmount, ZERO_BYTE)
@@ -4632,7 +4631,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           );
           await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(tokenHolderSigner)
               .transferByPartition(
@@ -4663,7 +4662,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           );
           await assertBalanceOfSecurityToken(token, recipient, partition1, 0);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(tokenHolderSigner)
               .transferByPartition(
@@ -4777,7 +4776,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, tokenHolder, issuanceAmount);
           await assertBalance(token, recipient, 0);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token.connect(tokenHolderSigner).transfer(recipient, transferAmount)
           );
 
@@ -4791,7 +4790,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, tokenHolder, issuanceAmount);
           await assertBalance(token, recipient, 0);
 
-          await expectRevert.unspecified(
+          await assertRevert(
             token.connect(tokenHolderSigner).transfer(recipient, transferAmount)
           );
 
@@ -4824,7 +4823,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, recipient, 0);
 
           await token.connect(tokenHolderSigner).authorizeOperator(operator);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(operatorSigner)
               .transferFrom(tokenHolder, recipient, transferAmount)
@@ -4841,7 +4840,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await assertBalance(token, recipient, 0);
 
           await token.connect(tokenHolderSigner).authorizeOperator(operator);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(operatorSigner)
               .transferFrom(tokenHolder, recipient, transferAmount)
@@ -4924,7 +4923,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
       });
       describe('when partition granularity is not updated by a token controller', function () {
         it('reverts', async function () {
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(unknownSigner)
               .setGranularityByPartition(
@@ -5036,7 +5035,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           await token
             .connect(tokenHolderSigner)
             .transferByPartition(partition1, recipient, 1, ZERO_BYTE);
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(tokenHolderSigner)
               .transferByPartition(partition2, recipient, 1, ZERO_BYTE)
@@ -5265,7 +5264,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
                 const amount = approvedAmount + 1;
 
                 it('reverts', async function () {
-                  await expectRevert.unspecified(
+                  await assertRevert(
                     token
                       .connect(operatorSigner)
                       .transferFrom(tokenHolder, recipient, amount)
@@ -5278,7 +5277,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
               const amount = issuanceAmount;
 
               it('reverts', async function () {
-                await expectRevert.unspecified(
+                await assertRevert(
                   token
                     .connect(operatorSigner)
                     .transferFrom(tokenHolder, ZERO_ADDRESS, amount)
@@ -5336,7 +5335,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
                 .connect(tokenHolderSigner)
                 .approve(operator, approvedAmount);
 
-              await expectRevert.unspecified(
+              await assertRevert(
                 token2
                   .connect(operatorSigner)
                   .transferFrom(tokenHolder, recipient, 3)
@@ -5366,7 +5365,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           });
           describe('when the operator is not approved and not authorized', function () {
             it('reverts', async function () {
-              await expectRevert.unspecified(
+              await assertRevert(
                 token
                   .connect(operatorSigner)
                   .transferFrom(tokenHolder, recipient, amount)
@@ -5392,7 +5391,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           );
         });
         it('reverts', async function () {
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(operatorSigner)
               .transferFrom(tokenHolder, recipient, amount)
@@ -5416,7 +5415,7 @@ describe('ERC1400HoldableCertificate with token extension', function () {
           );
         });
         it('reverts', async function () {
-          await expectRevert.unspecified(
+          await assertRevert(
             token
               .connect(operatorSigner)
               .transferFrom(tokenHolder, recipient, amount)
@@ -5765,7 +5764,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
       //     );
       //   });
       //   it("reverts", async function() {
-      //     await expectRevert.unspecified(
+      //     await assertRevert(
       //       token.connect(notarySigner).transferFrom(
       //         tokenHolder,
       //         recipient,
@@ -5836,13 +5835,13 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
       it('transfers the requested amount (after pause/unpause)', async function () {
         assert.equal(false, await extension.paused(token.address));
         await extension.connect(controllerSigner).pause(token.address);
-        await expectRevert.unspecified(
+        await assertRevert(
           extension.connect(controllerSigner).pause(token.address)
         );
 
         assert.equal(true, await extension.paused(token.address));
         await extension.connect(controllerSigner).unpause(token.address);
-        await expectRevert.unspecified(
+        await assertRevert(
           extension.connect(controllerSigner).unpause(token.address)
         );
 
@@ -5902,7 +5901,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
       });
       it('reverts', async function () {
         await assertBalance(token, tokenHolder, issuanceAmount);
-        await expectRevert.unspecified(
+        await assertRevert(
           token.connect(tokenHolderSigner).transfer(recipient, issuanceAmount)
         );
       });
@@ -5914,7 +5913,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
           issuanceAmount
         );
 
-        await expectRevert.unspecified(
+        await assertRevert(
           token
             .connect(tokenHolderSigner)
             .transferByPartition(
@@ -5981,7 +5980,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
         ).toNumber();
 
         const transferAmount = spendableBalance + 1;
-        await expectRevert.unspecified(
+        await assertRevert(
           token
             .connect(tokenHolderSigner)
             .transferByPartition(
@@ -6018,7 +6017,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
         await setHoldsActivated(extension, token, controller, false);
         await assertHoldsActivated(extension, token, false);
 
-        await expectRevert.unspecified(
+        await assertRevert(
           setHoldsActivated(extension, token, tokenHolder, true)
         );
       });
@@ -6379,7 +6378,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                       clock, // clock
                       tokenHolder
                     );
-                    await expectRevert.unspecified(
+                    await assertRevert(
                       token
                         .connect(tokenHolderSigner)
                         .transferByPartition(
@@ -6476,7 +6475,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                       clock, // clock
                       tokenHolder
                     );
-                    await expectRevert.unspecified(
+                    await assertRevert(
                       extension
                         .connect(tokenHolderSigner)
                         .hold(
@@ -6722,7 +6721,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                   clock, // clock
                   tokenHolder
                 );
-                await expectRevert.unspecified(
+                await assertRevert(
                   extension
                     .connect(tokenHolderSigner)
                     .hold(
@@ -6761,7 +6760,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                 clock, // clock
                 tokenHolder
               );
-              await expectRevert.unspecified(
+              await assertRevert(
                 extension
                   .connect(tokenHolderSigner)
                   .hold(
@@ -6800,7 +6799,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
               clock, // clock
               tokenHolder
             );
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(tokenHolderSigner)
                 .hold(
@@ -6822,7 +6821,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
         it('creates a hold', async function () {
           const holdId = newHoldId();
           const secretHashPair = newSecretHashPair();
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(tokenHolderSigner)
               .hold(
@@ -7099,7 +7098,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
           const time = (await clock.getTime()).toNumber();
           const holdId = newHoldId();
           const secretHashPair = newSecretHashPair();
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(tokenHolderSigner)
               .holdWithExpirationDate(
@@ -7177,7 +7176,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
           const time = (await clock.getTime()).toNumber();
           const holdId = newHoldId();
           const secretHashPair = newSecretHashPair();
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(tokenHolderSigner)
               .holdWithExpirationDate(
@@ -7278,7 +7277,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
           it('reverts', async function () {
             const holdId = newHoldId();
             const secretHashPair = newSecretHashPair();
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(recipientSigner)
                 .holdFrom(
@@ -7301,7 +7300,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
         it('reverts', async function () {
           const holdId = newHoldId();
           const secretHashPair = newSecretHashPair();
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(controllerSigner)
               .holdFrom(
@@ -7400,7 +7399,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
           );
           const holdId = newHoldId();
           const secretHashPair = newSecretHashPair();
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(controllerSigner)
               .holdFrom(
@@ -7517,7 +7516,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                 const time = (await clock.getTime()).toNumber();
                 const holdId = newHoldId();
                 const secretHashPair = newSecretHashPair();
-                await expectRevert.unspecified(
+                await assertRevert(
                   extension
                     .connect(recipientSigner)
                     .holdFromWithExpirationDate(
@@ -7541,7 +7540,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
               const time = (await clock.getTime()).toNumber();
               const holdId = newHoldId();
               const secretHashPair = newSecretHashPair();
-              await expectRevert.unspecified(
+              await assertRevert(
                 extension
                   .connect(controllerSigner)
                   .holdFromWithExpirationDate(
@@ -7615,7 +7614,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
           const time = (await clock.getTime()).toNumber();
           const holdId = newHoldId();
           const secretHashPair = newSecretHashPair();
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(controllerSigner)
               .holdFromWithExpirationDate(
@@ -7730,7 +7729,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
           const time = (await clock.getTime()).toNumber();
           const holdId = newHoldId();
           const secretHashPair = newSecretHashPair();
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(controllerSigner)
               .holdFromWithExpirationDate(
@@ -8029,7 +8028,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
       describe('when hold can not be released', function () {
         describe('when hold is released by the hold sender', function () {
           it('reverts', async function () {
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(tokenHolderSigner)
                 .releaseHold(token.address, holdId)
@@ -8088,7 +8087,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
         );
         assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
 
-        await expectRevert.unspecified(
+        await assertRevert(
           extension.connect(notarySigner).releaseHold(token.address, holdId)
         );
       });
@@ -8302,7 +8301,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
             });
             describe('when hold is neither renewed by the sender, nor by an operator', function () {
               it('reverts', async function () {
-                await expectRevert.unspecified(
+                await assertRevert(
                   extension
                     .connect(recipientSigner)
                     .renewHold(
@@ -8333,7 +8332,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
               // Wait for more than an hour
               await advanceTimeAndBlock(SECONDS_IN_AN_HOUR + 100);
 
-              await expectRevert.unspecified(
+              await assertRevert(
                 extension
                   .connect(tokenHolderSigner)
                   .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE)
@@ -8409,7 +8408,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
             );
             assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
 
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(tokenHolderSigner)
                 .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE)
@@ -8485,7 +8484,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
           );
 
           time = await clock.getTime();
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(tokenHolderSigner)
               .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE)
@@ -8668,7 +8667,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
       describe('when expiration date is not valid', function () {
         it('reverts', async function () {
           time = await clock.getTime();
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(tokenHolderSigner)
               .renewHoldWithExpirationDate(
@@ -8778,7 +8777,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
           );
 
           time = await clock.getTime();
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(tokenHolderSigner)
               .renewHoldWithExpirationDate(
@@ -9452,7 +9451,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
               });
               describe('when value is higher than hold value', function () {
                 it('reverts', async function () {
-                  await expectRevert.unspecified(
+                  await assertRevert(
                     extension
                       .connect(notarySigner)
                       .executeHold(
@@ -9470,7 +9469,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
                 // Wait for more than an hour
                 await advanceTimeAndBlock(SECONDS_IN_AN_HOUR + 100);
 
-                await expectRevert.unspecified(
+                await assertRevert(
                   extension
                     .connect(notarySigner)
                     .executeHold(
@@ -9536,7 +9535,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
             describe("when the token sender doesn't provide the correct secret", function () {
               it('reverts', async function () {
                 const fakeSecretHashPair = newSecretHashPair();
-                await expectRevert.unspecified(
+                await assertRevert(
                   extension
                     .connect(recipientSigner)
                     .executeHold(
@@ -9552,7 +9551,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
         });
         describe('when value is nil', function () {
           it('reverts', async function () {
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(notarySigner)
                 .executeHold(token.address, holdId, 0, EMPTY_BYTE32)
@@ -9646,7 +9645,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
         );
         assert.equal(holdData[8], HOLD_STATUS_RELEASED_BY_NOTARY);
 
-        await expectRevert.unspecified(
+        await assertRevert(
           extension
             .connect(notarySigner)
             .executeHold(token.address, holdId, holdAmount, EMPTY_BYTE32)
@@ -9701,7 +9700,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
     });
     describe('when the caller is neither the token contract owner nor a token controller', function () {
       it('reverts', async function () {
-        await expectRevert.unspecified(
+        await assertRevert(
           addTokenController(extension, token, unknown, tokenController1)
         );
       });
@@ -10035,7 +10034,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
               secretHashPair.hash,
               ZERO_BYTE
             );
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(recipientSigner)
               .renewHold(token.address, holdId, SECONDS_IN_A_DAY, ZERO_BYTE)
@@ -10274,7 +10273,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
             const time = (await clock.getTime()).toNumber();
             const holdId = newHoldId();
             const secretHashPair = newSecretHashPair();
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(controllerSigner)
                 .preHoldForWithExpirationDate(
@@ -10295,7 +10294,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
           it('reverts', async function () {
             const holdId = newHoldId();
             const secretHashPair = newSecretHashPair();
-            await expectRevert.unspecified(
+            await assertRevert(
               extension
                 .connect(notarySigner)
                 .preHoldFor(
@@ -10478,7 +10477,7 @@ const holdData = await extension.retrieveHoldData(token.address, holdId);
         it('creates a pre-hold', async function () {
           const holdId = newHoldId();
           const secretHashPair = newSecretHashPair();
-          await expectRevert.unspecified(
+          await assertRevert(
             extension
               .connect(controllerSigner)
               .preHoldFor(

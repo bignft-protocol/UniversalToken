@@ -1,4 +1,4 @@
-import { ethers } from 'hardhat';
+import { getSigner } from '../../test/common/wallet';
 import { ERC1400HoldableCertificateToken__factory } from '../../typechain-types';
 
 const CERTIFICATE_SIGNER = '0xe31C41f0f70C5ff39f73B4B94bcCD767b3071630';
@@ -19,7 +19,7 @@ const CERTIFICATE_VALIDATION_NONCE = 1;
 const CERTIFICATE_VALIDATION_SALT = 2;
 
 export default async function () {
-  const owner = ethers.provider.getSigner();
+  const owner = getSigner();
   const erc1400HoldableCertificateToken =
     await new ERC1400HoldableCertificateToken__factory(owner).deploy(
       'ERC1400HoldableCertificateToken',

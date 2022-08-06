@@ -1,33 +1,32 @@
-// @ts-nocheck
-
-import { ethers, network } from 'hardhat';
+import { network } from 'hardhat';
 import { HARDHAT_NETWORK_NAME } from 'hardhat/plugins';
+import { provider } from '../../test/common/wallet';
 
 // ---------- Module to accelerate time -----------------------
 export const advanceTime = (time: any) => {
   if (network.name !== HARDHAT_NETWORK_NAME) return;
-  return ethers.provider.send('evm_increaseTime', [time]);
+  return provider.send('evm_increaseTime', [time]);
 };
 
 export const advanceBlock = () => {
   if (network.name !== HARDHAT_NETWORK_NAME) return;
-  return ethers.provider.send('evm_mine', []);
+  return provider.send('evm_mine', []);
 };
 
 export const advanceTimeAndBlock = async (time: any) => {
   await advanceTime(time);
   await advanceBlock();
-  return Promise.resolve(ethers.provider.getBlock('latest'));
+  return Promise.resolve(provider.getBlock('latest'));
 };
 
 export const takeSnapshot = () => {
   if (network.name !== HARDHAT_NETWORK_NAME) return;
-  return ethers.provider.send('evm_snapshot', []);
+  return provider.send('evm_snapshot', []);
 };
 
 export const revertToSnapshot = (snapShotId: any) => {
   if (network.name !== HARDHAT_NETWORK_NAME) return;
-  return ethers.provider.send('evm_revert', [snapShotId]);
+  return provider.send('evm_revert', [snapShotId]);
 };
 
 // ---------- Module to accelerate time (end)------------------

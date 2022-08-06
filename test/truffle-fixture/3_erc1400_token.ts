@@ -1,4 +1,4 @@
-import { ethers } from 'hardhat';
+import { getSigner } from '../../test/common/wallet';
 import { ERC1400__factory } from '../../typechain-types';
 
 const controller = '0xb5747835141b46f7C472393B31F8F5A57F74A44f';
@@ -12,7 +12,7 @@ const partition3 =
 const partitions = [partition1, partition2, partition3];
 
 export default async function () {
-  const owner = ethers.provider.getSigner();
+  const owner = getSigner();
   const erc1400Token = await new ERC1400__factory(owner).deploy(
     'ERC1400Token',
     'DAU',

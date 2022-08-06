@@ -1,8 +1,8 @@
-import { ethers } from 'hardhat';
 import {
   ERC1400HoldableCertificateToken,
   ERC1400TokensValidator
 } from '../../typechain-types';
+import { getSigner } from './wallet';
 
 export const ERC1400_TOKENS_VALIDATOR = 'ERC1400TokensValidator';
 
@@ -17,7 +17,7 @@ export const setNewExtensionForToken = async (
   _sender: string
 ) => {
   const controllers = await _token.controllers();
-  const signer = ethers.provider.getSigner(_sender);
+  const signer = getSigner(_sender);
   await _extension
     .connect(signer)
     .registerTokenSetup(
@@ -48,7 +48,7 @@ export const setCertificateActivated = async (
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = ethers.provider.getSigner(_sender);
+  const signer = getSigner(_sender);
   await _extension
     .connect(signer)
     .registerTokenSetup(
@@ -69,7 +69,7 @@ export const setAllowListActivated = async (
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = ethers.provider.getSigner(_sender);
+  const signer = getSigner(_sender);
   await _extension
     .connect(signer)
     .registerTokenSetup(
@@ -90,7 +90,7 @@ export const setBlockListActivated = async (
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = ethers.provider.getSigner(_sender);
+  const signer = getSigner(_sender);
   await _extension
     .connect(signer)
     .registerTokenSetup(
@@ -111,7 +111,7 @@ export const setGranularityByPartitionActivated = async (
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = ethers.provider.getSigner(_sender);
+  const signer = getSigner(_sender);
   await _extension
     .connect(signer)
     .registerTokenSetup(
@@ -132,7 +132,7 @@ export const setHoldsActivated = async (
   _value: any
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = ethers.provider.getSigner(_sender);
+  const signer = getSigner(_sender);
   await _extension
     .connect(signer)
     .registerTokenSetup(
@@ -150,10 +150,10 @@ export const addTokenController = async (
   _extension: ERC1400TokensValidator,
   _token: ERC1400HoldableCertificateToken,
   _sender: string,
-  _newController: any
+  _newController: string
 ) => {
   const tokenSetup = await _extension.retrieveTokenSetup(_token.address);
-  const signer = ethers.provider.getSigner(_sender);
+  const signer = getSigner(_sender);
   //Need to clone the object since tokenSetup[5] is immutable
   const controllerList = Object.assign([], tokenSetup[5]);
   if (!controllerList.includes(_newController)) {

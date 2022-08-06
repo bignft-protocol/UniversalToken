@@ -1,4 +1,5 @@
-import { ethers } from 'hardhat';
+import { ethers } from 'ethers';
+import { getSigners } from '../../test/common/wallet';
 
 import {
   ERC20Token__factory,
@@ -26,7 +27,7 @@ type Args = {
 };
 
 export default async function (args: Args) {
-  const [owner, tokenHolder1, executer] = await ethers.getSigners();
+  const [owner, tokenHolder1, executer] = getSigners();
   const recipient1 = '0xe39d4ffC89A780e5214ed6D2d8528Cb058c60472';
   const token1Amount = args.amount;
 
@@ -45,7 +46,7 @@ export default async function (args: Args) {
       18
     );
 
-    await security20.mint(tokenHolder1.address, issuanceAmount);
+    await security20.mint(tokenHolder1.getAddress(), issuanceAmount);
   }
 
   if (args.emoney20) {
@@ -67,13 +68,13 @@ export default async function (args: Args) {
     await security20.connect(tokenHolder1).approve(dvp.address, token1Amount);
   }
 
-  const chainTime = (await ethers.provider.getBlock('latest')).timestamp;
+  const chainTime = (await owner.provider.getBlock('latest')).timestamp;
   const SECONDS_IN_A_WEEK = 86400 * 7;
   const expirationDate = chainTime + 2 * SECONDS_IN_A_WEEK;
   const tradeInputData: Swaps.TradeRequestInputStruct = {
-    holder1: tokenHolder1.address,
+    holder1: tokenHolder1.getAddress(),
     holder2: recipient1,
-    executer: executer.address,
+    executer: executer.getAddress(),
     expirationDate: expirationDate,
     tokenAddress1: security20.address,
     tokenValue1: tokenAmount1,

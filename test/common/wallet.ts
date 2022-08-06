@@ -1,19 +1,19 @@
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { HDNode } from 'ethers/lib/utils';
-import { ethers, network } from 'hardhat';
-import { HardhatNetworkHDAccountsConfig } from 'hardhat/types';
+import { ethers } from 'ethers';
+import { network } from 'hardhat';
 
-export function getSigners(num: number = 20): SignerWithAddress[] {
+// @ts-ignore
+export const provider = new ethers.providers.Web3Provider(network.provider);
+
+export function getSigners(num: number = 20): ethers.providers.JsonRpcSigner[] {
   const signers = [];
   for (let i = 0; i < num; i++) {
-    const { address } = HDNode.fromMnemonic(
-      (network.config.accounts as HardhatNetworkHDAccountsConfig).mnemonic
-    ).derivePath(`m/44'/60'/0'/0/${i}`);
-    // @ts-ignore
-    const signer = ethers.provider.getSigner(i) as SignerWithAddress;
-    // @ts-ignore
-    signer.address = address;
-    signers.push(signer);
+    signers.push(provider.getSigner(i));
   }
   return signers;
+}
+
+export function getSigner(
+  addressOrIndex?: string | number
+): ethers.providers.JsonRpcSigner {
+  return provider.getSigner(addressOrIndex);
 }

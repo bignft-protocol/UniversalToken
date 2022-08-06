@@ -1,6 +1,4 @@
-import { Signer } from 'ethers';
-import { ethers } from 'hardhat';
-import { assert } from 'chai';
+import assert from 'assert';
 import {
   BatchBalanceReader,
   BatchBalanceReader__factory,
@@ -48,7 +46,6 @@ const issuanceAmount42 = 42;
 const issuanceAmount43 = 43;
 
 describe('BatchBalanceReader', function () {
-  const signers = getSigners(6);
   const [
     signer,
     controllerSigner,
@@ -56,10 +53,7 @@ describe('BatchBalanceReader', function () {
     tokenHolder2Signer,
     tokenHolder3Signer,
     unknownSigner
-  ] = signers;
-
-  const [owner, controller, tokenHolder1, tokenHolder2, tokenHolder3, unknown] =
-    signers.map((s) => s.address);
+  ] = getSigners(6);
 
   let token1: ERC1400;
   let token2: ERC1400;
@@ -75,14 +69,14 @@ describe('BatchBalanceReader', function () {
       'ERC1400Token',
       'DAU',
       1,
-      [controller],
+      [controllerSigner.getAddress()],
       partitions
     );
     token2 = await new ERC1400__factory(controllerSigner).deploy(
       'ERC1400Token',
       'DAU',
       1,
-      [controller],
+      [controllerSigner.getAddress()],
       partitions
     );
     balanceReader = await new BatchBalanceReader__factory(signer).deploy();
@@ -90,76 +84,76 @@ describe('BatchBalanceReader', function () {
     // Token1
     await token1.issueByPartition(
       partition1,
-      tokenHolder1,
+      tokenHolder1Signer.getAddress(),
       issuanceAmount11,
       VALID_CERTIFICATE
     );
     await token1.issueByPartition(
       partition1,
-      tokenHolder2,
+      tokenHolder2Signer.getAddress(),
       issuanceAmount12,
       VALID_CERTIFICATE
     );
     await token1.issueByPartition(
       partition1,
-      tokenHolder3,
+      tokenHolder3Signer.getAddress(),
       issuanceAmount13,
       VALID_CERTIFICATE
     );
 
     await token1.issueByPartition(
       partition2,
-      tokenHolder1,
+      tokenHolder1Signer.getAddress(),
       issuanceAmount21,
       VALID_CERTIFICATE
     );
     await token1.issueByPartition(
       partition2,
-      tokenHolder2,
+      tokenHolder2Signer.getAddress(),
       issuanceAmount22,
       VALID_CERTIFICATE
     );
     await token1.issueByPartition(
       partition2,
-      tokenHolder3,
+      tokenHolder3Signer.getAddress(),
       issuanceAmount23,
       VALID_CERTIFICATE
     );
 
     await token1.issueByPartition(
       partition3,
-      tokenHolder1,
+      tokenHolder1Signer.getAddress(),
       issuanceAmount31,
       VALID_CERTIFICATE
     );
     await token1.issueByPartition(
       partition3,
-      tokenHolder2,
+      tokenHolder2Signer.getAddress(),
       issuanceAmount32,
       VALID_CERTIFICATE
     );
     await token1.issueByPartition(
       partition3,
-      tokenHolder3,
+      tokenHolder3Signer.getAddress(),
       issuanceAmount33,
       VALID_CERTIFICATE
     );
 
     await token1.issueByPartition(
       partition4,
-      tokenHolder1,
+      tokenHolder1Signer.getAddress(),
       issuanceAmount41,
       VALID_CERTIFICATE
     );
     await token1.issueByPartition(
       partition4,
-      tokenHolder2,
+      tokenHolder2Signer.getAddress(),
       issuanceAmount42,
       VALID_CERTIFICATE
     );
     await token1.issueByPartition(
       partition4,
-      tokenHolder3,
+      tokenHolder3Signer.getAddress(),
       issuanceAmount43,
       VALID_CERTIFICATE
     );
@@ -167,76 +161,76 @@ describe('BatchBalanceReader', function () {
     // Token2
     await token2.issueByPartition(
       partition1,
-      tokenHolder1,
+      tokenHolder1Signer.getAddress(),
       2 * issuanceAmount11,
       VALID_CERTIFICATE
     );
     await token2.issueByPartition(
       partition1,
-      tokenHolder2,
+      tokenHolder2Signer.getAddress(),
       2 * issuanceAmount12,
       VALID_CERTIFICATE
     );
     await token2.issueByPartition(
       partition1,
-      tokenHolder3,
+      tokenHolder3Signer.getAddress(),
       2 * issuanceAmount13,
       VALID_CERTIFICATE
     );
 
     await token2.issueByPartition(
       partition2,
-      tokenHolder1,
+      tokenHolder1Signer.getAddress(),
       2 * issuanceAmount21,
       VALID_CERTIFICATE
     );
     await token2.issueByPartition(
       partition2,
-      tokenHolder2,
+      tokenHolder2Signer.getAddress(),
       2 * issuanceAmount22,
       VALID_CERTIFICATE
     );
     await token2.issueByPartition(
       partition2,
-      tokenHolder3,
+      tokenHolder3Signer.getAddress(),
       2 * issuanceAmount23,
       VALID_CERTIFICATE
     );
 
     await token2.issueByPartition(
       partition3,
-      tokenHolder1,
+      tokenHolder1Signer.getAddress(),
       2 * issuanceAmount31,
       VALID_CERTIFICATE
     );
     await token2.issueByPartition(
       partition3,
-      tokenHolder2,
+      tokenHolder2Signer.getAddress(),
       2 * issuanceAmount32,
       VALID_CERTIFICATE
     );
     await token2.issueByPartition(
       partition3,
-      tokenHolder3,
+      tokenHolder3Signer.getAddress(),
       2 * issuanceAmount33,
       VALID_CERTIFICATE
     );
 
     await token2.issueByPartition(
       partition4,
-      tokenHolder1,
+      tokenHolder1Signer.getAddress(),
       2 * issuanceAmount41,
       VALID_CERTIFICATE
     );
     await token2.issueByPartition(
       partition4,
-      tokenHolder2,
+      tokenHolder2Signer.getAddress(),
       2 * issuanceAmount42,
       VALID_CERTIFICATE
     );
     await token2.issueByPartition(
       partition4,
-      tokenHolder3,
+      tokenHolder3Signer.getAddress(),
       2 * issuanceAmount43,
       VALID_CERTIFICATE
     );
@@ -244,7 +238,11 @@ describe('BatchBalanceReader', function () {
 
   describe('balancesOfByPartition', function () {
     it('returns the partition balances list', async function () {
-      const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
+      const tokenHolders = [
+        tokenHolder1Signer.getAddress(),
+        tokenHolder2Signer.getAddress(),
+        tokenHolder3Signer.getAddress()
+      ];
       const tokenAddresses = [token1.address, token2.address];
 
       const balancesOfByPartition = await balanceReader
@@ -290,7 +288,11 @@ describe('BatchBalanceReader', function () {
 
   describe('balancesOf', function () {
     it('returns the balances list', async function () {
-      const tokenHolders = [tokenHolder1, tokenHolder2, tokenHolder3];
+      const tokenHolders = [
+        tokenHolder1Signer.getAddress(),
+        tokenHolder2Signer.getAddress(),
+        tokenHolder3Signer.getAddress()
+      ];
       const tokenAddresses = [token1.address, token2.address];
 
       const balancesOf = await balanceReader

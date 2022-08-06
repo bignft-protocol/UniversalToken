@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import { task, types } from 'hardhat/config';
 import { HardhatUserConfig } from 'hardhat/types';
-import '@nomiclabs/hardhat-ethers';
 import '@nomiclabs/hardhat-etherscan';
 import '@typechain/hardhat';
 import 'solidity-coverage';

@@ -1,5 +1,5 @@
-import { ethers } from 'hardhat';
-import { getSigners } from '../../test/common/wallet';
+import { ethers } from 'ethers';
+import { getSigner } from '../../test/common/wallet';
 import {
   ERC1820Registry__factory,
   FundIssuer__factory
@@ -8,7 +8,7 @@ import {
 const FUND_ISSUER = 'FundIssuer';
 
 export default async function () {
-  const [owner] = getSigners(1);
+  const owner = getSigner();
 
   const fundIssuer = await new FundIssuer__factory(owner).deploy();
   FundIssuer__factory.setAsDeployed(fundIssuer);
@@ -16,15 +16,16 @@ export default async function () {
 
   const registry = ERC1820Registry__factory.deployed;
 
-  await registry.setInterfaceImplementer(
-    owner.address,
-    ethers.utils.id(FUND_ISSUER),
-    fundIssuer.address,
-    { from: owner.address }
-  );
+  await registry
+    .connect(owner)
+    .setInterfaceImplementer(
+      owner.getAddress(),
+      ethers.utils.id(FUND_ISSUER),
+      fundIssuer.address
+    );
 
   const registeredFundIssuerAddress = await registry.getInterfaceImplementer(
-    owner.address,
+    owner.getAddress(),
     ethers.utils.id(FUND_ISSUER)
   );
 
