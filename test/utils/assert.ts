@@ -20,7 +20,7 @@ import {
 } from './extract';
 
 import { ERC1400_TOKENS_VALIDATOR } from '../common/extension';
-import { provider } from '../../test/common/wallet';
+import { provider } from 'hardhat';
 import { PromiseOrValue } from 'typechain-types/common';
 
 export const STATE_PENDING = 1;

@@ -13,7 +13,7 @@ import {
   ERC1400TokensValidator__factory
 } from '../typechain-types';
 import truffleFixture from './truffle-fixture';
-import { getSigners } from './common/wallet';
+import { getSigners } from 'hardhat';
 
 const CERTIFICATE_SIGNER = '0xe31C41f0f70C5ff39f73B4B94bcCD767b3071630';
 

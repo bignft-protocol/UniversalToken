@@ -1,4 +1,4 @@
-import { getSigner } from '../../test/common/wallet';
+import { getSigner } from 'hardhat';
 import {
   ERC1400HoldableCertificateToken__factory,
   ERC1400TokensValidator__factory

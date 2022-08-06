@@ -13,7 +13,7 @@ import {
   ERC20HoldableToken__factory
 } from '../typechain-types';
 import { ZERO_ADDRESS, ZERO_BYTE, ZERO_BYTES32 } from './utils/assert';
-import { getSigners } from './common/wallet';
+import { getSigners } from 'hardhat';
 
 const HoldStatusCode = Object.freeze({
   Nonexistent: 0,

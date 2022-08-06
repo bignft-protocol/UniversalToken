@@ -12,7 +12,7 @@ import {
   ERC1820Registry__factory
 } from '../typechain-types';
 import truffleFixture from './truffle-fixture';
-import { getSigners } from './common/wallet';
+import { getSigners } from 'hardhat';
 
 const ERC1400_TOKENS_SENDER = 'ERC1400TokensSender';
 const ERC1400_TOKENS_RECIPIENT = 'ERC1400TokensRecipient';

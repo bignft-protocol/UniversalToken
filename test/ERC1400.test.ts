@@ -25,7 +25,7 @@ import {
 } from './utils/assert';
 import { BigNumberish, BytesLike, Signer } from 'ethers';
 import truffleFixture from './truffle-fixture';
-import { getSigners } from './common/wallet';
+import { getSigners } from 'hardhat';
 import { PromiseOrValue } from 'typechain-types/common';
 
 const ERC1820_ACCEPT_MAGIC = 'ERC1820_ACCEPT_MAGIC';

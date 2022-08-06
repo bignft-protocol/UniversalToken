@@ -1,4 +1,4 @@
-import { getSigner } from '../../test/common/wallet';
+import { getSigner } from 'hardhat';
 import { ERC1400HoldableCertificateToken__factory } from '../../typechain-types';
 
 const CERTIFICATE_SIGNER = '0xe31C41f0f70C5ff39f73B4B94bcCD767b3071630';

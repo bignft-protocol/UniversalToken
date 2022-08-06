@@ -1,4 +1,4 @@
-import { getSigner } from '../../test/common/wallet';
+import { getSigner } from 'hardhat';
 import { ERC20HoldableToken__factory } from '../../typechain-types';
 
 type Args = {

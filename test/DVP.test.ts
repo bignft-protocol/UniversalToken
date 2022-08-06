@@ -49,7 +49,7 @@ import {
 import { extractTokenAmount, extractTokenStandard } from './utils/extract';
 import truffleFixture from './truffle-fixture';
 import { toBuffer } from 'ethereumjs-util';
-import { getSigners, provider } from './common/wallet';
+import { getSigners, provider } from 'hardhat';
 
 const HEX_TYPE_ESCROW =
   '0x0000000000000000000000000000000000000000000000000000000000000002';

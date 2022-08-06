@@ -7,7 +7,7 @@ import {
   ERC1400TokensValidator__factory,
   Swaps__factory
 } from '../../typechain-types';
-import { getSigners } from '../../test/common/wallet';
+import { getSigners } from 'hardhat';
 
 type Args = {
   address: string;

@@ -1,6 +1,6 @@
 import { network } from 'hardhat';
 import { HARDHAT_NETWORK_NAME } from 'hardhat/plugins';
-import { provider } from '../../test/common/wallet';
+import { provider } from 'hardhat';
 
 // ---------- Module to accelerate time -----------------------
 export const advanceTime = (time: any) => {

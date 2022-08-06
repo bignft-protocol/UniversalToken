@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { getSigners } from '../../test/common/wallet';
+import { getSigners } from 'hardhat';
 
 import {
   ERC20Token__factory,

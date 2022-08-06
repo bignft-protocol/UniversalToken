@@ -23,7 +23,7 @@ import {
 } from '../typechain-types';
 import { ZERO_ADDRESS, ZERO_BYTE, ZERO_BYTES32 } from './utils/assert';
 import truffleFixture from './truffle-fixture';
-import { provider, getSigners } from './common/wallet';
+import { provider, getSigners } from 'hardhat';
 
 const partition1_short =
   '7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex

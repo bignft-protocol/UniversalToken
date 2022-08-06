@@ -1,6 +1,6 @@
 import { ERC1400__factory } from '../../typechain-types';
 import fs from 'fs';
-import { getSigner } from '../../test/common/wallet';
+import { getSigner } from 'hardhat';
 
 const partition1 =
   '0x7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex

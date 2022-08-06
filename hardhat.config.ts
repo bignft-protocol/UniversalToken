@@ -1,11 +1,12 @@
 import 'dotenv/config';
-import { task, types } from 'hardhat/config';
+import { extendEnvironment, task, types } from 'hardhat/config';
 import { HardhatUserConfig } from 'hardhat/types';
 import '@nomiclabs/hardhat-etherscan';
 import '@typechain/hardhat';
 import 'solidity-coverage';
 import 'hardhat-contract-sizer';
 import path from 'path';
+import { ethers } from 'ethers';
 
 let accounts: any;
 
@@ -68,5 +69,23 @@ task('task', 'Run a script task with custom input')
     const { default: fn } = await import(path.resolve(__dirname, script));
     await fn(input);
   });
+
+declare module 'hardhat/types/runtime' {
+  export interface HardhatRuntimeEnvironment {
+    provider: ethers.providers.Web3Provider;
+    getSigner: (
+      addressOrIndex?: string | number
+    ) => ethers.providers.JsonRpcSigner;
+    getSigners: (num?: number) => ethers.providers.JsonRpcSigner[];
+  }
+}
+
+extendEnvironment((hre) => {
+  // @ts-ignore
+  hre.provider = new ethers.providers.Web3Provider(hre.network.provider);
+  hre.getSigners = (num = 20) =>
+    [...new Array(num)].map((_, i) => hre.provider.getSigner(i));
+  hre.getSigner = (addressOrIndex) => hre.provider.getSigner(addressOrIndex);
+});
 
 export default config;

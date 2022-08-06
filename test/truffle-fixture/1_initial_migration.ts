@@ -1,4 +1,4 @@
-import { getSigner } from '../../test/common/wallet';
+import { getSigner } from 'hardhat';
 import { Migrations__factory } from '../../typechain-types';
 
 export default async function () {

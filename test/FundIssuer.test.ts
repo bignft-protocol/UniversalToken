@@ -35,7 +35,7 @@ import {
 } from './utils/assert';
 import { addressToBytes32, numTostringBytes32 } from './utils/bytes';
 import truffleFixture from './truffle-fixture';
-import { getSigners, provider } from './common/wallet';
+import { getSigners, provider } from 'hardhat';
 import { PromiseOrValue } from 'typechain-types/common';
 
 const ERC1400_TOKENS_RECIPIENT_INTERFACE = 'ERC1400TokensRecipient';

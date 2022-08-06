@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { getSigner } from '../../test/common/wallet';
+import { getSigner } from 'hardhat';
 
 // meta transaction
 const deployerAddress = '0xa990077c3205cbDf861e17Fa532eeB069cE9fF96';

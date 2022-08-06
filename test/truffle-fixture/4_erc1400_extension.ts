@@ -1,4 +1,4 @@
-import { getSigner } from '../../test/common/wallet';
+import { getSigner } from 'hardhat';
 import { ERC1400TokensValidator__factory } from '../../typechain-types';
 
 export default async function () {

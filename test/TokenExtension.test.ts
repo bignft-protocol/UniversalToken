@@ -60,7 +60,7 @@ import {
 import { BigNumber, Signer } from 'ethers';
 import { numberToHexa } from './utils/bytes';
 import truffleFixture from './truffle-fixture';
-import { getSigners } from './common/wallet';
+import { getSigners } from 'hardhat';
 import { PromiseOrValue } from 'typechain-types/common';
 
 const ERC1400_TOKENS_VALIDATOR = 'ERC1400TokensValidator';
