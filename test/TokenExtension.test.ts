@@ -58,7 +58,7 @@ import {
   PauserMock__factory
 } from '../typechain-types';
 import { BigNumber, Signer } from 'ethers';
-import { numberToHexa } from './utils/bytes';
+import { numToNumBytes32 } from './utils/bytes';
 import truffleFixture from './truffle-fixture';
 import { getSigners } from 'hardhat';
 import { PromiseOrValue } from 'typechain-types/common';
@@ -230,7 +230,7 @@ const craftNonceBasedCertificate = async (
   const signature = signingKey.signDigest(packedAndHashedData);
   const certificate = ethers.utils.hexlify(
     ethers.utils.concat([
-      numberToHexa(expirationTimeAsNumber, 32),
+      numToNumBytes32(expirationTimeAsNumber, 32),
       signature.r,
       signature.s,
       ethers.utils.hexlify(signature.recoveryParam)
@@ -302,7 +302,7 @@ const craftSaltBasedCertificate = async (
   const certificate = ethers.utils.hexlify(
     ethers.utils.concat([
       salt,
-      numberToHexa(expirationTimeAsNumber, 32),
+      numToNumBytes32(expirationTimeAsNumber, 32),
       signature.r,
       signature.s,
       ethers.utils.hexlify(signature.recoveryParam)

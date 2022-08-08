@@ -17,7 +17,7 @@ import {
 import { advanceTimeAndBlock } from './utils/time';
 import {
   addressToBytes32,
-  numToHexBytes32,
+  numTostringBytes32,
   numToNumBytes32
 } from './utils/bytes';
 
@@ -121,16 +121,16 @@ const getTradeProposalData = (
   const flag = isFake ? partitionFlag : dvpTradeProposalFlag;
   const hexTradeRecipient = addressToBytes32(_tradeRecipient);
   const hexTradeExecuter = addressToBytes32(_tradeExecuter);
-  const hexExpirationDate = numToHexBytes32(_expirationDate);
-  const hexSettlementDate = numToHexBytes32(_settlementDate);
+  const hexExpirationDate = numTostringBytes32(_expirationDate);
+  const hexSettlementDate = numTostringBytes32(_settlementDate);
 
   const hexTradeTokenAddress2 = addressToBytes32(_token2Address);
-  const hexTradeTokenAmount2 = numToHexBytes32(_token2Amount);
+  const hexTradeTokenAmount2 = numTostringBytes32(_token2Amount);
   let hexTradeTokenId;
   if (typeof _token2Id === 'string' && _token2Id.length === 66) {
     hexTradeTokenId = _token2Id.substring(2);
   } else if (typeof _token2Id === 'number') {
-    hexTradeTokenId = numToHexBytes32(_token2Id);
+    hexTradeTokenId = numTostringBytes32(_token2Id);
   } else {
     throw new Error('getTradeProposalData: Invalid type for tokenId');
   }
@@ -138,7 +138,7 @@ const getTradeProposalData = (
   const hexTradeTokenStandard2 = ethers.utils
     .hexlify(_token2Standard)
     .substring(2);
-  const hexTradeType = numToHexBytes32(_tradeType2);
+  const hexTradeType = numTostringBytes32(_tradeType2);
   const tradeTokenData = `${hexTradeTokenAddress2}${hexTradeTokenAmount2}${hexTradeTokenId}${hexTradeTokenStandard2}${hexTradeType}`;
 
   return `${flag}${hexTradeRecipient}${hexTradeExecuter}${hexExpirationDate}${hexSettlementDate}${tradeTokenData}`;
@@ -149,7 +149,7 @@ const getTradeAcceptanceData = (
   isFake: boolean | undefined = false
 ) => {
   const flag = isFake ? partitionFlag : dvpTradeAcceptanceFlag;
-  const hexTradeIndex = numToHexBytes32(tradeIndex);
+  const hexTradeIndex = numTostringBytes32(tradeIndex);
 
   return `${flag}${hexTradeIndex}`;
 };
@@ -797,14 +797,14 @@ describe('DVP', function () {
   describe('parameters', function () {
     describe('owner', function () {
       it('returns the signer.getAddress() of the contract', async function () {
-        const dvp: Swaps = await new Swaps__factory(signer).deploy(false);
+        const dvp = await new Swaps__factory(signer).deploy(false);
 
         assert.strictEqual(await dvp.owner(), await signer.getAddress());
       });
     });
     describe('tradeExecuters', function () {
       it('returns the list of trade executers', async function () {
-        const dvp: Swaps = await new Swaps__factory(signer).deploy(true);
+        const dvp = await new Swaps__factory(signer).deploy(true);
 
         const tradeExecuters = await dvp.tradeExecuters();
 
@@ -812,7 +812,7 @@ describe('DVP', function () {
         assert.strictEqual(tradeExecuters[0], await signer.getAddress());
       });
       it('returns empty list of trade executers', async function () {
-        const dvp: Swaps = await new Swaps__factory(signer).deploy(false);
+        const dvp = await new Swaps__factory(signer).deploy(false);
 
         const tradeExecuters = await dvp.tradeExecuters();
 

@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
-import { getSigner } from 'hardhat';
+import { getSigner, provider } from 'hardhat';
+import { ZERO_BYTE } from '../../test/utils/assert';
 import { ERC1820Registry__factory } from '../../typechain-types';
 
 // meta transaction
@@ -10,17 +11,20 @@ const rawTx =
 export default async function () {
   const owner = getSigner();
 
-  await owner.sendTransaction({
-    to: deployerAddress,
-    value: ethers.utils.parseEther('0.1')
-  });
+  let contractAddress = '0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24';
+  const contractCode = await provider.getCode(contractAddress);
 
-  const res = await owner.provider.sendTransaction(rawTx);
+  // not deployed
+  if (contractCode === ZERO_BYTE) {
+    await owner.sendTransaction({
+      to: deployerAddress,
+      value: ethers.utils.parseEther('0.1')
+    });
 
-  const registry = ERC1820Registry__factory.connect(
-    (await res.wait()).contractAddress,
-    owner
-  );
+    await owner.provider.sendTransaction(rawTx);
+  }
+
+  const registry = ERC1820Registry__factory.connect(contractAddress, owner);
 
   ERC1820Registry__factory.setAsDeployed(registry);
 
