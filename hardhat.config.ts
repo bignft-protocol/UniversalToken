@@ -31,7 +31,8 @@ const config: HardhatUserConfig = {
       accounts
     },
     balconyTestnet: {
-      url: 'https://endpoint-testnet.bignft.app',
+      url: 'https://ethrpc-balcony-testnet.orai.us',
+      chainId: 0xa2c2a,
       accounts
     }
   },
