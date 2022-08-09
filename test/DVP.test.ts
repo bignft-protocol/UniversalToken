@@ -48,7 +48,6 @@ import {
 } from './utils/assert';
 import { extractTokenAmount, extractTokenStandard } from './utils/extract';
 import truffleFixture from './truffle-fixture';
-import { toBuffer } from 'ethereumjs-util';
 import { getSigners, provider } from 'hardhat';
 
 const HEX_TYPE_ESCROW =
@@ -796,7 +795,7 @@ describe('DVP', function () {
 
   describe('parameters', function () {
     describe('owner', function () {
-      it('returns the signer.getAddress() of the contract', async function () {
+      it('returns the owner of the contract', async function () {
         const dvp = await new Swaps__factory(signer).deploy(false);
 
         assert.strictEqual(await dvp.owner(), await signer.getAddress());
@@ -1551,9 +1550,7 @@ describe('DVP', function () {
         18
       );
 
-      await security20
-        .connect(signer)
-        .mint(tokenHolder1Signer.getAddress(), issuanceAmount);
+      await security20.mint(tokenHolder1Signer.getAddress(), issuanceAmount);
       await emoney20.mint(recipient1Signer.getAddress(), issuanceAmount);
     });
     describe('when none of the 2 tokens is ETH', function () {
@@ -1589,9 +1586,10 @@ describe('DVP', function () {
                     const security721 = await new ERC721Token__factory(
                       signer
                     ).deploy('ERC721Token', 'DAU721', '', '');
-                    await security721
-                      .connect(signer)
-                      .mint(tokenHolder1Signer.getAddress(), issuanceTokenId);
+                    await security721.mint(
+                      tokenHolder1Signer.getAddress(),
+                      issuanceTokenId
+                    );
                     await security721
                       .connect(tokenHolder1Signer)
                       .approve(dvp.address, issuanceTokenId);
@@ -1698,9 +1696,10 @@ describe('DVP', function () {
                     const security721 = await new ERC721Token__factory(
                       signer
                     ).deploy('ERC721Token', 'DAU721', '', '');
-                    await security721
-                      .connect(signer)
-                      .mint(tokenHolder1Signer.getAddress(), issuanceTokenId);
+                    await security721.mint(
+                      tokenHolder1Signer.getAddress(),
+                      issuanceTokenId
+                    );
                     await security721
                       .connect(tokenHolder1Signer)
                       .approve(dvp.address, issuanceTokenId);
@@ -2060,9 +2059,7 @@ describe('DVP', function () {
         18
       );
 
-      await security20
-        .connect(signer)
-        .mint(tokenHolder1Signer.getAddress(), issuanceAmount);
+      await security20.mint(tokenHolder1Signer.getAddress(), issuanceAmount);
       await emoney20.mint(recipient1Signer.getAddress(), issuanceAmount);
 
       token1 = security20;
@@ -2406,9 +2403,7 @@ describe('DVP', function () {
               ''
             );
             token2 = security721;
-            await token2
-              .connect(signer)
-              .mint(recipient1Signer.getAddress(), issuanceTokenId);
+            await token2.mint(recipient1Signer.getAddress(), issuanceTokenId);
           });
           describe('when tokens have been reserved before', function () {
             it('accepts and executes the trade', async function () {
@@ -2682,19 +2677,15 @@ describe('DVP', function () {
         18
       );
 
-      await security20
-        .connect(signer)
-        .mint(tokenHolder1Signer.getAddress(), issuanceAmount);
+      await security20.mint(tokenHolder1Signer.getAddress(), issuanceAmount);
       await emoney20.mint(recipient1Signer.getAddress(), issuanceAmount);
 
       token1 = security20;
       token2 = emoney20;
 
-      await dvp
-        .connect(signer)
-        .setTokenControllers(token1.address, [
-          tokenController1Signer.getAddress()
-        ]);
+      await dvp.setTokenControllers(token1.address, [
+        tokenController1Signer.getAddress()
+      ]);
     });
     describe('when trade index is valid', function () {
       describe('when sender is token controller', function () {
@@ -3100,9 +3091,7 @@ describe('DVP', function () {
         18
       );
 
-      await security20
-        .connect(signer)
-        .mint(tokenHolder1Signer.getAddress(), issuanceAmount);
+      await security20.mint(tokenHolder1Signer.getAddress(), issuanceAmount);
       await emoney20.mint(recipient1Signer.getAddress(), issuanceAmount);
 
       token1 = security20;
@@ -3432,9 +3421,10 @@ describe('DVP', function () {
                       '',
                       ''
                     );
-                    await security721
-                      .connect(signer)
-                      .mint(tokenHolder1Signer.getAddress(), issuanceTokenId);
+                    await security721.mint(
+                      tokenHolder1Signer.getAddress(),
+                      issuanceTokenId
+                    );
                   });
                   it('setTokenURI sets the URI for the tokenId', async function () {
                     await security721.setTokenURI(
@@ -3822,9 +3812,7 @@ describe('DVP', function () {
         18
       );
 
-      await security20
-        .connect(signer)
-        .mint(tokenHolder1Signer.getAddress(), issuanceAmount);
+      await security20.mint(tokenHolder1Signer.getAddress(), issuanceAmount);
       await emoney20.mint(recipient1Signer.getAddress(), issuanceAmount);
 
       token1 = security20;
@@ -4124,9 +4112,7 @@ describe('DVP', function () {
         18
       );
 
-      await security20
-        .connect(signer)
-        .mint(tokenHolder1Signer.getAddress(), issuanceAmount);
+      await security20.mint(tokenHolder1Signer.getAddress(), issuanceAmount);
       await emoney20.mint(recipient1Signer.getAddress(), issuanceAmount);
 
       token1 = security20;
@@ -5159,18 +5145,14 @@ describe('DVP', function () {
         'DAU',
         18
       );
-      await dvp
-        .connect(signer)
-        .setPriceOracles(token1.address, [oracleSigner.getAddress()]);
+      await dvp.setPriceOracles(token1.address, [oracleSigner.getAddress()]);
 
       token2 = await new ERC20Token__factory(signer).deploy(
         'ERC20Token',
         'DAU',
         18
       );
-      await dvp
-        .connect(signer)
-        .setPriceOracles(token2.address, [unknownSigner.getAddress()]);
+      await dvp.setPriceOracles(token2.address, [unknownSigner.getAddress()]);
     });
     describe('when sender is price oracle of the token', function () {
       it('takes the price signer.getAddress()ship for a given token', async function () {
@@ -5221,18 +5203,14 @@ describe('DVP', function () {
         'DAU',
         18
       );
-      await dvp
-        .connect(signer)
-        .setPriceOracles(token1.address, [oracleSigner.getAddress()]);
+      await dvp.setPriceOracles(token1.address, [oracleSigner.getAddress()]);
 
       token2 = await new ERC20Token__factory(signer).deploy(
         'ERC20Token',
         'DAU',
         18
       );
-      await dvp
-        .connect(signer)
-        .setPriceOracles(token2.address, [unknownSigner.getAddress()]);
+      await dvp.setPriceOracles(token2.address, [unknownSigner.getAddress()]);
     });
     describe('when there is no competition on the price signer.getAddress()ship', function () {
       describe('when the price signer.getAddress()ship is taken', function () {
@@ -5434,9 +5412,7 @@ describe('DVP', function () {
         'DAU',
         18
       );
-      await dvp
-        .connect(signer)
-        .setPriceOracles(token1.address, [oracleSigner.getAddress()]);
+      await dvp.setPriceOracles(token1.address, [oracleSigner.getAddress()]);
     });
     describe('when sender is price oracle of the token', function () {
       describe('when start date is further than a week', function () {
@@ -5520,9 +5496,7 @@ describe('DVP', function () {
         issuanceAmount,
         MOCK_CERTIFICATE
       );
-      await dvp
-        .connect(signer)
-        .setPriceOracles(token1.address, [oracleSigner.getAddress()]);
+      await dvp.setPriceOracles(token1.address, [oracleSigner.getAddress()]);
 
       token2 = await new ERC1400__factory(signer).deploy(
         'ERC1400Token',
@@ -5537,9 +5511,7 @@ describe('DVP', function () {
         issuanceAmount,
         MOCK_CERTIFICATE
       );
-      await dvp
-        .connect(signer)
-        .setPriceOracles(token2.address, [unknownSigner.getAddress()]);
+      await dvp.setPriceOracles(token2.address, [unknownSigner.getAddress()]);
 
       // Create and accept a first trade
       let chainTime = (await provider.getBlock('latest')).timestamp;
