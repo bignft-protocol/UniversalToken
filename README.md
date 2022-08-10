@@ -509,6 +509,7 @@ If you want to verify contract, for example on bscTestnet network, first you nee
 
 ```bash
 yarn task tasks/deployments/ERC1400.ts --input '{"name":"ERC1400Token","symbol":"DAU"}'
+# on real network, you need .wait() for each method call
 
 # contract-arguments.js generated from deploy task
 
