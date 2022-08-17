@@ -1,16 +1,8 @@
 import { ethers } from 'ethers';
 import { getSigner } from 'hardhat';
+import { ZERO_BYTES32 } from '../../test/utils/assert';
+import { partition1 } from '../../test/utils/bytes';
 import { ERC1400__factory } from '../../typechain-types';
-
-const partition1 =
-  '0x7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
-const partition2 =
-  '0x6973737565640000000000000000000000000000000000000000000000000000'; // issued in hex
-const partition3 =
-  '0x6c6f636b65640000000000000000000000000000000000000000000000000000'; // locked in hex
-
-const ZERO_BYTES32 =
-  '0x0000000000000000000000000000000000000000000000000000000000000000';
 
 type Args = {
   address: string;

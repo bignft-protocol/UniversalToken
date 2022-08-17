@@ -1,13 +1,6 @@
 import { ethers } from 'ethers';
-import { getSigner, getSigners } from 'hardhat';
-import {
-  ERC1400__factory,
-  ERC1820Registry__factory,
-  FundIssuer__factory
-} from '../../typechain-types';
-
-const partition1 =
-  '0x7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
+import { getSigners } from 'hardhat';
+import { ERC1400__factory, FundIssuer__factory } from '../../typechain-types';
 
 export default async function () {
   const [owner, signer, signer2, fundSigner] = getSigners(4);

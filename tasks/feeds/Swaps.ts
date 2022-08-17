@@ -1,5 +1,5 @@
-import { ethers } from 'ethers';
 import { getSigners } from 'hardhat';
+import { ZERO_BYTES32 } from '../../test/utils/assert';
 
 import {
   ERC20Token__factory,
@@ -8,8 +8,7 @@ import {
 } from '../../typechain-types';
 
 const TYPE_SWAP = 0;
-const ZERO_BYTES32 =
-  '0x0000000000000000000000000000000000000000000000000000000000000000';
+
 const ERC20STANDARD =
   '0x0000000000000000000000000000000000000000000000000000000000000002';
 const OFFCHAIN =

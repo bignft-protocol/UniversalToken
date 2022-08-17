@@ -27,6 +27,7 @@ import { BigNumberish, BytesLike, Signer } from 'ethers';
 import truffleFixture from './truffle-fixture';
 import { getSigners } from 'hardhat';
 import { PromiseOrValue } from 'typechain-types/common';
+import { partition1, partition2, partition3 } from './utils/bytes';
 
 const ERC1820_ACCEPT_MAGIC = 'ERC1820_ACCEPT_MAGIC';
 
@@ -39,19 +40,8 @@ const partitionFlag =
   '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'; // Flag to indicate a partition change
 const otherFlag =
   '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'; // Other flag
-const partition1_short =
-  '7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
-const partition2_short =
-  '6973737565640000000000000000000000000000000000000000000000000000'; // issued in hex
-const partition3_short =
-  '6c6f636b65640000000000000000000000000000000000000000000000000000'; // locked in hex
-const changeToPartition1 = partitionFlag.concat(partition1_short);
-const changeToPartition2 = partitionFlag.concat(partition2_short);
-const changeToPartition3 = partitionFlag.concat(partition3_short);
-const doNotChangePartition = otherFlag.concat(partition2_short);
-const partition1 = ZERO_BYTE.concat(partition1_short);
-const partition2 = ZERO_BYTE.concat(partition2_short);
-const partition3 = ZERO_BYTE.concat(partition3_short);
+const changeToPartition2 = ethers.utils.hexConcat([partitionFlag, partition2]);
+const doNotChangePartition = ethers.utils.hexConcat([otherFlag, partition2]);
 
 const partitions = [partition1, partition2, partition3];
 const reversedPartitions = [partition3, partition1, partition2];

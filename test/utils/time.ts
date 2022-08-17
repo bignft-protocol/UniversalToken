@@ -2,6 +2,12 @@ import { network } from 'hardhat';
 import { HARDHAT_NETWORK_NAME } from 'hardhat/plugins';
 import { provider } from 'hardhat';
 
+export const SECONDS_IN_A_WEEK = 86400 * 7;
+
+export const DEFAULT_SUBSCRIPTION_PERIOD_LENGTH = SECONDS_IN_A_WEEK;
+export const DEFAULT_VALUATION_PERIOD_LENGTH = SECONDS_IN_A_WEEK;
+export const DEFAULT_PAYMENT_PERIOD_LENGTH = SECONDS_IN_A_WEEK;
+
 // ---------- Module to accelerate time -----------------------
 export const advanceTime = (time: any) => {
   if (network.name !== HARDHAT_NETWORK_NAME) return;

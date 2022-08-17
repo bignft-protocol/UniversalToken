@@ -1,9 +1,5 @@
 import { ethers } from 'ethers';
-import {
-  assertBalanceOfByPartition,
-  assertRevert,
-  ZERO_BYTE
-} from './utils/assert';
+import { assertBalanceOfByPartition, assertRevert } from './utils/assert';
 import {
   BatchTokenIssuer,
   BatchTokenIssuer__factory,
@@ -14,25 +10,9 @@ import {
 } from '../typechain-types';
 import truffleFixture from './truffle-fixture';
 import { getSigners } from 'hardhat';
+import { partition1, partitions } from './utils/bytes';
 
 const CERTIFICATE_SIGNER = '0xe31C41f0f70C5ff39f73B4B94bcCD767b3071630';
-
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-
-const partition1_short =
-  '7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
-const partition2_short =
-  '6973737565640000000000000000000000000000000000000000000000000000'; // issued in hex
-const partition3_short =
-  '6c6f636b65640000000000000000000000000000000000000000000000000000'; // locked in hex
-const partition4_short =
-  '636f6c6c61746572616c00000000000000000000000000000000000000000000'; // collateral in hex
-const partition1 = ZERO_BYTE.concat(partition1_short);
-const partition2 = ZERO_BYTE.concat(partition2_short);
-const partition3 = ZERO_BYTE.concat(partition3_short);
-const partition4 = ZERO_BYTE.concat(partition4_short);
-
-const partitions = [partition1, partition2, partition3, partition4];
 
 const CERTIFICATE_VALIDATION_NONE = 0;
 const CERTIFICATE_VALIDATION_NONCE = 1;

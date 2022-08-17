@@ -12,7 +12,13 @@
 
 import { ethers } from 'ethers';
 import assert from 'assert';
-import { advanceTimeAndBlock } from './utils/time';
+import {
+  advanceTimeAndBlock,
+  DEFAULT_PAYMENT_PERIOD_LENGTH,
+  DEFAULT_SUBSCRIPTION_PERIOD_LENGTH,
+  DEFAULT_VALUATION_PERIOD_LENGTH,
+  SECONDS_IN_A_WEEK
+} from './utils/time';
 import {
   FundIssuer,
   ERC1400,
@@ -33,7 +39,14 @@ import {
   ZERO_BYTE,
   ZERO_BYTES32
 } from './utils/assert';
-import { addressToBytes32, numTostringBytes32 } from './utils/bytes';
+import {
+  addressToBytes32,
+  numTostringBytes32,
+  partition1,
+  partitions,
+  partition2,
+  partition3
+} from './utils/bytes';
 import truffleFixture from './truffle-fixture';
 import { getSigners, provider } from 'hardhat';
 import { PromiseOrValue } from 'typechain-types/common';
@@ -78,17 +91,6 @@ const CERTIFICATE_SIGNER = '0xe31C41f0f70C5ff39f73B4B94bcCD767b3071630';
 
 const VALID_CERTIFICATE =
   '0x1000000000000000000000000000000000000000000000000000000000000000';
-
-const partition0 =
-  '0x0000000000000000000000000000000000000000000000000000000000000000'; // Empty hex
-
-const partition1 =
-  '0x7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
-const partition2 =
-  '0x6973737565640000000000000000000000000000000000000000000000000000'; // issued in hex
-const partition3 =
-  '0x6c6f636b65640000000000000000000000000000000000000000000000000000'; // locked in hex
-const partitions = [partition1, partition2, partition3];
 
 const ALL_PARTITIONS =
   '0x0000000000000000000000000000000000000000000000000000000000000000';
@@ -136,12 +138,6 @@ const token2Amount = 400;
 const token3Amount = 400;
 const token4Amount = 10;
 const issuanceTokenId = 123456789;
-
-const SECONDS_IN_A_WEEK = 86400 * 7;
-
-const DEFAULT_SUBSCRIPTION_PERIOD_LENGTH = SECONDS_IN_A_WEEK;
-const DEFAULT_VALUATION_PERIOD_LENGTH = SECONDS_IN_A_WEEK;
-const DEFAULT_PAYMENT_PERIOD_LENGTH = SECONDS_IN_A_WEEK;
 
 const getOrderCreationData = (
   _assetAddress: any,

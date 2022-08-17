@@ -24,21 +24,7 @@ import {
 import { ZERO_ADDRESS, ZERO_BYTE, ZERO_BYTES32 } from './utils/assert';
 import truffleFixture from './truffle-fixture';
 import { provider, getSigners } from 'hardhat';
-
-const partition1_short =
-  '7265736572766564000000000000000000000000000000000000000000000000'; // reserved in hex
-const partition2_short =
-  '6973737565640000000000000000000000000000000000000000000000000000'; // issued in hex
-const partition3_short =
-  '6c6f636b65640000000000000000000000000000000000000000000000000000'; // locked in hex
-const partition4_short =
-  '636f6c6c61746572616c00000000000000000000000000000000000000000000'; // collateral in hex
-const partition1 = ZERO_BYTE.concat(partition1_short);
-const partition2 = ZERO_BYTE.concat(partition2_short);
-const partition3 = ZERO_BYTE.concat(partition3_short);
-const partition4 = ZERO_BYTE.concat(partition4_short);
-
-const partitions = [partition1, partition2, partition3, partition4];
+import { partition1, partition2, partition3, partition4 } from './utils/bytes';
 
 const issuanceAmount11 = 11;
 const issuanceAmount12 = 12;

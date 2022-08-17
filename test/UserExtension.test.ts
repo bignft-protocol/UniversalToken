@@ -13,6 +13,7 @@ import {
 } from '../typechain-types';
 import truffleFixture from './truffle-fixture';
 import { getSigners } from 'hardhat';
+import { partitions } from './utils/bytes';
 
 const ERC1400_TOKENS_SENDER = 'ERC1400TokensSender';
 const ERC1400_TOKENS_RECIPIENT = 'ERC1400TokensRecipient';
@@ -25,19 +26,6 @@ const INVALID_CERTIFICATE_SENDER =
   '0x1100000000000000000000000000000000000000000000000000000000000000';
 const INVALID_CERTIFICATE_RECIPIENT =
   '0x2200000000000000000000000000000000000000000000000000000000000000';
-
-const partition1_short =
-  '5265736572766564000000000000000000000000000000000000000000000000'; // Reserved in hex
-const partition2_short =
-  '4973737565640000000000000000000000000000000000000000000000000000'; // Issued in hex
-const partition3_short =
-  '4c6f636b65640000000000000000000000000000000000000000000000000000'; // Locked in hex
-
-const partition1 = ZERO_BYTE.concat(partition1_short);
-const partition2 = ZERO_BYTE.concat(partition2_short);
-const partition3 = ZERO_BYTE.concat(partition3_short);
-
-const partitions = [partition1, partition2, partition3];
 
 const issuanceAmount = 1000;
 

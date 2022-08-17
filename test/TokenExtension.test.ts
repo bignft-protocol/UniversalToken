@@ -57,8 +57,13 @@ import {
   PauserMock,
   PauserMock__factory
 } from '../typechain-types';
-import { BigNumber, Signer } from 'ethers';
-import { numToNumBytes32 } from './utils/bytes';
+import { BigNumber } from 'ethers';
+import {
+  numToNumBytes32,
+  partition1,
+  partition2,
+  partitions
+} from './utils/bytes';
 import truffleFixture from './truffle-fixture';
 import { getSigners } from 'hardhat';
 import { PromiseOrValue } from 'typechain-types/common';
@@ -97,24 +102,10 @@ const INVALID_CERTIFICATE_SENDER =
 const INVALID_CERTIFICATE_RECIPIENT =
   '0x2200000000000000000000000000000000000000000000000000000000000000';
 
-const partition1_short =
-  '5265736572766564000000000000000000000000000000000000000000000000'; // Reserved in hex
-const partition2_short =
-  '4973737565640000000000000000000000000000000000000000000000000000'; // Issued in hex
-const partition3_short =
-  '4c6f636b65640000000000000000000000000000000000000000000000000000'; // Locked in hex
-
-const partition1 = ZERO_BYTE.concat(partition1_short);
-const partition2 = ZERO_BYTE.concat(partition2_short);
-const partition3 = ZERO_BYTE.concat(partition3_short);
-
-const partitions = [partition1, partition2, partition3];
-
 const partitionFlag =
   '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'; // Flag to indicate a partition change
-const changeToPartition1 = partitionFlag.concat(partition1_short);
-const changeToPartition2 = partitionFlag.concat(partition2_short);
-const changeToPartition3 = partitionFlag.concat(partition3_short);
+
+const changeToPartition2 = ethers.utils.hexConcat([partitionFlag, partition2]);
 
 const ESC_00 = '0x00'; // Transfer verifier not setup
 const ESC_50 = '0x50'; // 0x50	transfer failure
