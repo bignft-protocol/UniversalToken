@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: MIT
-
+// SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
 import "../roles/PauserRole.sol";
@@ -41,11 +40,7 @@ contract Pausable is PauserRole {
     /**
      * @dev called by the owner to pause, triggers stopped state
      */
-    function pause(address token)
-        public
-        onlyPauser(token)
-        whenNotPaused(token)
-    {
+    function pause(address token) public onlyPauser(token) whenNotPaused(token) {
         _paused[token] = true;
         emit Paused(token, msg.sender);
     }

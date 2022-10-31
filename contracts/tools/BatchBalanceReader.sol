@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: MIT
-
+// SPDX-License-Identifier: Apache-2.0
 /*
  * This code has not been reviewed.
  * Do not use or deploy this code before reviewing it personally first.
@@ -8,7 +7,7 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import "../tools/ERC1820Implementer.sol";
+import "../interface/ERC1820Implementer.sol";
 
 import "../IERC1400.sol";
 

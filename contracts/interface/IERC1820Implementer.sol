@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+pragma solidity ^0.8.0;
+
 // IV is value needed to have a vanity address starting with '0x1820'.
 // IV: 53759
 
