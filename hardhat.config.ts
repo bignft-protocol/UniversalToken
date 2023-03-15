@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import { extendEnvironment, task, types } from 'hardhat/config';
-import { HardhatUserConfig } from 'hardhat/types';
+import {
+  HardhatNetworkAccountsUserConfig,
+  HardhatUserConfig
+} from 'hardhat/types';
 import '@nomiclabs/hardhat-etherscan';
 import '@typechain/hardhat';
 import 'solidity-coverage';
@@ -8,7 +11,7 @@ import 'hardhat-contract-sizer';
 import path from 'path';
 import { ethers } from 'ethers';
 
-let accounts: any;
+let accounts: HardhatNetworkAccountsUserConfig | undefined = undefined;
 
 if (process.env.MNEMONIC) {
   accounts = {
@@ -19,7 +22,10 @@ if (process.env.MNEMONIC) {
     passphrase: ''
   };
 } else if (process.env.PRIVATE_KEY) {
-  accounts = process.env.PRIVATE_KEY.split(/\s*,\s*/);
+  accounts = process.env.PRIVATE_KEY.split(/\s*,\s*/).map((pv) => ({
+    privateKey: pv,
+    balance: '10000000000000000000000'
+  }));
 }
 
 const config: HardhatUserConfig = {
