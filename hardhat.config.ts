@@ -40,6 +40,11 @@ const config: HardhatUserConfig = {
       url: 'https://ethrpc-balcony-testnet.orai.us',
       chainId: 0xa2c2a,
       accounts
+    },
+    kawaiiverse: {
+      url: 'https://endpoint1.kawaii.global',
+      chainId: 0x1ae6,
+      accounts
     }
   },
   paths: {
